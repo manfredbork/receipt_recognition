@@ -1,5 +1,5 @@
 name: receipt_recognition
-description: "A new Flutter project."
+description: "A receipt recognizer based on Google's ML Kit."
 version: 0.0.1
 homepage: https://github.com/manfredbork/receipt_recognition
 repository: https://github.com/manfredbork/receipt_recognition
