@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
+import 'package:example/views/receipt_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -22,6 +22,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
   };
 
   ReceiptRecognizer? _receiptRecognizer;
+  RecognizedReceipt? _receipt;
   CameraDescription? _cameraBack;
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
@@ -78,17 +79,8 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     final receipt = await _receiptRecognizer?.processImage(inputImage);
 
     if (receipt != null && receipt.positions.isNotEmpty) {
+      _receipt = receipt;
       _canProcess = false;
-      if (kDebugMode) {
-        print('---------- Receipt ----------');
-        print('Detected supermarket: ${receipt.company?.value ?? 'Unknown'}');
-        print('-----------------------------');
-        for (final position in receipt.positions) {
-          print('${position.product.value} – ${position.price.formattedValue}');
-        }
-        print('-----------------------------');
-        print('Sum: ${receipt.sum?.formattedValue}');
-      }
       if (mounted) {
         HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -121,7 +113,12 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
         color: Colors.black,
         child: Stack(
           fit: StackFit.expand,
-          children: <Widget>[CameraPreview(_cameraController!)],
+          children: <Widget>[
+            CameraPreview(_cameraController!),
+            _receipt == null || _canProcess
+                ? Container()
+                : ReceiptWidget(receipt: _receipt!),
+          ],
         ),
       ),
       floatingActionButton:
