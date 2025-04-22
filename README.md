@@ -142,6 +142,7 @@ RecognizedReceipt
 
 ## 🔮 Roadmap
 
+- [ ] Long receipt support and merging mechanism 
 - [ ] Product name normalization and categorization
 - [ ] Tax and discount detection
 - [ ] Smart OCR region selection
