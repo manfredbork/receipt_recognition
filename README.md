@@ -110,14 +110,14 @@ await receiptRecognizer.close();
 
 ## 🧠 Model Overview
 
-| Class | Description |
-|-------|-------------|
-| `RecognizedReceipt` | Represents a full parsed receipt with items, sum, and store name. |
-| `RecognizedPosition` | A single line item on the receipt: product + price. |
-| `RecognizedEntity<T>` | Generic wrapper for parsed values from raw text. |
-| `RecognizedCompany` | Specialized entity for the store name. |
-| `RecognizedAmount` / `RecognizedSum` | Numerical values like prices and total. |
-| `formattedValue` | Nicely formatted display value. |
+| Class                                | Description                                                       |
+|--------------------------------------|-------------------------------------------------------------------|
+| `RecognizedReceipt`                  | Represents a full parsed receipt with items, sum, and store name. |
+| `RecognizedPosition`                 | A single line item on the receipt: product + price.               |
+| `RecognizedEntity<T>`                | Generic wrapper for parsed values from raw text.                  |
+| `RecognizedCompany`                  | Specialized entity for the store name.                            |
+| `RecognizedAmount` / `RecognizedSum` | Numerical values like prices and total.                           |
+| `formattedValue`                     | Nicely formatted display value.                                   |
 
 ---
 
