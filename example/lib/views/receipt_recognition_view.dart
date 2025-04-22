@@ -127,6 +127,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
               : FloatingActionButton.extended(
                 onPressed: () {
                   setState(() {
+                    _receipt = null;
                     _canProcess = true;
                   });
                 },

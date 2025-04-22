@@ -153,13 +153,13 @@ class ReceiptParser {
     );
     if (outer.isEmpty) return [];
     final reduced = [...outer];
-    reduced.removeWhere((e) => _isOutOfBounds(e, min, max));
-    reduced.removeWhere((e) => _isInvalidCompany(e, min));
-    reduced.removeWhere((e) => _isInvalidAmount(e, max));
     List<RecognizedEntity> merged = [];
     if (company != null) merged = merged + [company];
     merged = merged + reduced;
     if (sum != null) merged = merged + [sum];
+    merged.removeWhere((e) => _isOutOfBounds(e, min, max));
+    merged.removeWhere((e) => _isInvalidAmount(e, max));
+    merged.removeWhere((e) => _isInvalidCompany(e, min));
     return merged;
   }
 
