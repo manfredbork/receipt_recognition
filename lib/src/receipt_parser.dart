@@ -54,7 +54,7 @@ class ReceiptParser {
   static const _localeEU = 'eu';
   static const _localeUS = 'en_US';
   static const _checkIfSumLabel = r'^(Zu zahlen|Summe|Gesamtsumme|Total|Sum)$';
-  static const _checkIfCompany = r'^(Lidl|Aldi|Rewe|Edeka|Penny|Netto)$';
+  static const _checkIfCompany = r'^(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland)$';
   static const _checkIfUnknown = r'^[^0-9].*$';
   static const _checkIfAmount = r'^.*-?([0-9])+\s?([.,])\s?([0-9]){2}.*$';
   static const _replaceIfAmount = r'[^-0-9,.]';
