@@ -235,10 +235,9 @@ packages:
   receipt_recognition:
     dependency: "direct main"
     description:
-      name: receipt_recognition
-      sha256: "1e01e299e8975e7071d453f7b90046a89d06e5da1eed0f6ec7e0c03ceaf83d98"
-      url: "https://pub.dev"
-    source: hosted
+      path: ".."
+      relative: true
+    source: path
     version: "0.0.2"
   sky_engine:
     dependency: transitive
