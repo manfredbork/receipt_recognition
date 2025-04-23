@@ -55,7 +55,7 @@ class ReceiptParser {
   static const _localeUS = 'en_US';
   static const _checkIfSumLabel = r'^(Zu zahlen|Summe|Gesamtsumme|Total|Sum)$';
   static const _checkIfCompany =
-      r'^(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)$';
+      r'^.*(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto).*$';
   static const _checkIfUnknown = r'^[^0-9].*$';
   static const _checkIfAmount = r'^.*-?([0-9])+\s?([.,])\s?([0-9]){2}.*$';
   static const _replaceIfAmount = r'[^-0-9,.]';
@@ -108,10 +108,13 @@ class ReceiptParser {
           RegExp(_checkIfCompany, caseSensitive: false).hasMatch(e.value),
     );
     if (company.isEmpty) return null;
-    return RecognizedCompany(
-      line: company.first.line,
-      value: company.first.value,
-    );
+    final companyName =
+        RegExp(
+          _checkIfCompany,
+          caseSensitive: false,
+        ).stringMatch(company.first.value) ??
+        '';
+    return RecognizedCompany(line: company.first.line, value: companyName);
   }
 
   /// Finds sum. Returns a [RecognizedSum].
