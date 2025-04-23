@@ -21,10 +21,7 @@ class ReceiptWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Small space
           SizedBox(height: 32),
-
-          // Store name
           Text(
             receipt.company?.formattedValue ?? 'Unknown Store',
             style: TextStyle(
@@ -34,8 +31,6 @@ class ReceiptWidget extends StatelessWidget {
             ),
           ),
           Divider(),
-
-          // Items
           ...receipt.positions.map((position) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -54,10 +49,7 @@ class ReceiptWidget extends StatelessWidget {
               ),
             );
           }),
-
           Divider(),
-
-          // Total Sum
           if (receipt.sum != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
