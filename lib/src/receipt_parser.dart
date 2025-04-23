@@ -54,7 +54,8 @@ class ReceiptParser {
   static const _localeEU = 'eu';
   static const _localeUS = 'en_US';
   static const _checkIfSumLabel = r'^(Zu zahlen|Summe|Gesamtsumme|Total|Sum)$';
-  static const _checkIfCompany = r'^(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland)$';
+  static const _checkIfCompany =
+      r'^(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)$';
   static const _checkIfUnknown = r'^[^0-9].*$';
   static const _checkIfAmount = r'^.*-?([0-9])+\s?([.,])\s?([0-9]){2}.*$';
   static const _replaceIfAmount = r'[^-0-9,.]';
@@ -153,12 +154,12 @@ class ReceiptParser {
     );
     if (outer.isEmpty) return [];
     final reduced = [...outer];
+    reduced.removeWhere((e) => _isOutOfBounds(e, min, max));
+    reduced.removeWhere((e) => _isInvalidAmount(e, max));
     List<RecognizedEntity> merged = [];
     if (company != null) merged = merged + [company];
     merged = merged + reduced;
     if (sum != null) merged = merged + [sum];
-    merged.removeWhere((e) => _isOutOfBounds(e, min, max));
-    merged.removeWhere((e) => _isInvalidAmount(e, max));
     merged.removeWhere((e) => _isInvalidCompany(e, min));
     return merged;
   }
@@ -210,7 +211,7 @@ class ReceiptParser {
   /// Checks if entity is an invalid [RecognizedCompany]. Returns a [bool].
   static bool _isInvalidCompany(RecognizedEntity entity, RecognizedEntity min) {
     return entity is RecognizedCompany &&
-        entity.line.boundingBox.bottom >= min.line.boundingBox.top;
+        entity.line.boundingBox.bottom > min.line.boundingBox.top;
   }
 
   /// Checks if entity is an invalid [RecognizedAmount]. Returns a [bool].

@@ -36,7 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_mlkit_text_recognition: ^0.15.0
   camera: ^0.10.6
-  receipt_recognition: ^0.0.1
+  receipt_recognition: ^0.0.2
 
 dev_dependencies:
   flutter_test:
