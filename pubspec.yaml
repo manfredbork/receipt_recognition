@@ -21,3 +21,4 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   mockito: ^5.0.17
   build_runner: ^2.1.7
+  google_mlkit_commons: ^0.11.0
