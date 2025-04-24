@@ -11,9 +11,6 @@ class ReceiptRecognizer {
   /// Uses [TextRecognizer] from Google's ML Kit.
   final TextRecognizer _textRecognizer;
 
-  /// Uses package internal [ReceiptParser].
-  final ReceiptParser _receiptParser;
-
   /// Duration for scan timeout
   final Duration _scanTimeout;
 
@@ -33,7 +30,6 @@ class ReceiptRecognizer {
     onScanUpdate,
     onScanComplete,
   }) : _textRecognizer = TextRecognizer(script: script),
-       _receiptParser = ReceiptParser(),
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
@@ -43,8 +39,8 @@ class ReceiptRecognizer {
   Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
     final now = DateTime.now();
     final text = await _textRecognizer.processImage(inputImage);
-    final entities = _receiptParser.processText(text);
-    final receipt = _receiptParser.buildReceipt(entities);
+    final entities = ReceiptParser.processText(text);
+    final receipt = ReceiptParser.buildReceipt(entities);
     _lastScan ??= now;
     if (now.difference(_lastScan ?? now) > _scanTimeout) {
       _onScanTimeout?.call();
