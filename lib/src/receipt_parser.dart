@@ -5,11 +5,8 @@ import 'receipt_models.dart';
 
 /// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
-  /// Constructor to create an instance of [ReceiptRecognizer].
-  ReceiptParser();
-
   /// Processes [RecognizedText]. Returns a list of [RecognizedEntity].
-  List<RecognizedEntity> processText(RecognizedText text) {
+  static List<RecognizedEntity> processText(RecognizedText text) {
     final convertedLines = _convertText(text);
     final parsedEntities = _parseLines(convertedLines);
     final optimizedEntities = _optimizeEntities(parsedEntities);
@@ -17,7 +14,7 @@ class ReceiptParser {
   }
 
   /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
-  RecognizedReceipt? buildReceipt(List<RecognizedEntity> entities) {
+  static RecognizedReceipt? buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = [...entities.whereType<RecognizedUnknown>()];
     if (yUnknowns.isEmpty) return null;
     RecognizedSum? sum;
