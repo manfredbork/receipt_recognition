@@ -23,12 +23,14 @@ class ReceiptRecognizer {
 
   /// Constructor to create an instance of [ReceiptRecognizer].
   ReceiptRecognizer({
-    script = TextRecognitionScript.latin,
+    TextRecognizer? textRecognizer,
     scanTimeout = const Duration(seconds: 15),
     onScanTimeout,
     onScanUpdate,
     onScanComplete,
-  }) : _textRecognizer = TextRecognizer(script: script),
+  }) : _textRecognizer =
+           textRecognizer ??
+           TextRecognizer(script: TextRecognitionScript.latin),
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
