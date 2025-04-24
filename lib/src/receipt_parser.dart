@@ -45,6 +45,19 @@ class ReceiptParser {
     return RecognizedReceipt(positions: positions, sum: sum, company: company);
   }
 
+  /// Checks if [RecognizedReceipt] is valid. Returns a [bool].
+  static bool isValidReceipt(RecognizedReceipt receipt) {
+    return calculateSum(receipt.positions) == receipt.sum?.formattedValue;
+  }
+
+  /// Adds up prices of positions and formats sum. Returns a [String].
+  static String calculateSum(Iterable<RecognizedPosition> positions) {
+    return NumberFormat.decimalPatternDigits(
+      locale: Intl.defaultLocale,
+      decimalDigits: 2,
+    ).format(positions.fold(0.0, (a, b) => a + b.price.value));
+  }
+
   static const _empty = '';
   static const _period = '.';
   static const _comma = ',';

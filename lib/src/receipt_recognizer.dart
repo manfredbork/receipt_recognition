@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:intl/intl.dart';
 
 import 'receipt_models.dart';
 import 'receipt_parser.dart';
@@ -47,7 +46,7 @@ class ReceiptRecognizer {
       _lastScan = null;
     }
     if (receipt == null) return null;
-    if (_isValidReceipt(receipt)) {
+    if (ReceiptParser.isValidReceipt(receipt)) {
       _onScanComplete?.call(receipt);
       _lastScan = null;
       return receipt;
@@ -59,17 +58,4 @@ class ReceiptRecognizer {
 
   /// Closes the scanner and releases its resources.
   Future<void> close() => _textRecognizer.close();
-
-  /// Checks if [RecognizedReceipt] is valid. Returns a [bool].
-  bool _isValidReceipt(RecognizedReceipt receipt) {
-    return _sum(receipt.positions) == receipt.sum?.formattedValue;
-  }
-
-  /// Adds up prices of positions and formats sum. Returns a [String].
-  String _sum(Iterable<RecognizedPosition> positions) {
-    return NumberFormat.decimalPatternDigits(
-      locale: Intl.defaultLocale,
-      decimalDigits: 2,
-    ).format(positions.fold(0.0, (a, b) => a + b.price.value));
-  }
 }
