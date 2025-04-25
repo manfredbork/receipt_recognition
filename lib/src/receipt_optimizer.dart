@@ -39,10 +39,9 @@ class ReceiptOptimizer {
     _cachedSum = receipt.sum ?? _cachedSum;
     _cachedCompany = receipt.company ?? _cachedCompany;
     // TODO: Optimize here
+    _optimizationSteps++;
     if (isPrecisionLevelReached() && isValidReceipt(receipt)) {
       _reinit = true;
-    } else {
-      _optimizationSteps++;
     }
     return receipt;
   }
