@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:receipt_recognition/src/receipt_optimizer.dart';
 
 import 'receipt_models.dart';
 import 'receipt_parser.dart';
@@ -9,6 +10,9 @@ import 'receipt_parser.dart';
 class ReceiptRecognizer {
   /// Uses [TextRecognizer] from Google's ML Kit.
   final TextRecognizer _textRecognizer;
+
+  /// Uses internal [ReceiptOptimizer].
+  final ReceiptOptimizer _receiptOptimizer;
 
   /// Duration for scan timeout
   final Duration _scanTimeout;
@@ -24,6 +28,7 @@ class ReceiptRecognizer {
   /// Constructor to create an instance of [ReceiptRecognizer].
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
+    ReceiptOptimizer? receiptOptimizer,
     scanTimeout = const Duration(seconds: 15),
     onScanTimeout,
     onScanUpdate,
@@ -31,6 +36,7 @@ class ReceiptRecognizer {
   }) : _textRecognizer =
            textRecognizer ??
            TextRecognizer(script: TextRecognitionScript.latin),
+       _receiptOptimizer = receiptOptimizer ?? ReceiptOptimizer(),
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
@@ -41,14 +47,16 @@ class ReceiptRecognizer {
     final now = DateTime.now();
     final text = await _textRecognizer.processImage(inputImage);
     final entities = ReceiptParser.processText(text);
-    final receipt = ReceiptParser.buildReceipt(entities);
+    RecognizedReceipt? receipt = ReceiptParser.buildReceipt(entities);
     _lastScan ??= now;
     if (now.difference(_lastScan ?? now) > _scanTimeout) {
       _onScanTimeout?.call();
       _lastScan = null;
     }
     if (receipt == null) return null;
-    if (ReceiptParser.isValidReceipt(receipt)) {
+    receipt = _receiptOptimizer.optimizeReceipt(receipt);
+    if (_receiptOptimizer.isPrecisionLevelReached() &&
+        _receiptOptimizer.isValidReceipt(receipt)) {
       _onScanComplete?.call(receipt);
       _lastScan = null;
       return receipt;
