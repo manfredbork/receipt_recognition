@@ -50,14 +50,4 @@ class RecognizedReceipt {
   RecognizedReceipt({required this.positions, this.sum, this.company});
 }
 
-class CachedPosition extends RecognizedPosition {
-  double probability;
-
-  CachedPosition({
-    required super.product,
-    required super.price,
-    required this.probability,
-  });
-}
-
 enum PrecisionLevel { low, medium, high }

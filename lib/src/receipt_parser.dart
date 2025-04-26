@@ -51,9 +51,10 @@ class ReceiptParser {
   static const _localeEU = 'eu';
   static const _localeUS = 'en_US';
   static const _checkIfUnknown = r'^[^0-9].*$';
-  static const _checkIfAmount = r'^.*-?([0-9])+\s?([.,])\s?([0-9]){2}.*$';
+  static const _checkIfAmount =
+      r'^[^0-9-]*(?<amount>-?([0-9])+\s?([.,])\s?([0-9]){2}).*$';
   static const _replaceIfAmount = r'[^-0-9,.]';
-  static const _checkIfSumLabel = r'^(Zu zahlen|Summe|Gesamtsumme|Total|Sum)$';
+  static const _checkIfSumLabel = r'^.*(Zahlen|Summe|Gesamtsumme|Total|Sum).*$';
   static const _checkIfCompany =
       r'^.*(?<company>(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)).*$';
 
@@ -116,13 +117,13 @@ class ReceiptParser {
 
   /// Finds sum. Returns a [RecognizedSum].
   static RecognizedSum? _findSum(List<RecognizedEntity> entities) {
-    final sumLabel = entities.where(
+    final sumLabels = entities.where(
       (e) =>
           e is RecognizedUnknown &&
           RegExp(_checkIfSumLabel, caseSensitive: false).hasMatch(e.value),
     );
-    if (sumLabel.isEmpty) return null;
-    final ySumLabel = sumLabel.first.line.boundingBox.top;
+    if (sumLabels.isEmpty) return null;
+    final ySumLabel = sumLabels.first.line.boundingBox.top;
     final yAmounts = [...entities.whereType<RecognizedAmount>()];
     if (yAmounts.isEmpty) return null;
     yAmounts.sort(
@@ -147,15 +148,15 @@ class ReceiptParser {
     final sum = _findSum(entities);
     final amounts = _findAmounts(entities);
     if (amounts.isEmpty) return [];
-    final min = amounts.first;
     final max = sum ?? amounts.last;
+    amounts.removeWhere((e) => _isInvalidAmount(e, max));
+    final min = amounts.first;
     final outer = entities.where(
       (e) => _isOuterLeft(e, entities) || _isOuterRight(e, entities),
     );
     if (outer.isEmpty) return [];
     final reduced = [...outer];
     reduced.removeWhere((e) => _isOutOfBounds(e, min, max));
-    reduced.removeWhere((e) => _isInvalidAmount(e, max));
     List<RecognizedEntity> merged = [];
     if (company != null) merged = merged + [company];
     merged = merged + reduced;
@@ -230,13 +231,15 @@ class ReceiptParser {
 
   /// Gets replaced text. Returns a [String].
   static String _getReplacedText(String text) {
-    final locale = _getLocale(text);
+    final parsed =
+        RegExp(_checkIfAmount).firstMatch(text)?.namedGroup('amount') ?? _empty;
+    final locale = _getLocale(parsed);
     if (locale == _localeUS) {
-      return text
+      return parsed
           .replaceAll(RegExp(_replaceIfAmount), _empty)
           .replaceFirst(_comma, _period);
     }
-    return text
+    return parsed
         .replaceAll(RegExp(_replaceIfAmount), _empty)
         .replaceFirst(_period, _comma);
   }

@@ -29,7 +29,7 @@ class ReceiptRecognizer {
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
     ReceiptOptimizer? receiptOptimizer,
-    scanTimeout = const Duration(seconds: 15),
+    scanTimeout = const Duration(seconds: 8),
     onScanTimeout,
     onScanUpdate,
     onScanComplete,
@@ -55,8 +55,7 @@ class ReceiptRecognizer {
     }
     if (receipt == null) return null;
     receipt = _receiptOptimizer.optimizeReceipt(receipt);
-    if (_receiptOptimizer.isPrecisionLevelReached() &&
-        _receiptOptimizer.isValidReceipt(receipt)) {
+    if (_receiptOptimizer.isValidReceipt(receipt)) {
       _onScanComplete?.call(receipt);
       _lastScan = null;
       return receipt;
