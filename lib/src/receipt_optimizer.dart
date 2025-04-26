@@ -34,7 +34,6 @@ class ReceiptOptimizer {
     _cachedPositions ??= [];
     _cachedSum = receipt.sum ?? _cachedSum;
     _cachedCompany = receipt.company ?? _cachedCompany;
-    // TODO: Optimize here
     if (isPrecisionLevelReached() && isValidReceipt(receipt)) {
       _reinit = true;
     }
@@ -43,7 +42,7 @@ class ReceiptOptimizer {
 
   /// Checks if precision level is reached. Returns a [bool].
   bool isPrecisionLevelReached() {
-    return true;
+    return _precisionLevel.index >= 0;
   }
 
   /// Checks if [RecognizedReceipt] is valid. Returns a [bool].
