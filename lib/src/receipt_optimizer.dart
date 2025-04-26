@@ -7,9 +7,6 @@ class ReceiptOptimizer {
   /// Precision level of optimization
   final PrecisionLevel _precisionLevel;
 
-  /// Number of optimization steps
-  int _optimizationSteps = 0;
-
   /// Indicator if reinit happens
   bool _reinit = false;
 
@@ -29,7 +26,6 @@ class ReceiptOptimizer {
   /// Optimizes the [RecognizedReceipt]. Returns a [RecognizedReceipt].
   RecognizedReceipt optimizeReceipt(RecognizedReceipt receipt) {
     if (_reinit) {
-      _optimizationSteps = 0;
       _cachedPositions = null;
       _cachedSum = null;
       _cachedCompany = null;
@@ -39,7 +35,6 @@ class ReceiptOptimizer {
     _cachedSum = receipt.sum ?? _cachedSum;
     _cachedCompany = receipt.company ?? _cachedCompany;
     // TODO: Optimize here
-    _optimizationSteps++;
     if (isPrecisionLevelReached() && isValidReceipt(receipt)) {
       _reinit = true;
     }
@@ -48,7 +43,7 @@ class ReceiptOptimizer {
 
   /// Checks if precision level is reached. Returns a [bool].
   bool isPrecisionLevelReached() {
-    return _optimizationSteps > (_precisionLevel.index + 1) * 2;
+    return true;
   }
 
   /// Checks if [RecognizedReceipt] is valid. Returns a [bool].
