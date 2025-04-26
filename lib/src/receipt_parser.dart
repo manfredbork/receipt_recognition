@@ -45,30 +45,17 @@ class ReceiptParser {
     return RecognizedReceipt(positions: positions, sum: sum, company: company);
   }
 
-  /// Checks if [RecognizedReceipt] is valid. Returns a [bool].
-  static bool isValidReceipt(RecognizedReceipt receipt) {
-    return calculateSum(receipt.positions) == receipt.sum?.formattedValue;
-  }
-
-  /// Adds up prices of positions and formats sum. Returns a [String].
-  static String calculateSum(Iterable<RecognizedPosition> positions) {
-    return NumberFormat.decimalPatternDigits(
-      locale: Intl.defaultLocale,
-      decimalDigits: 2,
-    ).format(positions.fold(0.0, (a, b) => a + b.price.value));
-  }
-
   static const _empty = '';
   static const _period = '.';
   static const _comma = ',';
   static const _localeEU = 'eu';
   static const _localeUS = 'en_US';
-  static const _checkIfSumLabel = r'^(Zu zahlen|Summe|Gesamtsumme|Total|Sum)$';
-  static const _checkIfCompany =
-      r'^.*(?<company>(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)).*$';
   static const _checkIfUnknown = r'^[^0-9].*$';
   static const _checkIfAmount = r'^.*-?([0-9])+\s?([.,])\s?([0-9]){2}.*$';
   static const _replaceIfAmount = r'[^-0-9,.]';
+  static const _checkIfSumLabel = r'^(Zu zahlen|Summe|Gesamtsumme|Total|Sum)$';
+  static const _checkIfCompany =
+      r'^.*(?<company>(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)).*$';
 
   /// Converts [RecognizedText]. Returns a list of [TextLine].
   static List<TextLine> _convertText(RecognizedText text) {
