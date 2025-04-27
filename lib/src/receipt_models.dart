@@ -48,6 +48,11 @@ class RecognizedReceipt {
   final RecognizedCompany? company;
 
   RecognizedReceipt({required this.positions, this.sum, this.company});
-}
 
-enum PrecisionLevel { low, medium, high }
+  get isValid => calculatedSum == sum?.formattedValue;
+
+  get calculatedSum => NumberFormat.decimalPatternDigits(
+    locale: Intl.defaultLocale,
+    decimalDigits: 2,
+  ).format(positions.fold(0.0, (a, b) => a + b.price.value));
+}

@@ -11,7 +11,7 @@ class ReceiptRecognizer {
   /// Uses [TextRecognizer] from Google's ML Kit.
   final TextRecognizer _textRecognizer;
 
-  /// Uses internal [ReceiptOptimizer].
+  /// Uses [ReceiptOptimizer] from this package.
   final ReceiptOptimizer _receiptOptimizer;
 
   /// Duration for scan timeout
@@ -28,15 +28,14 @@ class ReceiptRecognizer {
   /// Constructor to create an instance of [ReceiptRecognizer].
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
-    ReceiptOptimizer? receiptOptimizer,
-    scanTimeout = const Duration(seconds: 8),
+    scanTimeout = const Duration(seconds: 10),
     onScanTimeout,
     onScanUpdate,
     onScanComplete,
   }) : _textRecognizer =
            textRecognizer ??
            TextRecognizer(script: TextRecognitionScript.latin),
-       _receiptOptimizer = receiptOptimizer ?? ReceiptOptimizer(),
+       _receiptOptimizer = ReceiptOptimizer(),
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
@@ -47,20 +46,28 @@ class ReceiptRecognizer {
     final now = DateTime.now();
     final text = await _textRecognizer.processImage(inputImage);
     final entities = ReceiptParser.processText(text);
-    RecognizedReceipt? receipt = ReceiptParser.buildReceipt(entities);
-    _lastScan ??= now;
-    if (now.difference(_lastScan ?? now) > _scanTimeout) {
-      _onScanTimeout?.call();
-      _lastScan = null;
-    }
+    final receipt = ReceiptParser.buildReceipt(entities);
+
     if (receipt == null) return null;
-    receipt = _receiptOptimizer.optimizeReceipt(receipt);
-    if (_receiptOptimizer.isValidReceipt(receipt)) {
-      _onScanComplete?.call(receipt);
+
+    final optimizedReceipt = _receiptOptimizer.optimizeReceipt(receipt);
+
+    if (optimizedReceipt.isValid) {
+      _onScanComplete?.call(optimizedReceipt);
+
       _lastScan = null;
+
       return receipt;
     } else {
-      _onScanUpdate?.call(receipt);
+      _onScanUpdate?.call(optimizedReceipt);
+
+      _lastScan ??= now;
+
+      if (now.difference(_lastScan ?? now) > _scanTimeout) {
+        _onScanTimeout?.call();
+        _lastScan = null;
+      }
+
       return null;
     }
   }

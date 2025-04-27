@@ -24,7 +24,6 @@ void main() {
     test(
       'processImage returns RecognizedReceipt with expected values',
       () async {
-        // Arrange
         final storeTextLine = TextLine(
           text: 'Aldi',
           recognizedLanguages: [],
@@ -34,6 +33,7 @@ void main() {
           confidence: null,
           angle: null,
         );
+
         final milkTextLine = TextLine(
           text: 'Milk',
           recognizedLanguages: [],
@@ -43,6 +43,7 @@ void main() {
           confidence: null,
           angle: null,
         );
+
         final milkPriceTextLine = TextLine(
           text: '\$1.99',
           recognizedLanguages: [],
@@ -52,6 +53,7 @@ void main() {
           confidence: null,
           angle: null,
         );
+
         final butterTextLine = TextLine(
           text: 'Butter',
           recognizedLanguages: [],
@@ -61,6 +63,7 @@ void main() {
           confidence: null,
           angle: null,
         );
+
         final butterPriceTextLine = TextLine(
           text: '\$2.99',
           recognizedLanguages: [],
@@ -70,6 +73,7 @@ void main() {
           confidence: null,
           angle: null,
         );
+
         final totalLabelTextLine = TextLine(
           text: 'Total',
           recognizedLanguages: [],
@@ -79,6 +83,7 @@ void main() {
           confidence: null,
           angle: null,
         );
+
         final totalTextLine = TextLine(
           text: '\$4.98',
           recognizedLanguages: [],
@@ -88,6 +93,7 @@ void main() {
           confidence: null,
           angle: null,
         );
+
         final textBlock = TextBlock(
           text: '',
           recognizedLanguages: [],
@@ -103,16 +109,15 @@ void main() {
             totalTextLine,
           ],
         );
+
         final recognizedText = RecognizedText(text: '', blocks: [textBlock]);
 
         when(
           mockTextRecognizer.processImage(any),
         ).thenAnswer((_) async => recognizedText);
 
-        // Act
         final result = await recognizer.processImage(mockInputImage);
 
-        // Assert
         expect(result?.positions.first.price.value, 2.99);
         expect(result?.positions.first.product.value, 'Butter');
         expect(result?.positions.last.price.value, 1.99);
@@ -123,17 +128,14 @@ void main() {
     );
 
     test('processImage handles empty text gracefully', () async {
-      // Arrange
       final recognizedText = RecognizedText(text: '', blocks: []);
 
       when(
         mockTextRecognizer.processImage(any),
       ).thenAnswer((_) async => recognizedText);
 
-      // Act
       final result = await recognizer.processImage(mockInputImage);
 
-      // Assert
       expect(result, null);
     });
   });
