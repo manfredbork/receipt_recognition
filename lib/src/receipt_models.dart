@@ -31,6 +31,10 @@ class RecognizedAmount extends RecognizedEntity<num> {
   ).format(value);
 }
 
+class RecognizedSumLabel extends RecognizedUnknown {
+  RecognizedSumLabel({required super.line, required super.value});
+}
+
 class RecognizedSum extends RecognizedAmount {
   RecognizedSum({required super.line, required super.value});
 }

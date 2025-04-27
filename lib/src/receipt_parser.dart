@@ -5,35 +5,186 @@ import 'receipt_models.dart';
 
 /// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
+  /// RegExp patterns
+  static const patternCompany =
+      r'(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)';
+  static const patternSumLabel = r'(Zu zahlen|Summe|Gesamtsumme|Total|Sum)';
+  static const patternAmount = r'-?([0-9])+([.,])([0-9]){2}';
+
   /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
     final convertedLines = _convertText(text);
     final parsedEntities = _parseLines(convertedLines);
-    final optimizedEntities = _optimizeEntities(parsedEntities);
-    return _buildReceipt(optimizedEntities);
+    final shrunkenEntities = _shrinkEntities(parsedEntities);
+
+    return _buildReceipt(shrunkenEntities);
   }
 
-  static const _empty = '';
-  static const _period = '.';
-  static const _comma = ',';
-  static const _localeEU = 'eu';
-  static const _localeUS = 'en_US';
-  static const _checkIfUnknown = r'^[^0-9].*$';
-  static const _checkIfAmount =
-      r'^[^0-9-]*(?<amount>-?([0-9])+\s?([.,])\s?([0-9]){2}).*$';
-  static const _replaceIfAmount = r'[^-0-9,.]';
-  static const _checkIfSumLabel = r'^.*(Zahlen|Summe|Gesamtsumme|Total|Sum).*$';
-  static const _checkIfCompany =
-      r'^.*(?<company>(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)).*$';
+  /// Converts [RecognizedText]. Returns a list of [TextLine].
+  static List<TextLine> _convertText(RecognizedText text) {
+    final List<TextLine> lines = [];
+
+    for (final block in text.blocks) {
+      lines.addAll(block.lines.map((line) => line));
+    }
+
+    return lines;
+  }
+
+  /// Parses a list of [TextLine]. Returns a list of [RecognizedEntity].
+  static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
+    final List<RecognizedEntity> parsedEntities = [];
+
+    bool detectedCompany = false;
+    bool detectedSumLabel = false;
+
+    for (final line in lines) {
+      final company = RegExp(
+        patternCompany,
+        caseSensitive: false,
+      ).stringMatch(line.text);
+
+      if (company != null && !detectedCompany) {
+        parsedEntities.add(RecognizedCompany(line: line, value: company));
+        detectedCompany = true;
+
+        continue;
+      }
+
+      final sumLabel = RegExp(
+        patternSumLabel,
+        caseSensitive: false,
+      ).stringMatch(line.text);
+
+      if (sumLabel != null && !detectedSumLabel) {
+        parsedEntities.add(RecognizedSumLabel(line: line, value: sumLabel));
+        detectedSumLabel = true;
+
+        continue;
+      }
+
+      final amount = RegExp(patternAmount).stringMatch(line.text);
+
+      if (amount != null) {
+        final locale = _detectsLocale(amount);
+        final value = NumberFormat.decimalPattern(locale).parse(amount);
+
+        parsedEntities.add(RecognizedAmount(line: line, value: value));
+      } else {
+        parsedEntities.add(RecognizedUnknown(line: line, value: line.text));
+      }
+    }
+
+    return parsedEntities;
+  }
+
+  /// Detects locale by separator. Returns a [String].
+  static String? _detectsLocale(String text) {
+    if (text.contains('.')) {
+      return 'en_US';
+    } else if (text.contains(',')) {
+      return 'eu';
+    }
+
+    return Intl.defaultLocale;
+  }
+
+  /// Shrinks a list of [RecognizedEntity]. Returns a list of [RecognizedEntity].
+  static List<RecognizedEntity> _shrinkEntities(
+    List<RecognizedEntity> entities,
+  ) {
+    final List<RecognizedEntity> shrunkenEntities = List.from(entities);
+
+    shrunkenEntities.removeWhere(
+      (a) => entities.any((b) => _isInvalidAmount(a, b)),
+    );
+    shrunkenEntities.removeWhere(
+      (a) => entities.any((b) => _isInvalidProduct(a, b)),
+    );
+
+    final sumLabels = shrunkenEntities.whereType<RecognizedSumLabel>();
+    final amounts = shrunkenEntities.whereType<RecognizedAmount>();
+
+    if (amounts.isEmpty) return [];
+
+    final RecognizedSum? sum;
+
+    if (sumLabels.isNotEmpty) {
+      sum = _findSum(amounts.toList(), sumLabels.first);
+
+      final indexSum = shrunkenEntities.lastIndexWhere(
+        (e) => e.value == sum?.value,
+      );
+
+      shrunkenEntities.removeAt(indexSum);
+      shrunkenEntities.insert(indexSum, sum);
+    }
+
+    return shrunkenEntities..sort(
+      (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
+    );
+  }
+
+  /// Finds sum in amounts by label. Returns a [RecognizedSum].
+  static RecognizedSum _findSum(
+    List<RecognizedAmount> amounts,
+    RecognizedSumLabel sumLabel,
+  ) {
+    final ySumLabel = sumLabel.line.boundingBox.top;
+    final sortedAmounts = List.from(amounts)..sort(
+      (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
+        (b.line.boundingBox.top - ySumLabel).abs(),
+      ),
+    );
+    final sum = sortedAmounts.first;
+
+    return RecognizedSum(line: sum.line, value: sum.value);
+  }
+
+  /// Checks if [RecognizedEntity] is opposite. Returns a [bool].
+  static bool _isOpposite(RecognizedEntity a, RecognizedEntity b) {
+    final aBB = a.line.boundingBox;
+    final bBB = b.line.boundingBox;
+
+    return a != b && (aBB.bottom > bBB.top && aBB.top < bBB.bottom);
+  }
+
+  /// Checks if [RecognizedEntity] is invalid amount. Returns a [bool].
+  static bool _isInvalidAmount(RecognizedEntity a, RecognizedEntity b) {
+    final aBB = a.line.boundingBox;
+    final bBB = b.line.boundingBox;
+    final aA = a is RecognizedAmount;
+    final aOb = _isOpposite(a, b);
+    final aLb = a.line.boundingBox.right < b.line.boundingBox.left;
+
+    return a != b && (aBB.overlaps(bBB) || (aA && aOb && aLb));
+  }
+
+  /// Checks if [RecognizedEntity] is invalid product. Returns a [bool].
+  static bool _isInvalidProduct(RecognizedEntity a, RecognizedEntity b) {
+    final aBB = a.line.boundingBox;
+    final bBB = b.line.boundingBox;
+    final aU = a is RecognizedUnknown;
+    final aOb = _isOpposite(a, b);
+    final aGb = a.line.boundingBox.right > b.line.boundingBox.left;
+
+    return a != b && (aBB.overlaps(bBB) || (aU && aOb && aGb));
+  }
 
   /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
-    final yUnknowns = [...entities.whereType<RecognizedUnknown>()];
-    if (yUnknowns.isEmpty) return null;
+    final unknowns = entities.whereType<RecognizedUnknown>();
+
+    if (unknowns.isEmpty) return null;
+
+    final yUnknowns = unknowns.toList();
+
     RecognizedSum? sum;
     RecognizedCompany? company;
+
     List<RecognizedPosition> positions = [];
     List<RecognizedUnknown> forbidden = [];
+
     for (final entity in entities) {
       if (entity is RecognizedSum) {
         sum = entity;
@@ -41,11 +192,13 @@ class ReceiptParser {
         company = entity;
       } else if (entity is RecognizedAmount) {
         final yAmount = entity.line.boundingBox.top;
+
         yUnknowns.sort(
           (a, b) => (yAmount - a.line.boundingBox.top).abs().compareTo(
             (yAmount - b.line.boundingBox.top).abs(),
           ),
         );
+
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown)) {
             positions.add(RecognizedPosition(product: yUnknown, price: entity));
@@ -55,202 +208,7 @@ class ReceiptParser {
         }
       }
     }
+
     return RecognizedReceipt(positions: positions, sum: sum, company: company);
-  }
-
-  /// Converts [RecognizedText]. Returns a list of [TextLine].
-  static List<TextLine> _convertText(RecognizedText text) {
-    final List<TextLine> lines = [];
-    for (final block in text.blocks) {
-      lines.addAll(block.lines.map((line) => line));
-    }
-    return lines;
-  }
-
-  /// Parses a list of [TextLine]. Returns a list of [RecognizedEntity].
-  static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
-    final List<RecognizedEntity> parsedEntities = [];
-    for (final line in lines) {
-      if (_isAmount(line.text)) {
-        final locale = _getLocale(line.text);
-        final text = _getReplacedText(line.text);
-        try {
-          parsedEntities.add(
-            RecognizedAmount(
-              line: line,
-              value: NumberFormat.decimalPattern(locale).parse(text),
-            ),
-          );
-        } on FormatException {
-          parsedEntities.add(RecognizedUnknown(line: line, value: line.text));
-        }
-      } else if (_isUnknown(line.text)) {
-        parsedEntities.add(RecognizedUnknown(line: line, value: line.text));
-      }
-    }
-    return parsedEntities;
-  }
-
-  /// Finds amounts. Returns a list of [RecognizedAmount].
-  static List<RecognizedAmount> _findAmounts(List<RecognizedEntity> entities) {
-    final amounts = entities.whereType<RecognizedAmount>();
-    if (amounts.isEmpty) return [];
-    return [...amounts];
-  }
-
-  /// Finds company. Returns a [RecognizedCompany].
-  static RecognizedCompany? _findCompany(List<RecognizedEntity> entities) {
-    final company = entities.where(
-      (e) =>
-          e is RecognizedUnknown &&
-          RegExp(_checkIfCompany, caseSensitive: false).hasMatch(e.value),
-    );
-    if (company.isEmpty) return null;
-    final companyName =
-        RegExp(
-          _checkIfCompany,
-          caseSensitive: false,
-        ).firstMatch(company.first.value)?.namedGroup('company') ??
-        _empty;
-    return RecognizedCompany(line: company.first.line, value: companyName);
-  }
-
-  /// Finds sum. Returns a [RecognizedSum].
-  static RecognizedSum? _findSum(List<RecognizedEntity> entities) {
-    final sumLabels = entities.where(
-      (e) =>
-          e is RecognizedUnknown &&
-          RegExp(_checkIfSumLabel, caseSensitive: false).hasMatch(e.value),
-    );
-    if (sumLabels.isEmpty) return null;
-    final ySumLabel = sumLabels.first.line.boundingBox.top;
-    final yAmounts = [...entities.whereType<RecognizedAmount>()];
-    if (yAmounts.isEmpty) return null;
-    yAmounts.sort(
-      (a, b) => (ySumLabel - a.line.boundingBox.top).abs().compareTo(
-        (ySumLabel - b.line.boundingBox.top).abs(),
-      ),
-    );
-    return RecognizedSum(
-      line: yAmounts.first.line,
-      value: yAmounts.first.value,
-    );
-  }
-
-  /// Optimizes to a list of [RecognizedEntity]. Returns a list of [RecognizedEntity].
-  static List<RecognizedEntity> _optimizeEntities(
-    List<RecognizedEntity> entities,
-  ) {
-    entities.sort(
-      (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
-    );
-    final company = _findCompany(entities);
-    final sum = _findSum(entities);
-    final amounts = _findAmounts(entities);
-    if (amounts.isEmpty) return [];
-    final max = sum ?? amounts.last;
-    amounts.removeWhere((e) => _isInvalidAmount(e, max));
-    final min = amounts.first;
-    final outer = entities.where(
-      (e) => _isOuterLeft(e, entities) || _isOuterRight(e, entities),
-    );
-    if (outer.isEmpty) return [];
-    final reduced = [...outer];
-    reduced.removeWhere((e) => _isOutOfBounds(e, min, max));
-    List<RecognizedEntity> merged = [];
-    if (company != null) merged = merged + [company];
-    merged = merged + reduced;
-    if (sum != null) merged = merged + [sum];
-    merged.removeWhere((e) => _isInvalidCompany(e, min));
-    return merged;
-  }
-
-  /// Checks if entity is on the outer left side. Returns a [bool].
-  static bool _isOuterLeft(
-    RecognizedEntity entity,
-    List<RecognizedEntity> entities,
-  ) {
-    return entities.every(
-      (e) =>
-          !_isOpposite(e, entity) ||
-          (_isOpposite(e, entity) &&
-              e.line.boundingBox.left > entity.line.boundingBox.left),
-    );
-  }
-
-  /// Checks if entity is on the outer right side. Returns a [bool].
-  static bool _isOuterRight(
-    RecognizedEntity entity,
-    List<RecognizedEntity> entities,
-  ) {
-    return entities.every(
-      (e) =>
-          !_isOpposite(e, entity) ||
-          (_isOpposite(e, entity) &&
-              e.line.boundingBox.right < entity.line.boundingBox.right),
-    );
-  }
-
-  /// Checks if [RecognizedEntity] is opposite. Returns a [bool].
-  static bool _isOpposite(RecognizedEntity a, RecognizedEntity b) {
-    return !a.line.boundingBox.overlaps(b.line.boundingBox) &&
-        a.line.boundingBox.bottom > b.line.boundingBox.top &&
-        a.line.boundingBox.top < b.line.boundingBox.bottom;
-  }
-
-  /// Checks if [RecognizedEntity] is out of bounds. Returns a [bool].
-  static bool _isOutOfBounds(
-    RecognizedEntity entity,
-    RecognizedEntity min,
-    RecognizedEntity max,
-  ) {
-    return (entity is! RecognizedCompany) &&
-        (entity.line.boundingBox.bottom < min.line.boundingBox.top ||
-            entity.line.boundingBox.top >= max.line.boundingBox.top);
-  }
-
-  /// Checks if entity is an invalid [RecognizedCompany]. Returns a [bool].
-  static bool _isInvalidCompany(RecognizedEntity entity, RecognizedEntity min) {
-    return entity is RecognizedCompany &&
-        entity.line.boundingBox.bottom > min.line.boundingBox.top;
-  }
-
-  /// Checks if entity is an invalid [RecognizedAmount]. Returns a [bool].
-  static bool _isInvalidAmount(RecognizedEntity entity, RecognizedEntity max) {
-    return entity is RecognizedAmount &&
-        entity.line.boundingBox.right < max.line.boundingBox.left;
-  }
-
-  /// Gets locale by separator. Returns a [String].
-  static String _getLocale(String text) {
-    if (text.contains(_period)) {
-      return _localeUS;
-    }
-    return _localeEU;
-  }
-
-  /// Gets replaced text. Returns a [String].
-  static String _getReplacedText(String text) {
-    final parsed =
-        RegExp(_checkIfAmount).firstMatch(text)?.namedGroup('amount') ?? _empty;
-    final locale = _getLocale(parsed);
-    if (locale == _localeUS) {
-      return parsed
-          .replaceAll(RegExp(_replaceIfAmount), _empty)
-          .replaceFirst(_comma, _period);
-    }
-    return parsed
-        .replaceAll(RegExp(_replaceIfAmount), _empty)
-        .replaceFirst(_period, _comma);
-  }
-
-  /// Checks if text is [RecognizedUnknown]. Returns [bool].
-  static bool _isUnknown(String text) {
-    return RegExp(_checkIfUnknown).hasMatch(text);
-  }
-
-  /// Checks if text is [RecognizedAmount]. Returns [bool].
-  static bool _isAmount(String text) {
-    return RegExp(_checkIfAmount).hasMatch(text);
   }
 }
