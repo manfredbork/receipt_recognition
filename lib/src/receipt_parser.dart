@@ -17,6 +17,13 @@ class ReceiptParser {
     final parsedEntities = _parseLines(convertedLines);
     final shrunkenEntities = _shrinkEntities(parsedEntities);
 
+    if (shrunkenEntities.isNotEmpty) {
+      print('**********************');
+    }
+    for (final entity in shrunkenEntities) {
+      print('$entity ${entity.formattedValue}');
+    }
+
     return _buildReceipt(shrunkenEntities);
   }
 
@@ -96,29 +103,40 @@ class ReceiptParser {
     final List<RecognizedEntity> shrunkenEntities = List.from(entities);
 
     shrunkenEntities.removeWhere(
-      (a) => entities.any((b) => _isInvalidAmount(a, b)),
-    );
-    shrunkenEntities.removeWhere(
-      (a) => entities.any((b) => _isInvalidProduct(a, b)),
+      (a) => entities.any((b) => _isInvalidOpposite(a, b)),
     );
 
-    final sumLabels = shrunkenEntities.whereType<RecognizedSumLabel>();
     final amounts = shrunkenEntities.whereType<RecognizedAmount>();
 
     if (amounts.isEmpty) return [];
 
-    final RecognizedSum? sum;
+    final sumLabels = shrunkenEntities.whereType<RecognizedSumLabel>();
 
     if (sumLabels.isNotEmpty) {
-      sum = _findSum(amounts.toList(), sumLabels.first);
-
+      final sum = _findSum(amounts.toList(), sumLabels.first);
       final indexSum = shrunkenEntities.lastIndexWhere(
-        (e) => e.value == sum?.value,
+        (e) => e.value == sum.value,
       );
 
       shrunkenEntities.removeAt(indexSum);
       shrunkenEntities.insert(indexSum, sum);
+
+      shrunkenEntities.removeWhere(
+        (e) => e.line.boundingBox.top > sum.line.boundingBox.top,
+      );
     }
+
+    shrunkenEntities.removeWhere(
+      (e) =>
+          e is RecognizedAmount &&
+          e.line.boundingBox.right < amounts.last.line.boundingBox.left,
+    );
+
+    shrunkenEntities.removeWhere(
+      (e) =>
+          e is! RecognizedCompany &&
+          e.line.boundingBox.top < amounts.first.line.boundingBox.top,
+    );
 
     return shrunkenEntities..sort(
       (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
@@ -143,32 +161,19 @@ class ReceiptParser {
 
   /// Checks if [RecognizedEntity] is opposite. Returns a [bool].
   static bool _isOpposite(RecognizedEntity a, RecognizedEntity b) {
-    final aBB = a.line.boundingBox;
-    final bBB = b.line.boundingBox;
+    final aBox = a.line.boundingBox;
+    final bBox = a.line.boundingBox;
 
-    return a != b && (aBB.bottom > bBB.top && aBB.top < bBB.bottom);
+    return !aBox.overlaps(bBox) &&
+        (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
   }
 
-  /// Checks if [RecognizedEntity] is invalid amount. Returns a [bool].
-  static bool _isInvalidAmount(RecognizedEntity a, RecognizedEntity b) {
-    final aBB = a.line.boundingBox;
-    final bBB = b.line.boundingBox;
-    final aA = a is RecognizedAmount;
-    final aOb = _isOpposite(a, b);
-    final aLb = a.line.boundingBox.right < b.line.boundingBox.left;
+  /// Checks if [RecognizedEntity] is invalid opposite. Returns a [bool].
+  static bool _isInvalidOpposite(RecognizedEntity a, RecognizedEntity b) {
+    final aBox = a.line.boundingBox;
+    final bBox = a.line.boundingBox;
 
-    return a != b && (aBB.overlaps(bBB) || (aA && aOb && aLb));
-  }
-
-  /// Checks if [RecognizedEntity] is invalid product. Returns a [bool].
-  static bool _isInvalidProduct(RecognizedEntity a, RecognizedEntity b) {
-    final aBB = a.line.boundingBox;
-    final bBB = b.line.boundingBox;
-    final aU = a is RecognizedUnknown;
-    final aOb = _isOpposite(a, b);
-    final aGb = a.line.boundingBox.right > b.line.boundingBox.left;
-
-    return a != b && (aBB.overlaps(bBB) || (aU && aOb && aGb));
+    return a is RecognizedAmount && _isOpposite(a, b) && aBox.right < bBox.left;
   }
 
   /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
