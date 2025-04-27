@@ -5,16 +5,29 @@ import 'receipt_models.dart';
 
 /// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
-  /// Processes [RecognizedText]. Returns a list of [RecognizedEntity].
-  static List<RecognizedEntity> processText(RecognizedText text) {
+  /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
+  static RecognizedReceipt? processText(RecognizedText text) {
     final convertedLines = _convertText(text);
     final parsedEntities = _parseLines(convertedLines);
     final optimizedEntities = _optimizeEntities(parsedEntities);
-    return optimizedEntities;
+    return _buildReceipt(optimizedEntities);
   }
 
+  static const _empty = '';
+  static const _period = '.';
+  static const _comma = ',';
+  static const _localeEU = 'eu';
+  static const _localeUS = 'en_US';
+  static const _checkIfUnknown = r'^[^0-9].*$';
+  static const _checkIfAmount =
+      r'^[^0-9-]*(?<amount>-?([0-9])+\s?([.,])\s?([0-9]){2}).*$';
+  static const _replaceIfAmount = r'[^-0-9,.]';
+  static const _checkIfSumLabel = r'^.*(Zahlen|Summe|Gesamtsumme|Total|Sum).*$';
+  static const _checkIfCompany =
+      r'^.*(?<company>(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)).*$';
+
   /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
-  static RecognizedReceipt? buildReceipt(List<RecognizedEntity> entities) {
+  static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = [...entities.whereType<RecognizedUnknown>()];
     if (yUnknowns.isEmpty) return null;
     RecognizedSum? sum;
@@ -44,19 +57,6 @@ class ReceiptParser {
     }
     return RecognizedReceipt(positions: positions, sum: sum, company: company);
   }
-
-  static const _empty = '';
-  static const _period = '.';
-  static const _comma = ',';
-  static const _localeEU = 'eu';
-  static const _localeUS = 'en_US';
-  static const _checkIfUnknown = r'^[^0-9].*$';
-  static const _checkIfAmount =
-      r'^[^0-9-]*(?<amount>-?([0-9])+\s?([.,])\s?([0-9]){2}).*$';
-  static const _replaceIfAmount = r'[^-0-9,.]';
-  static const _checkIfSumLabel = r'^.*(Zahlen|Summe|Gesamtsumme|Total|Sum).*$';
-  static const _checkIfCompany =
-      r'^.*(?<company>(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)).*$';
 
   /// Converts [RecognizedText]. Returns a list of [TextLine].
   static List<TextLine> _convertText(RecognizedText text) {

@@ -11,9 +11,6 @@ class ReceiptRecognizer {
   /// Uses [TextRecognizer] from Google's ML Kit.
   final TextRecognizer _textRecognizer;
 
-  /// Uses [ReceiptOptimizer] from this package.
-  final ReceiptOptimizer _receiptOptimizer;
-
   /// Duration for scan timeout
   final Duration _scanTimeout;
 
@@ -35,7 +32,6 @@ class ReceiptRecognizer {
   }) : _textRecognizer =
            textRecognizer ??
            TextRecognizer(script: TextRecognitionScript.latin),
-       _receiptOptimizer = ReceiptOptimizer(),
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
@@ -45,12 +41,11 @@ class ReceiptRecognizer {
   Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
     final now = DateTime.now();
     final text = await _textRecognizer.processImage(inputImage);
-    final entities = ReceiptParser.processText(text);
-    final receipt = ReceiptParser.buildReceipt(entities);
+    final receipt = ReceiptParser.processText(text);
 
     if (receipt == null) return null;
 
-    final optimizedReceipt = _receiptOptimizer.optimizeReceipt(receipt);
+    final optimizedReceipt = ReceiptOptimizer.optimizeReceipt(receipt);
 
     if (optimizedReceipt.isValid) {
       _onScanComplete?.call(optimizedReceipt);
