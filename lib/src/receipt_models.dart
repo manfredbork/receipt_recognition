@@ -34,12 +34,21 @@ class RecognizedAmount extends RecognizedEntity<num> {
   ).format(value);
 }
 
-class RecognizedSumLabel extends RecognizedUnknown {
+class RecognizedSumLabel extends RecognizedEntity<String> {
   RecognizedSumLabel({required super.line, required super.value});
+
+  @override
+  get formattedValue => value;
 }
 
-class RecognizedSum extends RecognizedAmount {
+class RecognizedSum extends RecognizedEntity<num> {
   RecognizedSum({required super.line, required super.value});
+
+  @override
+  get formattedValue => NumberFormat.decimalPatternDigits(
+    locale: Intl.defaultLocale,
+    decimalDigits: 2,
+  ).format(value);
 }
 
 class RecognizedPosition {
