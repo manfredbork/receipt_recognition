@@ -17,8 +17,11 @@ class RecognizedUnknown extends RecognizedEntity<String> {
   get formattedValue => value;
 }
 
-class RecognizedCompany extends RecognizedUnknown {
+class RecognizedCompany extends RecognizedEntity<String> {
   RecognizedCompany({required super.line, required super.value});
+
+  @override
+  get formattedValue => value;
 }
 
 class RecognizedAmount extends RecognizedEntity<num> {
@@ -29,6 +32,10 @@ class RecognizedAmount extends RecognizedEntity<num> {
     locale: Intl.defaultLocale,
     decimalDigits: 2,
   ).format(value);
+}
+
+class RecognizedSumLabel extends RecognizedUnknown {
+  RecognizedSumLabel({required super.line, required super.value});
 }
 
 class RecognizedSum extends RecognizedAmount {
@@ -48,16 +55,11 @@ class RecognizedReceipt {
   final RecognizedCompany? company;
 
   RecognizedReceipt({required this.positions, this.sum, this.company});
+
+  get isValid => calculatedSum == sum?.formattedValue;
+
+  get calculatedSum => NumberFormat.decimalPatternDigits(
+    locale: Intl.defaultLocale,
+    decimalDigits: 2,
+  ).format(positions.fold(0.0, (a, b) => a + b.price.value));
 }
-
-class CachedPosition extends RecognizedPosition {
-  double probability;
-
-  CachedPosition({
-    required super.product,
-    required super.price,
-    required this.probability,
-  });
-}
-
-enum PrecisionLevel { low, medium, high }
