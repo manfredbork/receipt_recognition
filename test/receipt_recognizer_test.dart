@@ -35,7 +35,7 @@ void main() {
         );
 
         final milkTextLine = TextLine(
-          text: 'Milk',
+          text: 'Cocoa 3.5%',
           recognizedLanguages: [],
           boundingBox: Rect.fromLTWH(0, 2, 1, 1),
           cornerPoints: [],
@@ -121,7 +121,7 @@ void main() {
         expect(result?.positions.first.price.value, 2.99);
         expect(result?.positions.first.product.value, 'Butter');
         expect(result?.positions.last.price.value, 1.99);
-        expect(result?.positions.last.product.value, 'Milk');
+        expect(result?.positions.last.product.value, 'Cocoa 3.5%');
         expect(result?.company?.value, 'Aldi');
         expect(result?.sum?.value, 4.98);
       },

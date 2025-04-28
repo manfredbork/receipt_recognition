@@ -9,16 +9,16 @@ class ReceiptParser {
   static const patternCompany =
       r'(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)';
   static const patternSumLabel = r'(Zu zahlen|Summe|Gesamtsumme|Total|Sum)';
+  static const patternUnknown = r'[^0-9.,\s]{5,}';
   static const patternAmount = r'-?([0-9])+([.,])([0-9]){2}';
-  static const patternUnknown = r'([^0-9]){6,}';
 
   /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
-    final convertedLines = _convertText(text);
-    final parsedEntities = _parseLines(convertedLines);
-    final shrunkenEntities = _shrinkEntities(parsedEntities);
+    final converted = _convertText(text);
+    final parsed = _parseLines(converted);
+    final shrunken = _shrinkEntities(parsed);
 
-    return _buildReceipt(shrunkenEntities);
+    return _buildReceipt(shrunken);
   }
 
   /// Converts [RecognizedText]. Returns a list of [TextLine].
@@ -34,7 +34,7 @@ class ReceiptParser {
 
   /// Parses a list of [TextLine]. Returns a list of [RecognizedEntity].
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
-    final List<RecognizedEntity> parsedEntities = [];
+    final List<RecognizedEntity> parsed = [];
 
     bool detectedCompany = false;
     bool detectedSumLabel = false;
@@ -46,7 +46,7 @@ class ReceiptParser {
       ).stringMatch(line.text);
 
       if (company != null && !detectedCompany) {
-        parsedEntities.add(RecognizedCompany(line: line, value: company));
+        parsed.add(RecognizedCompany(line: line, value: company));
         detectedCompany = true;
 
         continue;
@@ -58,26 +58,31 @@ class ReceiptParser {
       ).stringMatch(line.text);
 
       if (sumLabel != null && !detectedSumLabel) {
-        parsedEntities.add(RecognizedSumLabel(line: line, value: sumLabel));
+        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
         detectedSumLabel = true;
 
         continue;
       }
 
-      final amount = RegExp(patternAmount).stringMatch(line.text);
-      final isUnknown = RegExp(patternUnknown).hasMatch(line.text);
+      final unknown = RegExp(patternUnknown).stringMatch(line.text);
 
-      if (amount != null && !isUnknown) {
+      if (unknown != null) {
+        parsed.add(RecognizedUnknown(line: line, value: line.text));
+
+        continue;
+      }
+
+      final amount = RegExp(patternAmount).stringMatch(line.text);
+
+      if (amount != null) {
         final locale = _detectsLocale(amount);
         final value = NumberFormat.decimalPattern(locale).parse(amount);
 
-        parsedEntities.add(RecognizedAmount(line: line, value: value));
-      } else {
-        parsedEntities.add(RecognizedUnknown(line: line, value: line.text));
+        parsed.add(RecognizedAmount(line: line, value: value));
       }
     }
 
-    return parsedEntities;
+    return parsed;
   }
 
   /// Detects locale by separator. Returns a [String].
@@ -95,32 +100,31 @@ class ReceiptParser {
   static List<RecognizedEntity> _shrinkEntities(
     List<RecognizedEntity> entities,
   ) {
-    final List<RecognizedEntity> shrunkenEntities = List.from(entities);
+    final List<RecognizedEntity> shrunken = List.from(entities);
 
-    shrunkenEntities.removeWhere((a) => entities.any((b) => _isInvalid(a, b)));
+    shrunken.removeWhere((a) => entities.any((b) => _isInvalid(a, b)));
+    shrunken.removeWhere((a) => entities.every((b) => _isNotOpposite(a, b)));
 
-    final amounts = shrunkenEntities.whereType<RecognizedAmount>();
+    final amounts = shrunken.whereType<RecognizedAmount>();
 
     if (amounts.isEmpty) return [];
 
-    final sumLabels = shrunkenEntities.whereType<RecognizedSumLabel>();
+    final sumLabels = shrunken.whereType<RecognizedSumLabel>();
 
     if (sumLabels.isNotEmpty) {
       final sum = _findSum(amounts.toList(), sumLabels.first);
-      final indexSum = shrunkenEntities.lastIndexWhere(
-        (e) => e.value == sum.value,
-      );
+      final indexSum = shrunken.indexWhere((e) => e.value == sum.value);
 
-      shrunkenEntities.removeAt(indexSum);
-      shrunkenEntities.insert(indexSum, sum);
-      shrunkenEntities.removeWhere((e) => _isBelowLowerBound(e, sum));
+      shrunken.removeAt(indexSum);
+      shrunken.insert(indexSum, sum);
+      shrunken.removeWhere((e) => _isBelowLowerBound(e, sum));
     } else {
-      shrunkenEntities.removeWhere((e) => _isBelowLowerBound(e, amounts.last));
+      shrunken.removeWhere((e) => _isBelowLowerBound(e, amounts.last));
     }
 
-    shrunkenEntities.removeWhere((e) => _isAboveUpperBound(e, amounts.first));
+    shrunken.removeWhere((e) => _isAboveUpperBound(e, amounts.first));
 
-    return shrunkenEntities..sort(
+    return shrunken..sort(
       (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
     );
   }
@@ -148,6 +152,11 @@ class ReceiptParser {
 
     return !aBox.overlaps(bBox) &&
         (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
+  }
+
+  /// Checks if [RecognizedEntity] is not opposite. Returns a [bool].
+  static bool _isNotOpposite(RecognizedEntity a, RecognizedEntity b) {
+    return a is! RecognizedCompany && !_isOpposite(a, b);
   }
 
   /// Checks if [RecognizedEntity] is invalid. Returns a [bool].
