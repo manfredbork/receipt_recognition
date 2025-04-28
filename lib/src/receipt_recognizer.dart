@@ -52,7 +52,7 @@ class ReceiptRecognizer {
 
       _lastScan = null;
 
-      return receipt;
+      return optimizedReceipt;
     } else {
       _onScanUpdate?.call(optimizedReceipt);
 

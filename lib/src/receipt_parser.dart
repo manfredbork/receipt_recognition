@@ -7,9 +7,8 @@ import 'receipt_models.dart';
 class ReceiptParser {
   /// RegExp patterns
   static const patternCompany =
-      r'(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)';
-  static const patternSumLabel = r'(Zu zahlen|Summe|Gesamtsumme|Total|Sum)';
-  static const patternUnknown = r'[^0-9]{4,}';
+      r'(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto|akzenta)';
+  static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
   static const patternAmount = r'-?([0-9])+([.,])([0-9]){2}';
 
   /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
@@ -29,7 +28,8 @@ class ReceiptParser {
       lines.addAll(block.lines.map((line) => line));
     }
 
-    return lines;
+    return lines
+      ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
   /// Parses a list of [TextLine]. Returns a list of [RecognizedEntity].
@@ -64,14 +64,6 @@ class ReceiptParser {
         continue;
       }
 
-      final unknown = RegExp(patternUnknown).stringMatch(line.text);
-
-      if (unknown != null) {
-        parsed.add(RecognizedUnknown(line: line, value: line.text));
-
-        continue;
-      }
-
       final amount = RegExp(patternAmount).stringMatch(line.text);
 
       if (amount != null) {
@@ -79,6 +71,21 @@ class ReceiptParser {
         final value = NumberFormat.decimalPattern(locale).parse(amount);
 
         parsed.add(RecognizedAmount(line: line, value: value));
+      } else {
+        parsed.add(RecognizedUnknown(line: line, value: line.text));
+      }
+    }
+
+    final sumLabels = parsed.whereType<RecognizedSumLabel>();
+
+    if (sumLabels.isNotEmpty) {
+      final sum = _findSum(parsed, sumLabels.first);
+
+      if (sum != null) {
+        final indexSum = parsed.indexWhere((e) => e.value == sum.value);
+
+        parsed.removeAt(indexSum);
+        parsed.insert(indexSum, sum);
       }
     }
 
@@ -102,47 +109,50 @@ class ReceiptParser {
   ) {
     final List<RecognizedEntity> shrunken = List.from(entities);
 
-    shrunken.removeWhere((a) => entities.any((b) => _isInvalid(a, b)));
-    shrunken.removeWhere((a) => entities.every((b) => _isNotOpposite(a, b)));
+    shrunken.removeWhere((a) => shrunken.every((b) => _isInvalid(a, b)));
+
+    final sums = shrunken.whereType<RecognizedSum>();
+
+    if (sums.isNotEmpty) {
+      shrunken.removeWhere((e) => _isGreaterThanBottomBound(e, sums.first));
+      shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, sums.first));
+    }
 
     final amounts = shrunken.whereType<RecognizedAmount>();
 
-    if (amounts.isEmpty) return [];
-
-    final sumLabels = shrunken.whereType<RecognizedSumLabel>();
-
-    if (sumLabels.isNotEmpty) {
-      final sum = _findSum(amounts.toList(), sumLabels.first);
-      final indexSum = shrunken.indexWhere((e) => e.value == sum.value);
-
-      shrunken.removeAt(indexSum);
-      shrunken.insert(indexSum, sum);
-      shrunken.removeWhere((e) => _isBelowLowerBound(e, sum));
-    } else {
-      shrunken.removeWhere((e) => _isBelowLowerBound(e, amounts.last));
+    if (amounts.isNotEmpty) {
+      shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, amounts.first));
+      shrunken.removeWhere((e) => _isSmallerThanTopBound(e, amounts.first));
+      shrunken.removeWhere((e) => _isGreaterThanBottomBound(e, amounts.last));
     }
 
-    shrunken.removeWhere((e) => _isAboveUpperBound(e, amounts.first));
-
-    return shrunken..sort(
-      (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
-    );
+    return shrunken;
   }
 
-  /// Finds sum in amounts by label. Returns a [RecognizedSum].
-  static RecognizedSum _findSum(
-    List<RecognizedAmount> amounts,
+  /// Finds sum by sum label. Returns a [RecognizedSum].
+  static RecognizedSum? _findSum(
+    List<RecognizedEntity> entities,
     RecognizedSumLabel sumLabel,
   ) {
+    final amounts = entities.whereType<RecognizedAmount>();
     final ySumLabel = sumLabel.line.boundingBox.top;
-    final sortedAmounts = List.from(amounts)..sort(
-      (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
-        (b.line.boundingBox.top - ySumLabel).abs(),
-      ),
-    );
-    final sum = sortedAmounts.first;
+    final sorted =
+        amounts.toList()..sort(
+          (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
+            (b.line.boundingBox.top - ySumLabel).abs(),
+          ),
+        );
 
-    return RecognizedSum(line: sum.line, value: sum.value);
+    if (sorted.isNotEmpty) {
+      return RecognizedSum(line: sorted.first.line, value: sorted.first.value);
+    }
+
+    return null;
+  }
+
+  /// Checks if [RecognizedEntity] is invalid. Returns a [bool].
+  static bool _isInvalid(RecognizedEntity a, RecognizedEntity b) {
+    return a is! RecognizedCompany && !_isOpposite(a, b);
   }
 
   /// Checks if [RecognizedEntity] is opposite. Returns a [bool].
@@ -154,35 +164,31 @@ class ReceiptParser {
         (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
   }
 
-  /// Checks if [RecognizedEntity] is not opposite. Returns a [bool].
-  static bool _isNotOpposite(RecognizedEntity a, RecognizedEntity b) {
-    return a is! RecognizedCompany && !_isOpposite(a, b);
-  }
-
-  /// Checks if [RecognizedEntity] is invalid. Returns a [bool].
-  static bool _isInvalid(RecognizedEntity a, RecognizedEntity b) {
+  /// Checks if [RecognizedEntity] is smaller than left bound. Returns a [bool].
+  static bool _isSmallerThanLeftBound(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
 
-    return _isOpposite(a, b) &&
-        ((a is RecognizedAmount && aBox.right < bBox.left) ||
-            (a is! RecognizedAmount && aBox.left > bBox.right));
+    return a is RecognizedAmount && aBox.left < bBox.left;
   }
 
-  /// Checks if [RecognizedEntity] is above upper bound. Returns a [bool].
-  static bool _isAboveUpperBound(RecognizedEntity a, RecognizedEntity b) {
+  /// Checks if [RecognizedEntity] is smaller than top bound. Returns a [bool].
+  static bool _isSmallerThanTopBound(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
 
-    return a is! RecognizedCompany && aBox.bottom < bBox.top;
+    return a is RecognizedAmount && aBox.top < bBox.top;
   }
 
-  /// Checks if [RecognizedEntity] is below lower bound. Returns a [bool].
-  static bool _isBelowLowerBound(RecognizedEntity a, RecognizedEntity b) {
+  /// Checks if [RecognizedEntity] is greater than bottom bound. Returns a [bool].
+  static bool _isGreaterThanBottomBound(
+    RecognizedEntity a,
+    RecognizedEntity b,
+  ) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
 
-    return aBox.top > bBox.bottom;
+    return a is RecognizedAmount && aBox.bottom > bBox.bottom;
   }
 
   /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
