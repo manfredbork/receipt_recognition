@@ -17,8 +17,11 @@ class RecognizedUnknown extends RecognizedEntity<String> {
   get formattedValue => value;
 }
 
-class RecognizedCompany extends RecognizedUnknown {
+class RecognizedCompany extends RecognizedEntity<String> {
   RecognizedCompany({required super.line, required super.value});
+
+  @override
+  get formattedValue => value;
 }
 
 class RecognizedAmount extends RecognizedEntity<num> {

@@ -10,19 +10,13 @@ class ReceiptParser {
       r'(Lidl|Aldi|Rewe|Edeka|Penny|Rossmann|Kaufland|Netto)';
   static const patternSumLabel = r'(Zu zahlen|Summe|Gesamtsumme|Total|Sum)';
   static const patternAmount = r'-?([0-9])+([.,])([0-9]){2}';
+  static const patternUnknown = r'([^0-9]){6,}';
 
   /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
     final convertedLines = _convertText(text);
     final parsedEntities = _parseLines(convertedLines);
     final shrunkenEntities = _shrinkEntities(parsedEntities);
-
-    if (shrunkenEntities.isNotEmpty) {
-      print('**********************');
-    }
-    for (final entity in shrunkenEntities) {
-      print('$entity ${entity.formattedValue}');
-    }
 
     return _buildReceipt(shrunkenEntities);
   }
@@ -71,8 +65,9 @@ class ReceiptParser {
       }
 
       final amount = RegExp(patternAmount).stringMatch(line.text);
+      final isUnknown = RegExp(patternUnknown).hasMatch(line.text);
 
-      if (amount != null) {
+      if (amount != null && !isUnknown) {
         final locale = _detectsLocale(amount);
         final value = NumberFormat.decimalPattern(locale).parse(amount);
 
@@ -102,9 +97,7 @@ class ReceiptParser {
   ) {
     final List<RecognizedEntity> shrunkenEntities = List.from(entities);
 
-    shrunkenEntities.removeWhere(
-      (a) => entities.any((b) => _isInvalidOpposite(a, b)),
-    );
+    shrunkenEntities.removeWhere((a) => entities.any((b) => _isInvalid(a, b)));
 
     final amounts = shrunkenEntities.whereType<RecognizedAmount>();
 
@@ -120,23 +113,12 @@ class ReceiptParser {
 
       shrunkenEntities.removeAt(indexSum);
       shrunkenEntities.insert(indexSum, sum);
-
-      shrunkenEntities.removeWhere(
-        (e) => e.line.boundingBox.top > sum.line.boundingBox.top,
-      );
+      shrunkenEntities.removeWhere((e) => _isBelowLowerBound(e, sum));
+    } else {
+      shrunkenEntities.removeWhere((e) => _isBelowLowerBound(e, amounts.last));
     }
 
-    shrunkenEntities.removeWhere(
-      (e) =>
-          e is RecognizedAmount &&
-          e.line.boundingBox.right < amounts.last.line.boundingBox.left,
-    );
-
-    shrunkenEntities.removeWhere(
-      (e) =>
-          e is! RecognizedCompany &&
-          e.line.boundingBox.top < amounts.first.line.boundingBox.top,
-    );
+    shrunkenEntities.removeWhere((e) => _isAboveUpperBound(e, amounts.first));
 
     return shrunkenEntities..sort(
       (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
@@ -162,18 +144,36 @@ class ReceiptParser {
   /// Checks if [RecognizedEntity] is opposite. Returns a [bool].
   static bool _isOpposite(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
-    final bBox = a.line.boundingBox;
+    final bBox = b.line.boundingBox;
 
     return !aBox.overlaps(bBox) &&
         (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
   }
 
-  /// Checks if [RecognizedEntity] is invalid opposite. Returns a [bool].
-  static bool _isInvalidOpposite(RecognizedEntity a, RecognizedEntity b) {
+  /// Checks if [RecognizedEntity] is invalid. Returns a [bool].
+  static bool _isInvalid(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
-    final bBox = a.line.boundingBox;
+    final bBox = b.line.boundingBox;
 
-    return a is RecognizedAmount && _isOpposite(a, b) && aBox.right < bBox.left;
+    return _isOpposite(a, b) &&
+        ((a is RecognizedAmount && aBox.right < bBox.left) ||
+            (a is! RecognizedAmount && aBox.left > bBox.right));
+  }
+
+  /// Checks if [RecognizedEntity] is above upper bound. Returns a [bool].
+  static bool _isAboveUpperBound(RecognizedEntity a, RecognizedEntity b) {
+    final aBox = a.line.boundingBox;
+    final bBox = b.line.boundingBox;
+
+    return a is! RecognizedCompany && aBox.bottom < bBox.top;
+  }
+
+  /// Checks if [RecognizedEntity] is below lower bound. Returns a [bool].
+  static bool _isBelowLowerBound(RecognizedEntity a, RecognizedEntity b) {
+    final aBox = a.line.boundingBox;
+    final bBox = b.line.boundingBox;
+
+    return aBox.top > bBox.bottom;
   }
 
   /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
