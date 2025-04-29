@@ -25,7 +25,7 @@ void main() {
       'processImage returns RecognizedReceipt with expected values',
       () async {
         final storeTextLine = TextLine(
-          text: 'Aldi',
+          text: 'ALDI',
           recognizedLanguages: [],
           boundingBox: Rect.fromLTWH(0, 0, 1, 1),
           cornerPoints: [],
@@ -122,7 +122,7 @@ void main() {
         expect(result?.positions.first.product.value, 'Butter');
         expect(result?.positions.last.price.value, 1.99);
         expect(result?.positions.last.product.value, 'Cocoa 3.5%');
-        expect(result?.company?.value, 'Aldi');
+        expect(result?.company?.value, 'ALDI');
         expect(result?.sum?.value, 4.98);
       },
     );

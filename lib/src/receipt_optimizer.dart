@@ -11,12 +11,29 @@ class ReceiptOptimizer {
   /// Optimizes the [RecognizedReceipt]. Returns a [RecognizedReceipt].
   static RecognizedReceipt optimizeReceipt(RecognizedReceipt receipt) {
     if (_reinit) {
-      _cachedReceipts.clear();
       _reinit = false;
+      _cachedReceipts.clear();
+    }
+
+    _cachedReceipts.add(receipt);
+
+    if (_cachedReceipts.length >= 10) {
+      _reinit = true;
     }
 
     if (receipt.isValid) {
       _reinit = true;
+
+      if (receipt.company == null) {
+        for (final cachedReceipt in _cachedReceipts) {
+          if (cachedReceipt.company != null) {
+            return RecognizedReceipt(
+              positions: receipt.positions,
+              company: cachedReceipt.company,
+            );
+          }
+        }
+      }
     }
 
     return receipt;
