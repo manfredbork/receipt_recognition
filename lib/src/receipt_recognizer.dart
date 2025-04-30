@@ -25,7 +25,7 @@ class ReceiptRecognizer {
   /// Constructor to create an instance of [ReceiptRecognizer].
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
-    scanTimeout = const Duration(seconds: 10),
+    scanTimeout = const Duration(seconds: 30),
     onScanTimeout,
     onScanUpdate,
     onScanComplete,

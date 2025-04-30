@@ -7,7 +7,7 @@ import 'receipt_models.dart';
 class ReceiptParser {
   /// RegExp patterns
   static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
-  static const patternUnknown = r'([^0-9]){6,}';
+  static const patternUnknown = r'([^0-9\s]){4,}';
   static const patternAmount = r'-?([0-9])+\s?([.,])\s?([0-9]){2}';
 
   /// RegExp patterns and aliases
@@ -176,10 +176,15 @@ class ReceiptParser {
         );
 
     if (yAmounts.isNotEmpty) {
-      return RecognizedSum(
-        line: yAmounts.first.line,
-        value: yAmounts.first.value,
-      );
+      final yAmount = yAmounts.first.line.boundingBox.top;
+      final hSumLabel = (ySumLabel - sumLabel.line.boundingBox.bottom).abs();
+
+      if ((yAmount - ySumLabel).abs() < hSumLabel) {
+        return RecognizedSum(
+          line: yAmounts.first.line,
+          value: yAmounts.first.value,
+        );
+      }
     }
 
     return null;
@@ -237,6 +242,7 @@ class ReceiptParser {
 
     final yUnknowns = unknowns.toList();
 
+    RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
     RecognizedCompany? company;
 
@@ -246,10 +252,9 @@ class ReceiptParser {
     for (int i = 0; i < entities.length; i++) {
       final entity = entities[i];
 
-      String key = i > 0 ? entities[i - 1].formattedValue : '';
-      key += i < entities.length - 1 ? entities[i + 1].formattedValue : '';
-
-      if (entity is RecognizedSum) {
+      if (entity is RecognizedSumLabel) {
+        sumLabel = entity;
+      } else if (entity is RecognizedSum) {
         sum = entity;
       } else if (entity is RecognizedCompany) {
         company = entity;
@@ -264,19 +269,15 @@ class ReceiptParser {
 
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown)) {
-            positions.add(
-              RecognizedPosition(
-                product: yUnknown,
-                price: entity,
-                key: Object.hash(key, entity.formattedValue).toString(),
-              ),
-            );
+            positions.add(RecognizedPosition(product: yUnknown, price: entity));
             forbidden.add(yUnknown);
             break;
           }
         }
       }
     }
+
+    if (sumLabel == null) sum = null;
 
     return RecognizedReceipt(positions: positions, sum: sum, company: company);
   }
