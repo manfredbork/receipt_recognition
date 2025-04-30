@@ -243,7 +243,17 @@ class ReceiptParser {
     List<RecognizedPosition> positions = [];
     List<RecognizedUnknown> forbidden = [];
 
-    for (final entity in entities) {
+    for (int i = 0; i < entities.length; i++) {
+      final entity = entities[i];
+
+      String key = '';
+      if (i > 0) {
+        key += entities[i - 1].formattedValue;
+      }
+      if (i < entities.length - 1) {
+        key += entities[i + 1].formattedValue;
+      }
+
       if (entity is RecognizedSum) {
         sum = entity;
       } else if (entity is RecognizedCompany) {
@@ -259,7 +269,13 @@ class ReceiptParser {
 
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown)) {
-            positions.add(RecognizedPosition(product: yUnknown, price: entity));
+            positions.add(
+              RecognizedPosition(
+                product: yUnknown,
+                price: entity,
+                key: Object.hash(key, entity.formattedValue).toString(),
+              ),
+            );
             forbidden.add(yUnknown);
             break;
           }
