@@ -1,51 +1,54 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
-abstract class RecognizedEntity<T> {
-  final TextLine line;
+abstract class Valuable<T> {
   final T value;
 
-  RecognizedEntity({required this.line, required this.value});
+  Valuable({required this.value});
 
-  get formattedValue;
+  String get formattedValue;
+}
+
+abstract class RecognizedEntity<T> extends Valuable<T> {
+  final TextLine line;
+
+  RecognizedEntity({required this.line, required super.value});
 }
 
 class RecognizedUnknown extends RecognizedEntity<String> {
   RecognizedUnknown({required super.line, required super.value});
 
   @override
-  get formattedValue => value;
+  String get formattedValue => value;
 }
 
-class RecognizedCompany extends RecognizedEntity<String> {
+class RecognizedCompany extends RecognizedUnknown {
   RecognizedCompany({required super.line, required super.value});
-
-  @override
-  get formattedValue => value;
 }
 
 class RecognizedAmount extends RecognizedEntity<num> {
   RecognizedAmount({required super.line, required super.value});
 
   @override
-  get formattedValue => NumberFormat.decimalPatternDigits(
+  String get formattedValue => NumberFormat.decimalPatternDigits(
     locale: Intl.defaultLocale,
     decimalDigits: 2,
   ).format(value);
 }
 
-class RecognizedSumLabel extends RecognizedEntity<String> {
+class RecognizedSumLabel extends RecognizedUnknown {
   RecognizedSumLabel({required super.line, required super.value});
-
-  @override
-  get formattedValue => value;
 }
 
-class RecognizedSum extends RecognizedEntity<num> {
+class RecognizedSum extends RecognizedAmount {
   RecognizedSum({required super.line, required super.value});
+}
+
+class CalculatedSum extends Valuable<double> {
+  CalculatedSum({required super.value});
 
   @override
-  get formattedValue => NumberFormat.decimalPatternDigits(
+  String get formattedValue => NumberFormat.decimalPatternDigits(
     locale: Intl.defaultLocale,
     decimalDigits: 2,
   ).format(value);
@@ -54,8 +57,16 @@ class RecognizedSum extends RecognizedEntity<num> {
 class RecognizedPosition {
   final RecognizedEntity product;
   final RecognizedEntity price;
+  final String? key;
 
-  RecognizedPosition({required this.product, required this.price});
+  RecognizedPosition({required this.product, required this.price, this.key});
+
+  @override
+  bool operator ==(Object other) =>
+      other is RecognizedPosition && price == other.price && key == other.key;
+
+  @override
+  int get hashCode => Object.hash(price, key);
 }
 
 class RecognizedReceipt {
@@ -65,10 +76,8 @@ class RecognizedReceipt {
 
   RecognizedReceipt({required this.positions, this.sum, this.company});
 
-  get isValid => calculatedSum == sum?.formattedValue;
+  bool get isValid => calculatedSum.formattedValue == sum?.formattedValue;
 
-  get calculatedSum => NumberFormat.decimalPatternDigits(
-    locale: Intl.defaultLocale,
-    decimalDigits: 2,
-  ).format(positions.fold(0.0, (a, b) => a + b.price.value));
+  CalculatedSum get calculatedSum =>
+      CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
 }
