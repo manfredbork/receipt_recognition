@@ -246,13 +246,8 @@ class ReceiptParser {
     for (int i = 0; i < entities.length; i++) {
       final entity = entities[i];
 
-      String key = '';
-      if (i > 0) {
-        key += entities[i - 1].formattedValue;
-      }
-      if (i < entities.length - 1) {
-        key += entities[i + 1].formattedValue;
-      }
+      String key = i > 0 ? entities[i - 1].formattedValue : '';
+      key += i < entities.length - 1 ? entities[i + 1].formattedValue : '';
 
       if (entity is RecognizedSum) {
         sum = entity;
