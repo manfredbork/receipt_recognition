@@ -7,7 +7,7 @@ import 'receipt_models.dart';
 class ReceiptParser {
   /// RegExp patterns
   static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
-  static const patternUnknown = r'([^0-9]){6,}';
+  static const patternUnknown = r'([^0-9-\s]){4,}';
   static const patternAmount = r'-?([0-9])+\s?([.,])\s?([0-9]){2}';
 
   /// RegExp patterns and aliases
@@ -27,8 +27,9 @@ class ReceiptParser {
     final converted = _convertText(text);
     final parsed = _parseLines(converted);
     final shrunken = _shrinkEntities(parsed);
+    final receipt = _buildReceipt(shrunken);
 
-    return _buildReceipt(shrunken);
+    return receipt;
   }
 
   /// Converts [RecognizedText]. Returns a list of [TextLine].
@@ -214,7 +215,7 @@ class ReceiptParser {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
 
-    return a is RecognizedAmount && aBox.left < bBox.left;
+    return a is RecognizedAmount && aBox.right < bBox.left;
   }
 
   /// Checks if [RecognizedEntity] is smaller than top bound. Returns a [bool].
@@ -251,8 +252,6 @@ class ReceiptParser {
     List<RecognizedPosition> positions = [];
     List<RecognizedUnknown> forbidden = [];
 
-    int? key;
-
     for (final entity in entities) {
       if (entity is RecognizedSumLabel) {
         sumLabel = entity;
@@ -271,11 +270,8 @@ class ReceiptParser {
 
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown)) {
-            positions.add(
-              RecognizedPosition(product: yUnknown, price: entity, key: key),
-            );
+            positions.add(RecognizedPosition(product: yUnknown, price: entity));
             forbidden.add(yUnknown);
-            key = positions.last.hashCode;
             break;
           }
         }

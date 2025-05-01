@@ -2,57 +2,35 @@ import 'receipt_models.dart';
 
 /// A receipt optimizer that improves text recognition of [RecognizedReceipt].
 class ReceiptOptimizer {
-  /// Cached receipt
-  static RecognizedReceipt? _cachedReceipt;
+  /// Cached positions from multiple scans
+  static final Map<int, RecognizedPosition> _cachedPositions = {};
+
+  /// Cached sum from multiple scans
+  static RecognizedSum? sum;
+
+  /// Cached company from multiple scans
+  static RecognizedCompany? company;
 
   /// Optimizes the [RecognizedReceipt]. Returns a [RecognizedReceipt].
   static RecognizedReceipt optimizeReceipt(RecognizedReceipt receipt) {
-    if (receipt.isValid) {
-      _cachedReceipt = null;
-      return receipt;
-    }
-
-    final mergedReceipt = mergeReceipts(receipt);
+    final mergedReceipt = mergeReceiptFromCache(receipt);
 
     if (mergedReceipt.isValid) {
-      _cachedReceipt = null;
       return mergedReceipt;
     }
-
-    _cachedReceipt = mergedReceipt;
 
     return receipt;
   }
 
-  /// Merges with cached [RecognizedReceipt]. Returns a [RecognizedReceipt].
-  static RecognizedReceipt mergeReceipts(RecognizedReceipt receipt) {
-    final List<RecognizedPosition> mergedPositions =
-        _cachedReceipt?.positions ?? [];
+  /// Merges receipt from cache. Returns a [RecognizedReceipt].
+  static RecognizedReceipt mergeReceiptFromCache(RecognizedReceipt receipt) {
+    sum = receipt.sum ?? sum;
+    company = receipt.company ?? company;
 
-    if (mergedPositions == receipt.positions) return receipt;
-
-    for (final position in receipt.positions) {
-      if (!mergedPositions.any((p) => p.hashCode == position.hashCode)) {
-        mergedPositions.add(position);
-      }
-    }
-
-    final mergedReceipt = RecognizedReceipt(
-      positions: mergedPositions,
-      sum: receipt.sum ?? _cachedReceipt?.sum,
-      company: receipt.company ?? _cachedReceipt?.company,
+    return RecognizedReceipt(
+      positions: receipt.positions,
+      sum: sum,
+      company: company,
     );
-
-    final sum = mergedReceipt.sum;
-
-    if (sum != null && sum.value < mergedReceipt.calculatedSum.value) {
-      return RecognizedReceipt(
-        positions: [],
-        sum: mergedReceipt.sum,
-        company: mergedReceipt.company,
-      );
-    }
-
-    return mergedReceipt;
   }
 }
