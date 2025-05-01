@@ -2,40 +2,35 @@ import 'receipt_models.dart';
 
 /// A receipt optimizer that improves text recognition of [RecognizedReceipt].
 class ReceiptOptimizer {
-  /// Cached receipts from multiple scans
-  static final List<RecognizedReceipt> _cachedReceipts = [];
+  /// Cached positions from multiple scans
+  static final Map<int, RecognizedPosition> _cachedPositions = {};
 
-  /// Indicator if reinit happens
-  static bool _reinit = false;
+  /// Cached sum from multiple scans
+  static RecognizedSum? sum;
+
+  /// Cached company from multiple scans
+  static RecognizedCompany? company;
 
   /// Optimizes the [RecognizedReceipt]. Returns a [RecognizedReceipt].
   static RecognizedReceipt optimizeReceipt(RecognizedReceipt receipt) {
-    if (_reinit) {
-      _reinit = false;
-      _cachedReceipts.clear();
-    }
+    final mergedReceipt = mergeReceiptFromCache(receipt);
 
-    _cachedReceipts.add(receipt);
-
-    if (_cachedReceipts.length >= 10) {
-      _reinit = true;
-    }
-
-    if (receipt.isValid) {
-      _reinit = true;
-
-      if (receipt.company == null) {
-        for (final cachedReceipt in _cachedReceipts) {
-          if (cachedReceipt.company != null) {
-            return RecognizedReceipt(
-              positions: receipt.positions,
-              company: cachedReceipt.company,
-            );
-          }
-        }
-      }
+    if (mergedReceipt.isValid) {
+      return mergedReceipt;
     }
 
     return receipt;
+  }
+
+  /// Merges receipt from cache. Returns a [RecognizedReceipt].
+  static RecognizedReceipt mergeReceiptFromCache(RecognizedReceipt receipt) {
+    sum = receipt.sum ?? sum;
+    company = receipt.company ?? company;
+
+    return RecognizedReceipt(
+      positions: receipt.positions,
+      sum: sum,
+      company: company,
+    );
   }
 }

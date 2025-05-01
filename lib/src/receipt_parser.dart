@@ -7,7 +7,7 @@ import 'receipt_models.dart';
 class ReceiptParser {
   /// RegExp patterns
   static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
-  static const patternUnknown = r'([^0-9]){6,}';
+  static const patternUnknown = r'([^0-9-\s]){4,}';
   static const patternAmount = r'-?([0-9])+\s?([.,])\s?([0-9]){2}';
 
   /// RegExp patterns and aliases
@@ -27,8 +27,9 @@ class ReceiptParser {
     final converted = _convertText(text);
     final parsed = _parseLines(converted);
     final shrunken = _shrinkEntities(parsed);
+    final receipt = _buildReceipt(shrunken);
 
-    return _buildReceipt(shrunken);
+    return receipt;
   }
 
   /// Converts [RecognizedText]. Returns a list of [TextLine].
@@ -117,20 +118,10 @@ class ReceiptParser {
   ) {
     final List<RecognizedEntity> shrunken = List.from(entities);
 
-    final amounts = shrunken.whereType<RecognizedAmount>();
-
-    final xAmounts =
-        amounts.toList()..sort(
-          (a, b) =>
-              (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
-        );
-
-    if (xAmounts.isNotEmpty) {
-      shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, xAmounts.last));
-    }
+    final beforeAmounts = shrunken.whereType<RecognizedAmount>();
 
     final yAmounts =
-        amounts.toList()..sort(
+        beforeAmounts.toList()..sort(
           (a, b) =>
               (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
         );
@@ -158,6 +149,18 @@ class ReceiptParser {
 
     shrunken.removeWhere((a) => shrunken.every((b) => _isInvalid(a, b)));
 
+    final afterAmounts = shrunken.whereType<RecognizedAmount>();
+
+    final xAmounts =
+        afterAmounts.toList()..sort(
+          (a, b) =>
+              (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
+        );
+
+    if (xAmounts.isNotEmpty) {
+      shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, xAmounts.last));
+    }
+
     return shrunken;
   }
 
@@ -176,10 +179,15 @@ class ReceiptParser {
         );
 
     if (yAmounts.isNotEmpty) {
-      return RecognizedSum(
-        line: yAmounts.first.line,
-        value: yAmounts.first.value,
-      );
+      final yAmount = yAmounts.first.line.boundingBox.top;
+      final hSumLabel = (ySumLabel - sumLabel.line.boundingBox.bottom).abs();
+
+      if ((yAmount - ySumLabel).abs() < hSumLabel) {
+        return RecognizedSum(
+          line: yAmounts.first.line,
+          value: yAmounts.first.value,
+        );
+      }
     }
 
     return null;
@@ -237,6 +245,7 @@ class ReceiptParser {
 
     final yUnknowns = unknowns.toList();
 
+    RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
     RecognizedCompany? company;
 
@@ -244,7 +253,9 @@ class ReceiptParser {
     List<RecognizedUnknown> forbidden = [];
 
     for (final entity in entities) {
-      if (entity is RecognizedSum) {
+      if (entity is RecognizedSumLabel) {
+        sumLabel = entity;
+      } else if (entity is RecognizedSum) {
         sum = entity;
       } else if (entity is RecognizedCompany) {
         company = entity;
@@ -266,6 +277,8 @@ class ReceiptParser {
         }
       }
     }
+
+    if (sumLabel == null) sum = null;
 
     return RecognizedReceipt(positions: positions, sum: sum, company: company);
   }
