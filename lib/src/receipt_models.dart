@@ -57,23 +57,15 @@ class CalculatedSum extends Valuable<double> {
 class RecognizedPosition {
   final RecognizedEntity product;
   final RecognizedEntity price;
+  final int? key;
 
-  RecognizedPosition({required this.product, required this.price});
-
-  String get key {
-    final text = product.line.text.replaceAll(RegExp(r'[^A-Za-z]'), '');
-    if (text.length >= 4) {
-      return text.substring(0, 2) + text.substring(text.length - 2);
-    }
-    return text;
-  }
+  RecognizedPosition({required this.product, required this.price, this.key});
 
   @override
-  bool operator ==(Object other) =>
-      other is RecognizedPosition && price == other.price && key == other.key;
+  bool operator ==(Object other) => hashCode == other.hashCode;
 
   @override
-  int get hashCode => Object.hash(price, key);
+  int get hashCode => Object.hash(price.formattedValue, key);
 }
 
 class RecognizedReceipt {

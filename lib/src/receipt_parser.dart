@@ -7,7 +7,7 @@ import 'receipt_models.dart';
 class ReceiptParser {
   /// RegExp patterns
   static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
-  static const patternUnknown = r'([^0-9\s]){4,}';
+  static const patternUnknown = r'([^0-9]){6,}';
   static const patternAmount = r'-?([0-9])+\s?([.,])\s?([0-9]){2}';
 
   /// RegExp patterns and aliases
@@ -117,20 +117,10 @@ class ReceiptParser {
   ) {
     final List<RecognizedEntity> shrunken = List.from(entities);
 
-    final amounts = shrunken.whereType<RecognizedAmount>();
-
-    final xAmounts =
-        amounts.toList()..sort(
-          (a, b) =>
-              (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
-        );
-
-    if (xAmounts.isNotEmpty) {
-      shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, xAmounts.last));
-    }
+    final beforeAmounts = shrunken.whereType<RecognizedAmount>();
 
     final yAmounts =
-        amounts.toList()..sort(
+        beforeAmounts.toList()..sort(
           (a, b) =>
               (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
         );
@@ -157,6 +147,18 @@ class ReceiptParser {
     }
 
     shrunken.removeWhere((a) => shrunken.every((b) => _isInvalid(a, b)));
+
+    final afterAmounts = shrunken.whereType<RecognizedAmount>();
+
+    final xAmounts =
+        afterAmounts.toList()..sort(
+          (a, b) =>
+              (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
+        );
+
+    if (xAmounts.isNotEmpty) {
+      shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, xAmounts.last));
+    }
 
     return shrunken;
   }
@@ -212,7 +214,7 @@ class ReceiptParser {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
 
-    return a is RecognizedAmount && aBox.right < bBox.left;
+    return a is RecognizedAmount && aBox.left < bBox.left;
   }
 
   /// Checks if [RecognizedEntity] is smaller than top bound. Returns a [bool].
@@ -249,9 +251,9 @@ class ReceiptParser {
     List<RecognizedPosition> positions = [];
     List<RecognizedUnknown> forbidden = [];
 
-    for (int i = 0; i < entities.length; i++) {
-      final entity = entities[i];
+    int? key;
 
+    for (final entity in entities) {
       if (entity is RecognizedSumLabel) {
         sumLabel = entity;
       } else if (entity is RecognizedSum) {
@@ -269,8 +271,11 @@ class ReceiptParser {
 
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown)) {
-            positions.add(RecognizedPosition(product: yUnknown, price: entity));
+            positions.add(
+              RecognizedPosition(product: yUnknown, price: entity, key: key),
+            );
             forbidden.add(yUnknown);
+            key = positions.last.hashCode;
             break;
           }
         }
