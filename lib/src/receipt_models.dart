@@ -60,13 +60,12 @@ class RecognizedPosition {
 
   RecognizedPosition({required this.product, required this.price});
 
-  String get key {
+  String? get key {
     final text = product.value.replaceAll(r'[^A-Za-z0-9]', '');
     if (text.length >= 4) {
-      int i = (text.length >> 1).toInt() - 2;
-      return text.substring(i, text.length - i);
+      return text.substring(0, 2) + text.substring(text.length - 2);
     }
-    return product.value;
+    return null;
   }
 
   @override
