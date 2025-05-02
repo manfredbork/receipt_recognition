@@ -4,11 +4,11 @@ import 'receipt_models.dart';
 
 /// A receipt optimizer that improves text recognition of [RecognizedReceipt].
 class ReceiptOptimizer {
+  /// Initializes cached variables if true
+  static bool _init = false;
+
   /// Cached positions from multiple scans
   static final List<RecognizedPosition> _cachedPositions = [];
-
-  /// Cached product values from multiple scans
-  static final Map<int, List<String>> _cachedProductValues = {};
 
   /// Cached sum from multiple scans
   static RecognizedSum? _sum;
@@ -18,34 +18,26 @@ class ReceiptOptimizer {
 
   /// Optimizes the [RecognizedReceipt]. Returns a [RecognizedReceipt].
   static RecognizedReceipt optimizeReceipt(RecognizedReceipt receipt) {
-    final mergedReceipt = mergeReceiptFromCache(receipt);
-
-    if (kDebugMode) {
-      if (mergedReceipt.positions.isNotEmpty) {
-        print('***************************');
-      }
-      for (final position in mergedReceipt.positions) {
-        print(
-          '${position.product.value} ${position.price.formattedValue} ${position.hashCode}',
-        );
-      }
-      if (mergedReceipt.positions.isNotEmpty) {
-        print(
-          '${mergedReceipt.calculatedSum.formattedValue} / ${mergedReceipt.sum?.formattedValue}',
-        );
-      }
-    }
-
-    if (mergedReceipt.isValid) {
+    if (_init == true) {
       _cachedPositions.clear();
-      _cachedProductValues.clear();
       _sum = null;
       _company = null;
+      _init = false;
+    }
 
+    final mergedReceipt = mergeReceiptFromCache(receipt);
+
+    if (mergedReceipt.isValid) {
+      _init = true;
       return mergedReceipt;
     }
 
     return receipt;
+  }
+
+  /// Initializes cached variables on next optimization call.
+  static void init() {
+    _init = true;
   }
 
   /// Merges receipt from cache. Returns a [RecognizedReceipt].
@@ -54,42 +46,51 @@ class ReceiptOptimizer {
     _company = receipt.company ?? _company;
 
     RecognizedReceipt? mergedReceipt;
-    int insertIndex = 0;
+
+    int index = 0;
 
     for (final position in receipt.positions) {
-      final index = _cachedPositions.lastIndexWhere((p) => p == position);
-
-      if (index >= 0) {
-        insertIndex = index;
-      } else if (insertIndex < _cachedPositions.length) {
-        _cachedPositions.insert(insertIndex++, position);
-      } else {
-        _cachedPositions.add(position);
-      }
-
-      if (_cachedProductValues.containsKey(position.hashCode)) {
-        _cachedProductValues[position.hashCode]?.add(position.product.value);
-      } else {
-        _cachedProductValues[position.hashCode] = [position.product.value];
-      }
-
-      mergedReceipt = RecognizedReceipt(
-        positions: _cachedPositions,
-        sum: _sum,
-        company: _company,
+      index = _cachedPositions.indexWhere(
+        (p) =>
+            p.product.isSimilar(position.product) &&
+            p.price.formattedValue == position.price.formattedValue,
       );
 
-      if (mergedReceipt.isValid) {
-        return mergedReceipt;
+      if (index == -1) {
+        _cachedPositions.add(position);
+      } else {
+        _cachedPositions[index].product.addValueAlias(position.product.value);
       }
     }
 
-    if (mergedReceipt != null) {
+    mergedReceipt = RecognizedReceipt(
+      positions: _cachedPositions,
+      sum: _sum,
+      company: _company,
+    );
+
+    if (mergedReceipt.isValid) {
       return mergedReceipt;
     }
 
+    if (kDebugMode) {
+      if (_cachedPositions.isNotEmpty) {
+        print('***************************');
+      }
+      for (final position in _cachedPositions) {
+        print(
+          '${position.product.formattedValue} ${position.price.formattedValue} ${position.product.valueAliases}',
+        );
+      }
+      if (_cachedPositions.isNotEmpty) {
+        print(
+          '${mergedReceipt.calculatedSum.formattedValue} / ${mergedReceipt.sum?.formattedValue}',
+        );
+      }
+    }
+
     return RecognizedReceipt(
-      positions: receipt.positions,
+      positions: _cachedPositions,
       sum: _sum,
       company: _company,
     );

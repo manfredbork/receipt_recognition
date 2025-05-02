@@ -117,7 +117,7 @@ void main() {
         ).thenAnswer((_) async => recognizedText);
 
         final result = await recognizer.processImage(mockInputImage);
-
+        
         expect(result?.positions.first.price.value, 2.99);
         expect(result?.positions.first.product.value, 'Butter');
         expect(result?.positions.last.price.value, 1.99);

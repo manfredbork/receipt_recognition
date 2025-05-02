@@ -1,3 +1,5 @@
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
+import 'package:fuzzywuzzy/ratios/simple_ratio.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
@@ -44,7 +46,7 @@ class RecognizedSum extends RecognizedAmount {
   RecognizedSum({required super.line, required super.value});
 }
 
-class CalculatedSum extends Valuable<double> {
+class CalculatedSum extends Valuable<num> {
   CalculatedSum({required super.value});
 
   @override
@@ -54,25 +56,63 @@ class CalculatedSum extends Valuable<double> {
   ).format(value);
 }
 
-class RecognizedPosition {
-  final RecognizedEntity product;
-  final RecognizedEntity price;
+class RecognizedProduct extends RecognizedUnknown {
+  final List<String> valueAliases;
+  final int similarity;
 
-  RecognizedPosition({required this.product, required this.price});
+  RecognizedProduct({
+    required super.line,
+    required super.value,
+    this.similarity = 66,
+  }) : valueAliases = [value],
+       formattedValue = value;
 
-  String? get key {
-    final text = product.value.replaceAll(r'[^A-Za-z0-9]', '');
-    if (text.length >= 4) {
-      return text.substring(0, 2) + text.substring(text.length - 2);
+  void addValueAlias(String valueAlias) {
+    valueAliases.add(valueAlias);
+
+    final Map<String, int> popularity = {};
+
+    for (final value in valueAliases) {
+      if (popularity.containsKey(value)) {
+        popularity[value] = popularity[value]! + 1;
+      } else {
+        popularity[value] = 1;
+      }
     }
-    return null;
+
+    final sorted = [...popularity.entries]
+      ..sort((a, b) => a.value.compareTo(b.value));
+
+    formattedValue = sorted.lastOrNull?.key ?? formattedValue;
+  }
+
+  bool isSimilar(RecognizedProduct other) {
+    try {
+      extractOne(
+        query: other.value,
+        choices: valueAliases,
+        cutoff: similarity,
+        ratio: SimpleRatio(),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
-  bool operator ==(Object other) => hashCode == other.hashCode;
+  String formattedValue;
+}
 
-  @override
-  int get hashCode => Object.hash(price.formattedValue, key);
+class RecognizedPrice extends RecognizedAmount {
+  RecognizedPrice({required super.line, required super.value});
+}
+
+class RecognizedPosition {
+  final RecognizedProduct product;
+  final RecognizedPrice price;
+
+  RecognizedPosition({required this.product, required this.price});
 }
 
 class RecognizedReceipt {

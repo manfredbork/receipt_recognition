@@ -44,8 +44,8 @@ void main() {
       final line1 = MockTextLine('Apple');
       final line2 = MockTextLine('0.99');
       final position = RecognizedPosition(
-        product: RecognizedUnknown(line: line1, value: 'Apple'),
-        price: RecognizedAmount(line: line2, value: 0.99),
+        product: RecognizedProduct(line: line1, value: 'Apple'),
+        price: RecognizedPrice(line: line2, value: 0.99),
       );
 
       final receipt = RecognizedReceipt(
@@ -62,8 +62,8 @@ void main() {
     test('Allows null sum and company', () {
       final line = MockTextLine('Banana');
       final position = RecognizedPosition(
-        product: RecognizedUnknown(line: line, value: 'Banana'),
-        price: RecognizedAmount(line: line, value: 1.49),
+        product: RecognizedProduct(line: line, value: 'Banana'),
+        price: RecognizedPrice(line: line, value: 1.49),
       );
 
       final receipt = RecognizedReceipt(positions: [position]);

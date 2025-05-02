@@ -7,8 +7,8 @@ import 'receipt_models.dart';
 class ReceiptParser {
   /// RegExp patterns
   static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
-  static const patternUnknown = r'([^0-9-\s]){4,}';
-  static const patternAmount = r'-?([0-9])+\s?([.,])\s?([0-9]){2}';
+  static const patternUnknown = r'([^0-9\s]){4,}';
+  static const patternAmount = r'-?\s?([0-9])+\s?([.,])\s?([0-9]){2}';
 
   /// RegExp patterns and aliases
   static const patternsCompany = {
@@ -270,7 +270,15 @@ class ReceiptParser {
 
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown)) {
-            positions.add(RecognizedPosition(product: yUnknown, price: entity));
+            positions.add(
+              RecognizedPosition(
+                product: RecognizedProduct(
+                  value: yUnknown.value,
+                  line: yUnknown.line,
+                ),
+                price: RecognizedPrice(line: entity.line, value: entity.value),
+              ),
+            );
             forbidden.add(yUnknown);
             break;
           }

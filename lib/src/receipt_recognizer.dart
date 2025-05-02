@@ -61,6 +61,8 @@ class ReceiptRecognizer {
       if (now.difference(_lastScan ?? now) > _scanTimeout) {
         _onScanTimeout?.call();
         _lastScan = null;
+
+        ReceiptOptimizer.init();
       }
 
       return null;
