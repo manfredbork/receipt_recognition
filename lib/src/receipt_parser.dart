@@ -6,13 +6,14 @@ import 'receipt_models.dart';
 /// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
   /// RegExp patterns
-  static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
-  static const patternUnknown = r'([^0-9\s]){4,}';
+  static const patternDisallowed = r'(Steuer|Brutto|Rückgeld|BAR|Geg.|Handeingabe|E-Bon|Stk)';
+  static const patternSumLabel = r'(Zu zahlen|Summe|Sunne|Total|Sum)';
+  static const patternUnknown = r'([^0-9]){6,}';
   static const patternAmount = r'-?\s?([0-9])+\s?([.,])\s?([0-9]){2}';
 
   /// RegExp patterns and aliases
   static const patternsCompany = {
-    'ldl': 'Lidl',
+    'lidl': 'Lidl',
     'aldi': 'ALDI',
     'rewe': 'REWE',
     'edeka': 'EDEKA',
@@ -52,6 +53,8 @@ class ReceiptParser {
     bool detectedSumLabel = false;
 
     for (final line in lines) {
+      if (RegExp(patternDisallowed).hasMatch(line.text)) continue;
+
       final company = RegExp(
         '(${patternsCompany.keys.join('|')})',
         caseSensitive: false,
@@ -120,11 +123,9 @@ class ReceiptParser {
 
     final beforeAmounts = shrunken.whereType<RecognizedAmount>();
 
-    final yAmounts =
-        beforeAmounts.toList()..sort(
-          (a, b) =>
-              (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
-        );
+    final yAmounts = List.from(beforeAmounts)..sort(
+      (a, b) => (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
+    );
 
     if (yAmounts.isNotEmpty) {
       shrunken.removeWhere((e) => _isSmallerThanTopBound(e, yAmounts.first));
@@ -151,11 +152,9 @@ class ReceiptParser {
 
     final afterAmounts = shrunken.whereType<RecognizedAmount>();
 
-    final xAmounts =
-        afterAmounts.toList()..sort(
-          (a, b) =>
-              (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
-        );
+    final xAmounts = List.from(afterAmounts)..sort(
+      (a, b) => (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
+    );
 
     if (xAmounts.isNotEmpty) {
       shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, xAmounts.last));
@@ -171,12 +170,11 @@ class ReceiptParser {
   ) {
     final ySumLabel = sumLabel.line.boundingBox.top;
     final amounts = entities.whereType<RecognizedAmount>();
-    final yAmounts =
-        amounts.toList()..sort(
-          (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
-            (b.line.boundingBox.top - ySumLabel).abs(),
-          ),
-        );
+    final yAmounts = List.from(amounts)..sort(
+      (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
+        (b.line.boundingBox.top - ySumLabel).abs(),
+      ),
+    );
 
     if (yAmounts.isNotEmpty) {
       final yAmount = yAmounts.first.line.boundingBox.top;
@@ -243,7 +241,7 @@ class ReceiptParser {
 
     if (unknowns.isEmpty) return null;
 
-    final yUnknowns = unknowns.toList();
+    final yUnknowns = List.from(unknowns);
 
     RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;

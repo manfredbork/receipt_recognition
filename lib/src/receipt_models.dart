@@ -63,27 +63,45 @@ class RecognizedProduct extends RecognizedUnknown {
   RecognizedProduct({
     required super.line,
     required super.value,
-    this.similarity = 66,
+    this.similarity = 75,
   }) : valueAliases = [value],
-       formattedValue = value;
+       formattedValue = value,
+       credibility = 100;
 
   void addValueAlias(String valueAlias) {
-    valueAliases.add(valueAlias);
+    if (valueAliases.length < 100) {
+      valueAliases.add(valueAlias);
+    }
 
-    final Map<String, int> popularity = {};
+    recalculateCredibility();
+  }
+
+  void addAllValueAliases(List<String> allValueAliases) {
+    if (valueAliases.length < 100) {
+      valueAliases.addAll(allValueAliases);
+    }
+
+    recalculateCredibility();
+  }
+
+  void recalculateCredibility() {
+    final Map<String, int> rank = {};
 
     for (final value in valueAliases) {
-      if (popularity.containsKey(value)) {
-        popularity[value] = popularity[value]! + 1;
+      if (rank.containsKey(value)) {
+        rank[value] = rank[value]! + 1;
       } else {
-        popularity[value] = 1;
+        rank[value] = 1;
       }
     }
 
-    final sorted = [...popularity.entries]
+    final sorted = List.from(rank.entries)
       ..sort((a, b) => a.value.compareTo(b.value));
 
-    formattedValue = sorted.lastOrNull?.key ?? formattedValue;
+    if (sorted.isNotEmpty) {
+      formattedValue = sorted.last.key;
+      credibility = (sorted.last.value / valueAliases.length * 100).toInt();
+    }
   }
 
   bool isSimilar(RecognizedProduct other) {
@@ -102,6 +120,8 @@ class RecognizedProduct extends RecognizedUnknown {
 
   @override
   String formattedValue;
+
+  int credibility;
 }
 
 class RecognizedPrice extends RecognizedAmount {

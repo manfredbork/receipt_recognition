@@ -29,6 +29,23 @@ class ReceiptOptimizer {
 
     if (mergedReceipt.isValid) {
       _init = true;
+
+      if (kDebugMode) {
+        if (mergedReceipt.positions.isNotEmpty) {
+          print('***************************');
+        }
+        for (final position in mergedReceipt.positions) {
+          print(
+            '${position.product.formattedValue} ${position.price.formattedValue} ${position.product.credibility} ${position.product.valueAliases}',
+          );
+        }
+        if (mergedReceipt.positions.isNotEmpty) {
+          print(
+            '${mergedReceipt.calculatedSum.formattedValue} / ${mergedReceipt.sum?.formattedValue}',
+          );
+        }
+      }
+
       return mergedReceipt;
     }
 
@@ -46,7 +63,7 @@ class ReceiptOptimizer {
     _company = receipt.company ?? _company;
 
     RecognizedReceipt? mergedReceipt;
-
+    List<RecognizedPosition> mergedPositions = [];
     int index = 0;
 
     for (final position in receipt.positions) {
@@ -59,40 +76,21 @@ class ReceiptOptimizer {
       if (index == -1) {
         _cachedPositions.add(position);
       } else {
+        position.product.addAllValueAliases(
+          _cachedPositions[index].product.valueAliases,
+        );
         _cachedPositions[index].product.addValueAlias(position.product.value);
       }
+
+      mergedPositions.add(position);
     }
 
     mergedReceipt = RecognizedReceipt(
-      positions: _cachedPositions,
+      positions: receipt.positions,
       sum: _sum,
       company: _company,
     );
 
-    if (mergedReceipt.isValid) {
-      return mergedReceipt;
-    }
-
-    if (kDebugMode) {
-      if (_cachedPositions.isNotEmpty) {
-        print('***************************');
-      }
-      for (final position in _cachedPositions) {
-        print(
-          '${position.product.formattedValue} ${position.price.formattedValue} ${position.product.valueAliases}',
-        );
-      }
-      if (_cachedPositions.isNotEmpty) {
-        print(
-          '${mergedReceipt.calculatedSum.formattedValue} / ${mergedReceipt.sum?.formattedValue}',
-        );
-      }
-    }
-
-    return RecognizedReceipt(
-      positions: _cachedPositions,
-      sum: _sum,
-      company: _company,
-    );
+    return mergedReceipt;
   }
 }
