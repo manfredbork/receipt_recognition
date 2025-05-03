@@ -59,15 +59,45 @@ class ReceiptOptimizer {
 
   /// Merges receipt from cache. Returns a [RecognizedReceipt].
   static RecognizedReceipt mergeReceiptFromCache(RecognizedReceipt receipt) {
-    _sum = receipt.sum ?? _sum;
-    _company = receipt.company ?? _company;
+    writeSumToCache(receipt.sum);
+    writeCompanyToCache(receipt.company);
+    addPositionsToCache(receipt.positions);
 
-    RecognizedReceipt? mergedReceipt;
-    List<RecognizedPosition> mergedPositions = [];
-    int index = 0;
+    final updatedPositions = updateValueAliases(receipt.positions);
+    final updatedReceipt = RecognizedReceipt(
+      positions: updatedPositions,
+      sum: _sum,
+      company: _company,
+    );
 
-    for (final position in receipt.positions) {
-      index = _cachedPositions.indexWhere(
+    if (updatedReceipt.isValid) {
+      return updatedReceipt;
+    }
+
+    final mergedPositions = mergePositionsFromCache();
+    final mergedReceipt = RecognizedReceipt(
+      positions: mergedPositions,
+      sum: _sum,
+      company: _company,
+    );
+
+    return mergedReceipt;
+  }
+
+  /// Writes sum to cache.
+  static void writeSumToCache(RecognizedSum? sum) {
+    _sum = sum ?? _sum;
+  }
+
+  /// Writes company to cache.
+  static void writeCompanyToCache(RecognizedCompany? company) {
+    _company = company ?? _company;
+  }
+
+  /// Adds and updates positions to cache.
+  static void addPositionsToCache(List<RecognizedPosition> positions) {
+    for (final position in positions) {
+      final index = _cachedPositions.indexWhere(
         (p) =>
             p.product.isSimilar(position.product) &&
             p.price.formattedValue == position.price.formattedValue,
@@ -76,21 +106,45 @@ class ReceiptOptimizer {
       if (index == -1) {
         _cachedPositions.add(position);
       } else {
+        _cachedPositions[index].product.addValueAlias(position.product.value);
+      }
+    }
+  }
+
+  /// Updates value aliases. Returns a list of [RecognizedPosition].
+  static List<RecognizedPosition> updateValueAliases(
+    List<RecognizedPosition> positions,
+  ) {
+    List<RecognizedPosition> updatedPositions = [];
+
+    for (final position in positions) {
+      final index = _cachedPositions.indexWhere(
+        (p) =>
+            p.product.isSimilar(position.product) &&
+            p.price.formattedValue == position.price.formattedValue,
+      );
+
+      if (index >= 0) {
         position.product.addAllValueAliases(
           _cachedPositions[index].product.valueAliases,
         );
-        _cachedPositions[index].product.addValueAlias(position.product.value);
       }
 
-      mergedPositions.add(position);
+      updatedPositions.add(position);
     }
 
-    mergedReceipt = RecognizedReceipt(
-      positions: receipt.positions,
-      sum: _sum,
-      company: _company,
-    );
+    return updatedPositions;
+  }
 
-    return mergedReceipt;
+  /// Merges positions from cache. Returns a list of [RecognizedPosition].
+  static List<RecognizedPosition> mergePositionsFromCache() {
+    List<RecognizedPosition> mergedPositions = [];
+
+    for (final position in _cachedPositions) {
+      // TODO: Merge positions from cache
+      position;
+    }
+
+    return mergedPositions;
   }
 }

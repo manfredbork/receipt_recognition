@@ -77,11 +77,9 @@ class RecognizedProduct extends RecognizedUnknown {
   }
 
   void addAllValueAliases(List<String> allValueAliases) {
-    if (valueAliases.length < 100) {
-      valueAliases.addAll(allValueAliases);
+    for (final valueAlias in allValueAliases) {
+      addValueAlias(valueAlias);
     }
-
-    recalculateCredibility();
   }
 
   void recalculateCredibility() {
