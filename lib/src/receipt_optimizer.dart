@@ -126,7 +126,7 @@ class ReceiptOptimizer {
 
       if (index >= 0) {
         position.product.addAllValueAliases(
-          _cachedPositions[index].product.valueAliases,
+          List.from(_cachedPositions[index].product.valueAliases),
         );
       }
 
