@@ -36,13 +36,14 @@ class ReceiptOptimizer {
         }
         for (final position in mergedReceipt.positions) {
           print(
-            '${position.product.formattedValue} ${position.price.formattedValue} ${position.product.credibility} ${position.product.valueAliases}',
+            '${position.product.formattedValue} ${position.price.formattedValue} ${position.product.valueAliases} Credibility ${position.product.credibility}%',
           );
         }
         if (mergedReceipt.positions.isNotEmpty) {
           print(
-            '${mergedReceipt.calculatedSum.formattedValue} / ${mergedReceipt.sum?.formattedValue}',
+            'Calculated sum is ${mergedReceipt.calculatedSum.formattedValue}',
           );
+          print('Receipt sum is ${mergedReceipt.sum?.formattedValue}');
         }
       }
 
@@ -125,7 +126,7 @@ class ReceiptOptimizer {
       );
 
       if (index >= 0) {
-        position.product.addAllValueAliases(
+        position.product.updateAllValueAliases(
           List.from(_cachedPositions[index].product.valueAliases),
         );
       }

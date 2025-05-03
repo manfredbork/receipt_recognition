@@ -76,10 +76,11 @@ class RecognizedProduct extends RecognizedUnknown {
     recalculateCredibility();
   }
 
-  void addAllValueAliases(List<String> allValueAliases) {
-    for (final valueAlias in allValueAliases) {
-      addValueAlias(valueAlias);
-    }
+  void updateAllValueAliases(List<String> allValueAliases) {
+    valueAliases.clear();
+    valueAliases.addAll(allValueAliases);
+
+    recalculateCredibility();
   }
 
   void recalculateCredibility() {
