@@ -4,7 +4,7 @@ import 'receipt_models.dart';
 
 /// A receipt optimizer that improves text recognition of [RecognizedReceipt].
 class ReceiptOptimizer {
-  /// Initializes cached variables if true
+  /// Trigger to initialize cache
   static bool _init = false;
 
   /// Cached positions from multiple scans
@@ -53,7 +53,7 @@ class ReceiptOptimizer {
     return receipt;
   }
 
-  /// Initializes cached variables on next optimization call.
+  /// Initializes cache before next optimization.
   static void init() {
     _init = true;
   }
