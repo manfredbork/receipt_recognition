@@ -19,7 +19,7 @@ void main() {
       mockTextRecognizer = MockTextRecognizer();
       recognizer = ReceiptRecognizer(
         textRecognizer: mockTextRecognizer,
-        optimizer: ReceiptOptimizer(minScansForTrustworthiness: 1),
+        videoFeed: false,
       );
       mockInputImage = MockInputImage();
     });

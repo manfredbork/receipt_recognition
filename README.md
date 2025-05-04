@@ -64,6 +64,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 final receiptRecognizer = ReceiptRecognizer(
+  videoFeed: false,
   scanTimeout: Duration(seconds: 10),
   onScanTimeout: () {
     print('Scan timed out.');
@@ -142,7 +143,7 @@ RecognizedReceipt
 
 ## 🔮 Roadmap
 
-- [✓] Product name normalization
+- [x] Product name normalization
 - [ ] Long receipt support and merging mechanism
 - [ ] TSE detection and categorization
 - [ ] Tax and discount detection
