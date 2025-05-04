@@ -6,21 +6,13 @@ import 'receipt_models.dart';
 /// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
   /// RegExp patterns
+  static const patternDisallowed =
+      r'(Geg.|Steuer|Brutto|Rückgeld|Handeingabe|Stk)';
+  static const patternCompany =
+      r'(Lidl|Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
   static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
-  static const patternUnknown = r'([^0-9-\s]){4,}';
-  static const patternAmount = r'-?([0-9])+\s?([.,])\s?([0-9]){2}';
-
-  /// RegExp patterns and aliases
-  static const patternsCompany = {
-    'ldl': 'Lidl',
-    'aldi': 'ALDI',
-    'rewe': 'REWE',
-    'edeka': 'EDEKA',
-    'penny': 'PENNY',
-    'kaufland': 'Kaufland',
-    'netto': 'Netto',
-    'akzenta': 'akzenta',
-  };
+  static const patternUnknown = r'([^0-9]){6,}';
+  static const patternAmount = r'-?\s?([0-9])+\s?([.,])\s?([0-9]){2}';
 
   /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
@@ -52,18 +44,16 @@ class ReceiptParser {
     bool detectedSumLabel = false;
 
     for (final line in lines) {
+      if (RegExp(patternDisallowed).hasMatch(line.text)) continue;
+
       final company = RegExp(
-        '(${patternsCompany.keys.join('|')})',
+        patternCompany,
         caseSensitive: false,
       ).stringMatch(line.text);
 
       if (company != null && !detectedCompany) {
-        final pCompany = patternsCompany[company.toLowerCase()];
-
-        if (pCompany != null) {
-          parsed.add(RecognizedCompany(line: line, value: pCompany));
-          detectedCompany = true;
-        }
+        parsed.add(RecognizedCompany(line: line, value: company));
+        detectedCompany = true;
 
         continue;
       }
@@ -120,11 +110,9 @@ class ReceiptParser {
 
     final beforeAmounts = shrunken.whereType<RecognizedAmount>();
 
-    final yAmounts =
-        beforeAmounts.toList()..sort(
-          (a, b) =>
-              (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
-        );
+    final yAmounts = List.from(beforeAmounts)..sort(
+      (a, b) => (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
+    );
 
     if (yAmounts.isNotEmpty) {
       shrunken.removeWhere((e) => _isSmallerThanTopBound(e, yAmounts.first));
@@ -151,11 +139,9 @@ class ReceiptParser {
 
     final afterAmounts = shrunken.whereType<RecognizedAmount>();
 
-    final xAmounts =
-        afterAmounts.toList()..sort(
-          (a, b) =>
-              (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
-        );
+    final xAmounts = List.from(afterAmounts)..sort(
+      (a, b) => (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
+    );
 
     if (xAmounts.isNotEmpty) {
       shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, xAmounts.last));
@@ -171,12 +157,11 @@ class ReceiptParser {
   ) {
     final ySumLabel = sumLabel.line.boundingBox.top;
     final amounts = entities.whereType<RecognizedAmount>();
-    final yAmounts =
-        amounts.toList()..sort(
-          (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
-            (b.line.boundingBox.top - ySumLabel).abs(),
-          ),
-        );
+    final yAmounts = List.from(amounts)..sort(
+      (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
+        (b.line.boundingBox.top - ySumLabel).abs(),
+      ),
+    );
 
     if (yAmounts.isNotEmpty) {
       final yAmount = yAmounts.first.line.boundingBox.top;
@@ -243,7 +228,7 @@ class ReceiptParser {
 
     if (unknowns.isEmpty) return null;
 
-    final yUnknowns = unknowns.toList();
+    final yUnknowns = List.from(unknowns);
 
     RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
@@ -270,7 +255,15 @@ class ReceiptParser {
 
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown)) {
-            positions.add(RecognizedPosition(product: yUnknown, price: entity));
+            positions.add(
+              RecognizedPosition(
+                product: RecognizedProduct(
+                  value: yUnknown.value,
+                  line: yUnknown.line,
+                ),
+                price: RecognizedPrice(line: entity.line, value: entity.value),
+              ),
+            );
             forbidden.add(yUnknown);
             break;
           }
