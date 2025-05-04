@@ -64,6 +64,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 final receiptRecognizer = ReceiptRecognizer(
+  videoFeed: false,
   scanTimeout: Duration(seconds: 10),
   onScanTimeout: () {
     print('Scan timed out.');
@@ -110,14 +111,14 @@ await receiptRecognizer.close();
 
 ## 🧠 Model Overview
 
-| Class                                | Description                                                       |
-|--------------------------------------|-------------------------------------------------------------------|
-| `RecognizedReceipt`                  | Represents a full parsed receipt with items, sum, and store name. |
-| `RecognizedPosition`                 | A single line item on the receipt: product + price.               |
-| `RecognizedEntity<T>`                | Generic wrapper for parsed values from raw text.                  |
-| `RecognizedCompany`                  | Specialized entity for the store name.                            |
-| `RecognizedAmount` / `RecognizedSum` | Numerical values like prices and total.                           |
-| `formattedValue`                     | Nicely formatted display value.                                   |
+| Class                | Description                                                       |
+|----------------------|-------------------------------------------------------------------|
+| `RecognizedReceipt`  | Represents a full parsed receipt with items, sum, and store name. |
+| `RecognizedPosition` | A single line item on the receipt: product + price.               |
+| `RecognizedProduct`  | Alphanumeric value for product.                                   |
+| `RecognizedPrice`    | Numerical value for price.                                        |
+| `RecognizedSum`      | Numerical value for sum.                                          |
+| `RecognizedCompany`  | Specialized entity for the store name.                            |
 
 ---
 
@@ -131,9 +132,9 @@ RecognizedReceipt
 │   └── value: num (e.g., 23.45)
 └── positions: List<RecognizedPosition>
      ├── RecognizedPosition
-     │   ├── product: RecognizedEntity<String>
+     │   ├── product: RecognizedProduct
      │   │   └── value: "Milk"
-     │   └── price: RecognizedAmount
+     │   └── price: RecognizedPrice
      │       └── value: 2.49
      └── ...
 ```
@@ -142,8 +143,9 @@ RecognizedReceipt
 
 ## 🔮 Roadmap
 
-- [ ] Long receipt support and merging mechanism 
-- [ ] Product name normalization and categorization
+- [x] Product name normalization
+- [ ] Long receipt support and merging mechanism
+- [ ] TSE detection and categorization
 - [ ] Tax and discount detection
 - [ ] Smart OCR region selection
 - [ ] Multi-language receipt support

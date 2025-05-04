@@ -29,6 +29,7 @@ class ReceiptRecognizer {
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
+    videoFeed = true,
     scanTimeout = const Duration(seconds: 30),
     onScanTimeout,
     onScanUpdate,
@@ -36,7 +37,10 @@ class ReceiptRecognizer {
   }) : _textRecognizer =
            textRecognizer ??
            TextRecognizer(script: TextRecognitionScript.latin),
-       _optimizer = optimizer ?? ReceiptOptimizer(),
+       _optimizer =
+           optimizer ?? videoFeed
+               ? ReceiptOptimizer()
+               : ReceiptOptimizer(minScansForTrustworthiness: 1),
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
