@@ -16,7 +16,7 @@ class ReceiptOptimizer implements Optimizer {
   /// Cached company from multiple scans
   RecognizedCompany? _company;
 
-  /// Constructor to create an instance of [ReceiptRecognizer].
+  /// Constructor to create an instance of [ReceiptOptimizer].
   ReceiptOptimizer({minScansForTrustworthiness = 3})
     : _minScansForTrustworthiness = minScansForTrustworthiness;
 
