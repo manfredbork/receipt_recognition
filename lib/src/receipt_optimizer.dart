@@ -4,6 +4,9 @@ import 'receipt_models.dart';
 
 /// A receipt optimizer that improves text recognition of [RecognizedReceipt].
 class ReceiptOptimizer implements Optimizer {
+  /// Minimum scans required before trustworthiness is calculated
+  final int _minScansForTrustworthiness;
+
   /// Cached positions from multiple scans
   final List<RecognizedPosition> _cachedPositions = [];
 
@@ -12,6 +15,10 @@ class ReceiptOptimizer implements Optimizer {
 
   /// Cached company from multiple scans
   RecognizedCompany? _company;
+
+  /// Constructor to create an instance of [ReceiptRecognizer].
+  ReceiptOptimizer({minScansForTrustworthiness = 3})
+    : _minScansForTrustworthiness = minScansForTrustworthiness;
 
   /// Initializes optimizer.
   @override
@@ -106,6 +113,7 @@ class ReceiptOptimizer implements Optimizer {
         _cachedPositions.add(position);
       } else {
         _cachedPositions[index].product.addValueAlias(position.product.value);
+        _cachedPositions[index].product.calculateTrustworthiness();
       }
     }
   }
@@ -127,6 +135,10 @@ class ReceiptOptimizer implements Optimizer {
         position.product.updateValueAliases(
           List.from(_cachedPositions[index].product.valueAliases),
         );
+      }
+
+      if (position.product.valueAliases.length >= _minScansForTrustworthiness) {
+        position.product.calculateTrustworthiness();
       }
 
       updatedPositions.add(position);

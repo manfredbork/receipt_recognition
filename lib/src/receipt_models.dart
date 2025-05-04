@@ -80,37 +80,30 @@ class RecognizedProduct extends RecognizedUnknown {
     if (valueAliases.length < 10) {
       valueAliases.add(valueAlias);
     }
-
-    calculateTrustworthiness();
   }
 
   void updateValueAliases(List<String> valueAliases) {
     this.valueAliases.clear();
     this.valueAliases.addAll(valueAliases);
-
-    calculateTrustworthiness();
   }
 
   void calculateTrustworthiness() {
-    if (valueAliases.length > 3) {
-      final Map<String, int> rank = {};
+    final Map<String, int> rank = {};
 
-      for (final value in valueAliases) {
-        if (rank.containsKey(value)) {
-          rank[value] = rank[value]! + 1;
-        } else {
-          rank[value] = 1;
-        }
+    for (final value in valueAliases) {
+      if (rank.containsKey(value)) {
+        rank[value] = rank[value]! + 1;
+      } else {
+        rank[value] = 1;
       }
+    }
 
-      final sorted = List.from(rank.entries)
-        ..sort((a, b) => a.value.compareTo(b.value));
+    final sorted = List.from(rank.entries)
+      ..sort((a, b) => a.value.compareTo(b.value));
 
-      if (sorted.isNotEmpty) {
-        formattedValue = sorted.last.key;
-        trustworthiness =
-            (sorted.last.value / valueAliases.length * 100).toInt();
-      }
+    if (sorted.isNotEmpty) {
+      formattedValue = sorted.last.key;
+      trustworthiness = (sorted.last.value / valueAliases.length * 100).toInt();
     }
   }
 
