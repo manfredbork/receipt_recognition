@@ -3,6 +3,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.4] – 2025-04-24
+
+### Added
+
+- **Optimizer Module**: Introduced a new optimizer module to enhance the performance and efficiency of the receipt recognition pipeline.
+- **Product Name Detection Enhancements**: Implemented advanced techniques for more accurate extraction and recognition of product names from receipts.
+
+### Changed
+
+- **Company Regex Enhancements**: Updated regular expressions related to company name detection to enhance parsing accuracy.
+
+### Fixed
+
+- **Product Name Extraction**: Resolved issues where certain product names were not being accurately extracted due to inconsistent formatting.
+- **Company Name Detection**: Fixed bugs in the regular expressions that led to incorrect company name identification in specific receipt formats.
+- **Parser Stability**: Addressed edge cases in the parser that previously caused errors when processing receipts with uncommon layouts.
+
+---
+
 ## [0.0.3] - 2025-04-24
 
 ### Added
