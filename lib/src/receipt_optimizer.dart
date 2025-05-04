@@ -3,40 +3,37 @@ import 'package:flutter/foundation.dart';
 import 'receipt_models.dart';
 
 /// A receipt optimizer that improves text recognition of [RecognizedReceipt].
-class ReceiptOptimizer {
-  /// Trigger to initialize cache
-  static bool _init = false;
-
+class ReceiptOptimizer implements Optimizer {
   /// Cached positions from multiple scans
-  static final List<RecognizedPosition> _cachedPositions = [];
+  final List<RecognizedPosition> _cachedPositions = [];
 
   /// Cached sum from multiple scans
-  static RecognizedSum? _sum;
+  RecognizedSum? _sum;
 
   /// Cached company from multiple scans
-  static RecognizedCompany? _company;
+  RecognizedCompany? _company;
+
+  /// Initializes optimizer.
+  @override
+  void init() {
+    _cachedPositions.clear();
+    _sum = null;
+    _company = null;
+  }
 
   /// Optimizes the [RecognizedReceipt]. Returns a [RecognizedReceipt].
-  static RecognizedReceipt optimizeReceipt(RecognizedReceipt receipt) {
-    if (_init == true) {
-      _cachedPositions.clear();
-      _sum = null;
-      _company = null;
-      _init = false;
-    }
-
-    final mergedReceipt = mergeReceiptFromCache(receipt);
+  @override
+  RecognizedReceipt optimize(RecognizedReceipt receipt) {
+    final mergedReceipt = _mergeReceiptFromCache(receipt);
 
     if (mergedReceipt.isValid) {
-      _init = true;
-
       if (kDebugMode) {
         if (mergedReceipt.positions.isNotEmpty) {
           print('***************************');
         }
         for (final position in mergedReceipt.positions) {
           print(
-            '${position.product.formattedValue} ${position.price.formattedValue} ${position.product.valueAliases} Credibility ${position.product.credibility}%',
+            '${position.product.formattedValue} ${position.price.formattedValue} ${position.product.valueAliases} Trustworthiness ${position.product.trustworthiness}%',
           );
         }
         if (mergedReceipt.positions.isNotEmpty) {
@@ -53,18 +50,19 @@ class ReceiptOptimizer {
     return receipt;
   }
 
-  /// Initializes cache before next optimization.
-  static void init() {
-    _init = true;
+  /// Closes optimizer.
+  @override
+  void close() {
+    init();
   }
 
   /// Merges receipt from cache. Returns a [RecognizedReceipt].
-  static RecognizedReceipt mergeReceiptFromCache(RecognizedReceipt receipt) {
-    writeSumToCache(receipt.sum);
-    writeCompanyToCache(receipt.company);
-    addPositionsToCache(receipt.positions);
+  RecognizedReceipt _mergeReceiptFromCache(RecognizedReceipt receipt) {
+    _writeSumToCache(receipt.sum);
+    _writeCompanyToCache(receipt.company);
+    _addPositionsToCache(receipt.positions);
 
-    final updatedPositions = updateValueAliases(receipt.positions);
+    final updatedPositions = _updateValueAliases(receipt.positions);
     final updatedReceipt = RecognizedReceipt(
       positions: updatedPositions,
       sum: _sum,
@@ -75,7 +73,7 @@ class ReceiptOptimizer {
       return updatedReceipt;
     }
 
-    final mergedPositions = mergePositionsFromCache();
+    final mergedPositions = _mergePositionsFromCache();
     final mergedReceipt = RecognizedReceipt(
       positions: mergedPositions,
       sum: _sum,
@@ -86,17 +84,17 @@ class ReceiptOptimizer {
   }
 
   /// Writes sum to cache.
-  static void writeSumToCache(RecognizedSum? sum) {
+  void _writeSumToCache(RecognizedSum? sum) {
     _sum = sum ?? _sum;
   }
 
   /// Writes company to cache.
-  static void writeCompanyToCache(RecognizedCompany? company) {
+  void _writeCompanyToCache(RecognizedCompany? company) {
     _company = company ?? _company;
   }
 
   /// Adds and updates positions to cache.
-  static void addPositionsToCache(List<RecognizedPosition> positions) {
+  void _addPositionsToCache(List<RecognizedPosition> positions) {
     for (final position in positions) {
       final index = _cachedPositions.indexWhere(
         (p) =>
@@ -113,7 +111,7 @@ class ReceiptOptimizer {
   }
 
   /// Updates value aliases. Returns a list of [RecognizedPosition].
-  static List<RecognizedPosition> updateValueAliases(
+  List<RecognizedPosition> _updateValueAliases(
     List<RecognizedPosition> positions,
   ) {
     List<RecognizedPosition> updatedPositions = [];
@@ -126,7 +124,7 @@ class ReceiptOptimizer {
       );
 
       if (index >= 0) {
-        position.product.updateAllValueAliases(
+        position.product.updateValueAliases(
           List.from(_cachedPositions[index].product.valueAliases),
         );
       }
@@ -138,7 +136,7 @@ class ReceiptOptimizer {
   }
 
   /// Merges positions from cache. Returns a list of [RecognizedPosition].
-  static List<RecognizedPosition> mergePositionsFromCache() {
+  List<RecognizedPosition> _mergePositionsFromCache() {
     List<RecognizedPosition> mergedPositions = [];
 
     for (final position in _cachedPositions) {

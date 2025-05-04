@@ -6,22 +6,13 @@ import 'receipt_models.dart';
 /// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
   /// RegExp patterns
-  static const patternDisallowed = r'(Steuer|Brutto|Rückgeld|BAR|Geg.|Handeingabe|E-Bon|Stk)';
-  static const patternSumLabel = r'(Zu zahlen|Summe|Sunne|Total|Sum)';
+  static const patternDisallowed =
+      r'(Geg.|Steuer|Brutto|Rückgeld|Handeingabe|Stk)';
+  static const patternCompany =
+      r'(Lidl|Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
+  static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
   static const patternUnknown = r'([^0-9]){6,}';
   static const patternAmount = r'-?\s?([0-9])+\s?([.,])\s?([0-9]){2}';
-
-  /// RegExp patterns and aliases
-  static const patternsCompany = {
-    'lidl': 'Lidl',
-    'aldi': 'ALDI',
-    'rewe': 'REWE',
-    'edeka': 'EDEKA',
-    'penny': 'PENNY',
-    'kaufland': 'Kaufland',
-    'netto': 'Netto',
-    'akzenta': 'akzenta',
-  };
 
   /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
@@ -56,17 +47,13 @@ class ReceiptParser {
       if (RegExp(patternDisallowed).hasMatch(line.text)) continue;
 
       final company = RegExp(
-        '(${patternsCompany.keys.join('|')})',
+        patternCompany,
         caseSensitive: false,
       ).stringMatch(line.text);
 
       if (company != null && !detectedCompany) {
-        final pCompany = patternsCompany[company.toLowerCase()];
-
-        if (pCompany != null) {
-          parsed.add(RecognizedCompany(line: line, value: pCompany));
-          detectedCompany = true;
-        }
+        parsed.add(RecognizedCompany(line: line, value: company));
+        detectedCompany = true;
 
         continue;
       }

@@ -8,8 +8,11 @@ import 'receipt_parser.dart';
 
 /// A receipt recognizer that scans a receipt from [InputImage].
 class ReceiptRecognizer {
-  /// Uses [TextRecognizer] from Google's ML Kit.
+  /// Use [TextRecognizer] from Google's ML Kit.
   final TextRecognizer _textRecognizer;
+
+  /// Use any optimizer implementing [Optimizer].
+  final Optimizer _optimizer;
 
   /// Duration for scan timeout
   final Duration _scanTimeout;
@@ -25,6 +28,7 @@ class ReceiptRecognizer {
   /// Constructor to create an instance of [ReceiptRecognizer].
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
+    Optimizer? optimizer,
     scanTimeout = const Duration(seconds: 30),
     onScanTimeout,
     onScanUpdate,
@@ -32,6 +36,7 @@ class ReceiptRecognizer {
   }) : _textRecognizer =
            textRecognizer ??
            TextRecognizer(script: TextRecognitionScript.latin),
+       _optimizer = optimizer ?? ReceiptOptimizer(),
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
@@ -45,12 +50,12 @@ class ReceiptRecognizer {
 
     if (receipt == null) return null;
 
-    final optimizedReceipt = ReceiptOptimizer.optimizeReceipt(receipt);
+    final optimizedReceipt = _optimizer.optimize(receipt);
 
     if (optimizedReceipt.isValid) {
-      _onScanComplete?.call(optimizedReceipt);
-
       _lastScan = null;
+      _optimizer.init();
+      _onScanComplete?.call(optimizedReceipt);
 
       return optimizedReceipt;
     } else {
@@ -59,10 +64,9 @@ class ReceiptRecognizer {
       _lastScan ??= now;
 
       if (now.difference(_lastScan ?? now) > _scanTimeout) {
-        _onScanTimeout?.call();
         _lastScan = null;
-
-        ReceiptOptimizer.init();
+        _optimizer.init();
+        _onScanTimeout?.call();
       }
 
       return null;
@@ -70,5 +74,8 @@ class ReceiptRecognizer {
   }
 
   /// Closes the scanner and releases its resources.
-  Future<void> close() => _textRecognizer.close();
+  Future<void> close() async {
+    _textRecognizer.close();
+    _optimizer.close();
+  }
 }

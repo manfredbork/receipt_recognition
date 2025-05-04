@@ -3,6 +3,14 @@ import 'package:fuzzywuzzy/ratios/simple_ratio.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
+abstract class Optimizer {
+  init();
+
+  optimize(RecognizedReceipt receipt);
+
+  close();
+}
+
 abstract class Valuable<T> {
   final T value;
 
@@ -66,40 +74,43 @@ class RecognizedProduct extends RecognizedUnknown {
     this.similarity = 75,
   }) : valueAliases = [value],
        formattedValue = value,
-       credibility = 100;
+       trustworthiness = 0;
 
   void addValueAlias(String valueAlias) {
-    if (valueAliases.length < 100) {
+    if (valueAliases.length < 10) {
       valueAliases.add(valueAlias);
     }
 
-    recalculateCredibility();
+    calculateTrustworthiness();
   }
 
-  void updateAllValueAliases(List<String> allValueAliases) {
-    valueAliases.clear();
-    valueAliases.addAll(allValueAliases);
+  void updateValueAliases(List<String> valueAliases) {
+    this.valueAliases.clear();
+    this.valueAliases.addAll(valueAliases);
 
-    recalculateCredibility();
+    calculateTrustworthiness();
   }
 
-  void recalculateCredibility() {
-    final Map<String, int> rank = {};
+  void calculateTrustworthiness() {
+    if (valueAliases.length > 3) {
+      final Map<String, int> rank = {};
 
-    for (final value in valueAliases) {
-      if (rank.containsKey(value)) {
-        rank[value] = rank[value]! + 1;
-      } else {
-        rank[value] = 1;
+      for (final value in valueAliases) {
+        if (rank.containsKey(value)) {
+          rank[value] = rank[value]! + 1;
+        } else {
+          rank[value] = 1;
+        }
       }
-    }
 
-    final sorted = List.from(rank.entries)
-      ..sort((a, b) => a.value.compareTo(b.value));
+      final sorted = List.from(rank.entries)
+        ..sort((a, b) => a.value.compareTo(b.value));
 
-    if (sorted.isNotEmpty) {
-      formattedValue = sorted.last.key;
-      credibility = (sorted.last.value / valueAliases.length * 100).toInt();
+      if (sorted.isNotEmpty) {
+        formattedValue = sorted.last.key;
+        trustworthiness =
+            (sorted.last.value / valueAliases.length * 100).toInt();
+      }
     }
   }
 
@@ -120,7 +131,7 @@ class RecognizedProduct extends RecognizedUnknown {
   @override
   String formattedValue;
 
-  int credibility;
+  int trustworthiness;
 }
 
 class RecognizedPrice extends RecognizedAmount {
@@ -141,7 +152,9 @@ class RecognizedReceipt {
 
   RecognizedReceipt({required this.positions, this.sum, this.company});
 
-  bool get isValid => calculatedSum.formattedValue == sum?.formattedValue;
+  bool get isValid =>
+      calculatedSum.formattedValue == sum?.formattedValue &&
+      positions.every((p) => p.product.trustworthiness > 0);
 
   CalculatedSum get calculatedSum =>
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
