@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 
 import 'receipt_models.dart';
@@ -8,7 +10,7 @@ class ReceiptOptimizer implements Optimizer {
   final int _minScansForTrustworthiness;
 
   /// Cached positions from multiple scans.
-  final List<RecognizedPosition> _cachedPositions = [];
+  final _cachedPositions = LinkedList<RecognizedPosition>();
 
   /// Cached sum from multiple scans.
   RecognizedSum? _sum;
@@ -103,17 +105,14 @@ class ReceiptOptimizer implements Optimizer {
   /// Adds and updates positions to cache.
   void _addPositionsToCache(List<RecognizedPosition> positions) {
     for (final position in positions) {
-      final index = _cachedPositions.indexWhere(
-        (p) =>
-            p.product.isSimilar(position.product) &&
-            p.price.formattedValue == position.price.formattedValue,
-      );
+      final cachedPosition =
+          _cachedPositions.where((p) => p.isSimilar(position)).firstOrNull;
 
-      if (index == -1) {
+      if (cachedPosition == null) {
         _cachedPositions.add(position);
       } else {
-        _cachedPositions[index].product.addValueAlias(position.product.value);
-        _cachedPositions[index].product.calculateTrustworthiness();
+        cachedPosition.product.addValueAlias(position.product.value);
+        cachedPosition.product.calculateTrustworthiness();
       }
     }
   }
@@ -125,15 +124,12 @@ class ReceiptOptimizer implements Optimizer {
     List<RecognizedPosition> updatedPositions = [];
 
     for (final position in positions) {
-      final index = _cachedPositions.indexWhere(
-        (p) =>
-            p.product.isSimilar(position.product) &&
-            p.price.formattedValue == position.price.formattedValue,
-      );
+      final cachedPosition =
+          _cachedPositions.where((p) => p.isSimilar(position)).firstOrNull;
 
-      if (index >= 0) {
+      if (cachedPosition != null) {
         position.product.updateValueAliases(
-          List.from(_cachedPositions[index].product.valueAliases),
+          List.from(cachedPosition.product.valueAliases),
         );
       }
 

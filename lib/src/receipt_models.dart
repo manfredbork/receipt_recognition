@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:fuzzywuzzy/ratios/simple_ratio.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -37,7 +39,7 @@ abstract class RecognizedEntity<T> extends Valuable<T> {
 }
 
 /// A recognized entity with an untyped or string value.
-class RecognizedUnknown extends RecognizedEntity<String> {
+final class RecognizedUnknown extends RecognizedEntity<String> {
   RecognizedUnknown({required super.line, required super.value});
 
   @override
@@ -45,12 +47,12 @@ class RecognizedUnknown extends RecognizedEntity<String> {
 }
 
 /// Represents a recognized company name on a receipt.
-class RecognizedCompany extends RecognizedUnknown {
+final class RecognizedCompany extends RecognizedUnknown {
   RecognizedCompany({required super.line, required super.value});
 }
 
 /// Represents a recognized numeric amount (e.g., price, sum).
-class RecognizedAmount extends RecognizedEntity<num> {
+final class RecognizedAmount extends RecognizedEntity<num> {
   RecognizedAmount({required super.line, required super.value});
 
   @override
@@ -61,17 +63,17 @@ class RecognizedAmount extends RecognizedEntity<num> {
 }
 
 /// Represents a label indicating a sum on the receipt (e.g., "Total", "Summe").
-class RecognizedSumLabel extends RecognizedUnknown {
+final class RecognizedSumLabel extends RecognizedUnknown {
   RecognizedSumLabel({required super.line, required super.value});
 }
 
 /// Represents the final total sum amount recognized from the receipt.
-class RecognizedSum extends RecognizedAmount {
+final class RecognizedSum extends RecognizedAmount {
   RecognizedSum({required super.line, required super.value});
 }
 
 /// Represents a computed sum calculated from individual line item prices.
-class CalculatedSum extends Valuable<num> {
+final class CalculatedSum extends Valuable<num> {
   CalculatedSum({required super.value});
 
   @override
@@ -82,7 +84,7 @@ class CalculatedSum extends Valuable<num> {
 }
 
 /// Represents a product name recognized from a receipt with alias tracking and similarity logic.
-class RecognizedProduct extends RecognizedUnknown {
+final class RecognizedProduct extends RecognizedUnknown {
   /// A list of alternative names or aliases for the product.
   final List<String> valueAliases;
 
@@ -150,12 +152,12 @@ class RecognizedProduct extends RecognizedUnknown {
 }
 
 /// Represents the price of a product recognized from a receipt.
-class RecognizedPrice extends RecognizedAmount {
+final class RecognizedPrice extends RecognizedAmount {
   RecognizedPrice({required super.line, required super.value});
 }
 
 /// Represents a line item on a receipt, consisting of a product and its price.
-class RecognizedPosition {
+final class RecognizedPosition extends LinkedListEntry<RecognizedPosition> {
   /// The recognized product name.
   final RecognizedProduct product;
 
@@ -163,10 +165,16 @@ class RecognizedPosition {
   final RecognizedPrice price;
 
   RecognizedPosition({required this.product, required this.price});
+
+  /// Checks whether this position is similar to [other].
+  bool isSimilar(RecognizedPosition other) {
+    return product.isSimilar(other.product) &&
+        price.formattedValue == other.price.formattedValue;
+  }
 }
 
 /// Represents a fully recognized receipt, including products, sum, and store information.
-class RecognizedReceipt {
+final class RecognizedReceipt {
   /// The list of recognized line items on the receipt.
   final List<RecognizedPosition> positions;
 
