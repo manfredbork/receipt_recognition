@@ -51,9 +51,11 @@ class ReceiptParser {
         caseSensitive: false,
       ).stringMatch(line.text);
 
-      if (company != null && !detectedCompany) {
-        parsed.add(RecognizedCompany(line: line, value: company));
-        detectedCompany = true;
+      if (company != null) {
+        if (!detectedCompany) {
+          parsed.add(RecognizedCompany(line: line, value: company));
+          detectedCompany = true;
+        }
 
         continue;
       }
@@ -63,9 +65,11 @@ class ReceiptParser {
         caseSensitive: false,
       ).stringMatch(line.text);
 
-      if (sumLabel != null && !detectedSumLabel) {
-        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-        detectedSumLabel = true;
+      if (sumLabel != null) {
+        if (!detectedSumLabel) {
+          parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+          detectedSumLabel = true;
+        }
 
         continue;
       }
