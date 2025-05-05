@@ -5,7 +5,7 @@ import 'receipt_models.dart';
 
 /// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
-  /// RegExp patterns
+  /// RegExp patterns.
   static const patternDisallowed =
       r'(Geg.|Steuer|Brutto|Rückgeld|Handeingabe|Stk)';
   static const patternCompany =
