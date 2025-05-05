@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:fuzzywuzzy/ratios/simple_ratio.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -157,7 +155,7 @@ final class RecognizedPrice extends RecognizedAmount {
 }
 
 /// Represents a line item on a receipt, consisting of a product and its price.
-final class RecognizedPosition extends LinkedListEntry<RecognizedPosition> {
+final class RecognizedPosition {
   /// The recognized product name.
   final RecognizedProduct product;
 

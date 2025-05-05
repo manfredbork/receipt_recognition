@@ -10,7 +10,7 @@ class ReceiptOptimizer implements Optimizer {
   final int _minScansForTrustworthiness;
 
   /// Cached positions from multiple scans.
-  final _cachedPositions = LinkedList<RecognizedPosition>();
+  final List<RecognizedPosition> _cachedPositions = [];
 
   /// Cached sum from multiple scans.
   RecognizedSum? _sum;
@@ -121,7 +121,7 @@ class ReceiptOptimizer implements Optimizer {
   List<RecognizedPosition> _updateValueAliases(
     List<RecognizedPosition> positions,
   ) {
-    List<RecognizedPosition> updatedPositions = [];
+    final List<RecognizedPosition> updatedPositions = [];
 
     for (final position in positions) {
       final cachedPosition =
@@ -145,7 +145,7 @@ class ReceiptOptimizer implements Optimizer {
 
   /// Merges positions from cache. Returns a list of [RecognizedPosition].
   List<RecognizedPosition> _mergePositionsFromCache() {
-    List<RecognizedPosition> mergedPositions = [];
+    final List<RecognizedPosition> mergedPositions = [];
 
     for (final position in _cachedPositions) {
       // TODO: Merge positions from cache

@@ -234,8 +234,8 @@ class ReceiptParser {
     RecognizedSum? sum;
     RecognizedCompany? company;
 
-    List<RecognizedPosition> positions = [];
-    List<RecognizedUnknown> forbidden = [];
+    final List<RecognizedPosition> positions = [];
+    final List<RecognizedUnknown> forbidden = [];
 
     for (final entity in entities) {
       if (entity is RecognizedSumLabel) {
