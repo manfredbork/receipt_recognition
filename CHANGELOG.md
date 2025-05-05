@@ -3,6 +3,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5] – 2025-05-05
+
+### Added
+- Added comprehensive `dartdoc` comments for all model classes in `lib/src/receipt_models.dart`
+
+---
+
 ## [0.0.4] – 2025-05-04
 
 ### Added

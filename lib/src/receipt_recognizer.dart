@@ -14,15 +14,15 @@ class ReceiptRecognizer {
   /// Use any optimizer implementing [Optimizer].
   final Optimizer _optimizer;
 
-  /// Duration for scan timeout
+  /// Duration for scan timeout.
   final Duration _scanTimeout;
 
-  /// Different callback methods
+  /// Different callback methods.
   final VoidCallback? _onScanTimeout;
   final Function(RecognizedReceipt)? _onScanComplete;
   final Function(RecognizedReceipt)? _onScanUpdate;
 
-  /// Time of last scan
+  /// Time of last scan.
   DateTime? _lastScan;
 
   /// Constructor to create an instance of [ReceiptRecognizer].

@@ -4,16 +4,16 @@ import 'receipt_models.dart';
 
 /// A receipt optimizer that improves text recognition of [RecognizedReceipt].
 class ReceiptOptimizer implements Optimizer {
-  /// Minimum scans required before trustworthiness is calculated
+  /// Minimum scans required before trustworthiness is calculated.
   final int _minScansForTrustworthiness;
 
-  /// Cached positions from multiple scans
+  /// Cached positions from multiple scans.
   final List<RecognizedPosition> _cachedPositions = [];
 
-  /// Cached sum from multiple scans
+  /// Cached sum from multiple scans.
   RecognizedSum? _sum;
 
-  /// Cached company from multiple scans
+  /// Cached company from multiple scans.
   RecognizedCompany? _company;
 
   /// Constructor to create an instance of [ReceiptOptimizer].
