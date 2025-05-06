@@ -1,3 +1,4 @@
+import 'package:diffutil_dart/diffutil.dart';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:fuzzywuzzy/ratios/simple_ratio.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -49,7 +50,7 @@ final class RecognizedCompany extends RecognizedUnknown {
   RecognizedCompany({required super.line, required super.value});
 }
 
-/// Represents a recognized numeric amount (e.g., price, sum).
+/// Represents a recognized numeric amount (e.g., price).
 final class RecognizedAmount extends RecognizedEntity<num> {
   RecognizedAmount({required super.line, required super.value});
 
@@ -61,13 +62,22 @@ final class RecognizedAmount extends RecognizedEntity<num> {
 }
 
 /// Represents a label indicating a sum on the receipt (e.g., "Total", "Summe").
-final class RecognizedSumLabel extends RecognizedUnknown {
+final class RecognizedSumLabel extends RecognizedEntity<String> {
   RecognizedSumLabel({required super.line, required super.value});
+
+  @override
+  String get formattedValue => value;
 }
 
 /// Represents the final total sum amount recognized from the receipt.
-final class RecognizedSum extends RecognizedAmount {
+final class RecognizedSum extends RecognizedEntity<num> {
   RecognizedSum({required super.line, required super.value});
+
+  @override
+  String get formattedValue => NumberFormat.decimalPatternDigits(
+    locale: Intl.defaultLocale,
+    decimalDigits: 2,
+  ).format(value);
 }
 
 /// Represents a computed sum calculated from individual line item prices.
@@ -104,11 +114,13 @@ final class RecognizedProduct extends RecognizedUnknown {
        formattedValue = value,
        trustworthiness = 0;
 
-  /// Adds a new value alias if the list has fewer than 10 entries.
+  /// Removes entry if list has more than 100 entries and then adds a new value alias.
   void addValueAlias(String valueAlias) {
-    if (valueAliases.length < 10) {
-      valueAliases.add(valueAlias);
+    if (valueAliases.length > 100) {
+      valueAliases.remove(valueAliases.first);
     }
+
+    valueAliases.add(valueAlias);
   }
 
   /// Replaces all existing value aliases with [valueAliases].
@@ -166,8 +178,27 @@ final class RecognizedPosition {
 
   /// Checks whether this position is similar to [other].
   bool isSimilar(RecognizedPosition other) {
-    return product.isSimilar(other.product) &&
+    return (product.isSimilar(other.product) ||
+            other.product.isSimilar(product)) &&
         price.formattedValue == other.price.formattedValue;
+  }
+}
+
+/// A [ListDiffDelegate] for comparing lists of [RecognizedPosition] items.
+class PositionListDiff extends ListDiffDelegate<RecognizedPosition> {
+  /// Creates a diff delegate for [oldList] and [newList].
+  PositionListDiff(super.oldList, super.newList);
+
+  /// Always returns `false`, treating item contents as changed.
+  @override
+  bool areContentsTheSame(int oldItemPosition, int newItemPosition) {
+    return false;
+  }
+
+  /// Returns whether items are the same using [isSimilar].
+  @override
+  bool areItemsTheSame(int oldItemPosition, int newItemPosition) {
+    return oldList[oldItemPosition].isSimilar(newList[newItemPosition]);
   }
 }
 

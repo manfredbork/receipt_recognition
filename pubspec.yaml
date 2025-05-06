@@ -9,6 +9,7 @@ environment:
   flutter: ">=1.17.0"
 
 dependencies:
+  diffutil_dart: ^4.0.1
   flutter:
     sdk: flutter
 
