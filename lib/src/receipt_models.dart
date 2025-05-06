@@ -24,6 +24,9 @@ abstract class Valuable<T> {
   /// Creates a [Valuable] with the given [value].
   Valuable({required this.value});
 
+  /// Formats value to a string.
+  String format(T value);
+
   /// Returns the value as a human-readable string.
   String get formattedValue;
 }
@@ -37,9 +40,80 @@ abstract class RecognizedEntity<T> extends Valuable<T> {
   RecognizedEntity({required this.line, required super.value});
 }
 
+/// A formatter class with a static method to format number properly.
+final class Formatter {
+  static String format(num value) => NumberFormat.decimalPatternDigits(
+    locale: Intl.defaultLocale,
+    decimalDigits: 2,
+  ).format(value);
+
+  static num parse(String value) => NumberFormat.decimalPatternDigits(
+    locale: Intl.defaultLocale,
+    decimalDigits: 2,
+  ).parse(value);
+}
+
+/// A base class to manage alternative values (e.g., product, price).
+final class RecognizedAliases<T> extends RecognizedEntity<T> {
+  /// A list of alternative values or aliases for the entity.
+  final List<T> valueAliases;
+
+  /// Trustworthiness score (0–100) based on frequency of alias matches.
+  int trustworthiness;
+
+  RecognizedAliases({required super.line, required super.value})
+    : valueAliases = [value],
+      formattedValue = value.toString(),
+      trustworthiness = 0;
+
+  /// Removes entry if list has more than 100 entries and then adds a new value alias.
+  void addValueAlias(T valueAlias) {
+    if (valueAliases.length > 100) {
+      valueAliases.remove(valueAliases.first);
+    }
+
+    valueAliases.add(valueAlias);
+  }
+
+  /// Replaces all existing value aliases with [valueAliases].
+  void updateValueAliases(List<T> valueAliases) {
+    this.valueAliases.clear();
+    this.valueAliases.addAll(valueAliases);
+  }
+
+  /// Calculates the trustworthiness score and determines the most reliable alias.
+  void calculateTrustworthiness() {
+    final Map<T, int> rank = {};
+    for (final value in valueAliases) {
+      rank[value] = (rank[value] ?? 0) + 1;
+    }
+
+    final sorted = List.from(rank.entries)
+      ..sort((a, b) => a.value.compareTo(b.value));
+
+    if (sorted.isNotEmpty) {
+      formattedValue = format(sorted.last.key);
+      trustworthiness = (sorted.last.value / valueAliases.length * 100).toInt();
+    }
+  }
+
+  /// Formats value to a string.
+  @override
+  String format(T value) {
+    return value.toString();
+  }
+
+  /// The most trusted value after alias analysis.
+  @override
+  String formattedValue;
+}
+
 /// A recognized entity with an untyped or string value.
 final class RecognizedUnknown extends RecognizedEntity<String> {
   RecognizedUnknown({required super.line, required super.value});
+
+  @override
+  String format(String value) => value;
 
   @override
   String get formattedValue => value;
@@ -52,18 +126,22 @@ final class RecognizedCompany extends RecognizedUnknown {
 
 /// Represents a recognized numeric amount (e.g., price).
 final class RecognizedAmount extends RecognizedEntity<num> {
-  RecognizedAmount({required super.line, required super.value});
+  RecognizedAmount({required super.line, required super.value})
+    : formattedValue = Formatter.format(value);
 
   @override
-  String get formattedValue => NumberFormat.decimalPatternDigits(
-    locale: Intl.defaultLocale,
-    decimalDigits: 2,
-  ).format(value);
+  String format(num value) => Formatter.format(value);
+
+  @override
+  String formattedValue;
 }
 
 /// Represents a label indicating a sum on the receipt (e.g., "Total", "Summe").
 final class RecognizedSumLabel extends RecognizedEntity<String> {
   RecognizedSumLabel({required super.line, required super.value});
+
+  @override
+  String format(String value) => value;
 
   @override
   String get formattedValue => value;
@@ -74,10 +152,10 @@ final class RecognizedSum extends RecognizedEntity<num> {
   RecognizedSum({required super.line, required super.value});
 
   @override
-  String get formattedValue => NumberFormat.decimalPatternDigits(
-    locale: Intl.defaultLocale,
-    decimalDigits: 2,
-  ).format(value);
+  String format(num value) => Formatter.format(value);
+
+  @override
+  String get formattedValue => format(value);
 }
 
 /// Represents a computed sum calculated from individual line item prices.
@@ -85,65 +163,22 @@ final class CalculatedSum extends Valuable<num> {
   CalculatedSum({required super.value});
 
   @override
-  String get formattedValue => NumberFormat.decimalPatternDigits(
-    locale: Intl.defaultLocale,
-    decimalDigits: 2,
-  ).format(value);
+  String format(num value) => Formatter.format(value);
+
+  @override
+  String get formattedValue => format(value);
 }
 
 /// Represents a product name recognized from a receipt with alias tracking and similarity logic.
-final class RecognizedProduct extends RecognizedUnknown {
-  /// A list of alternative names or aliases for the product.
-  final List<String> valueAliases;
-
+final class RecognizedProduct extends RecognizedAliases<String> {
   /// Minimum similarity threshold used for comparison.
   final int similarity;
-
-  /// Trustworthiness score (0–100) based on frequency of alias matches.
-  int trustworthiness;
-
-  /// The most trusted product name after alias analysis.
-  @override
-  String formattedValue;
 
   RecognizedProduct({
     required super.line,
     required super.value,
     this.similarity = 75,
-  }) : valueAliases = [value],
-       formattedValue = value,
-       trustworthiness = 0;
-
-  /// Removes entry if list has more than 100 entries and then adds a new value alias.
-  void addValueAlias(String valueAlias) {
-    if (valueAliases.length > 100) {
-      valueAliases.remove(valueAliases.first);
-    }
-
-    valueAliases.add(valueAlias);
-  }
-
-  /// Replaces all existing value aliases with [valueAliases].
-  void updateValueAliases(List<String> valueAliases) {
-    this.valueAliases.clear();
-    this.valueAliases.addAll(valueAliases);
-  }
-
-  /// Calculates the trustworthiness score and determines the most reliable alias.
-  void calculateTrustworthiness() {
-    final Map<String, int> rank = {};
-    for (final value in valueAliases) {
-      rank[value] = (rank[value] ?? 0) + 1;
-    }
-
-    final sorted = List.from(rank.entries)
-      ..sort((a, b) => a.value.compareTo(b.value));
-
-    if (sorted.isNotEmpty) {
-      formattedValue = sorted.last.key;
-      trustworthiness = (sorted.last.value / valueAliases.length * 100).toInt();
-    }
-  }
+  });
 
   /// Checks whether this product is similar to [other] based on string similarity.
   bool isSimilar(RecognizedProduct other) {
@@ -162,7 +197,7 @@ final class RecognizedProduct extends RecognizedUnknown {
 }
 
 /// Represents the price of a product recognized from a receipt.
-final class RecognizedPrice extends RecognizedAmount {
+final class RecognizedPrice extends RecognizedAliases<num> {
   RecognizedPrice({required super.line, required super.value});
 }
 
@@ -178,10 +213,19 @@ final class RecognizedPosition {
 
   /// Checks whether this position is similar to [other].
   bool isSimilar(RecognizedPosition other) {
-    return (product.isSimilar(other.product) ||
-            other.product.isSimilar(product)) &&
-        price.formattedValue == other.price.formattedValue;
+    return product.isSimilar(other.product) || other.product.isSimilar(product);
   }
+
+  /// Checks whether this position is equal to [other].
+  @override
+  bool operator ==(Object other) =>
+      other is RecognizedPosition &&
+      product.value == other.product.value &&
+      price.formattedValue == other.price.formattedValue;
+
+  /// Generates hash from product and price.
+  @override
+  int get hashCode => Object.hash(product.value, price.value);
 }
 
 /// A [ListDiffDelegate] for comparing lists of [RecognizedPosition] items.
@@ -221,6 +265,7 @@ final class RecognizedReceipt {
       positions.every((p) => p.product.trustworthiness > 0);
 
   /// Calculates the total sum from all line item prices.
-  CalculatedSum get calculatedSum =>
-      CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
+  CalculatedSum get calculatedSum => CalculatedSum(
+    value: positions.fold(0.0, (a, b) => a + num.parse(b.price.formattedValue)),
+  );
 }

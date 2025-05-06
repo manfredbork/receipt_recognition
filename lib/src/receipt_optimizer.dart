@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:math';
 
 import 'package:diffutil_dart/diffutil.dart';
 import 'package:flutter/foundation.dart';
@@ -10,11 +11,11 @@ class ReceiptOptimizer implements Optimizer {
   /// Minimum scans required before trustworthiness is calculated.
   final int _minScansForTrustworthiness;
 
-  /// Cached prices from multiple scans.
-  final List<num> _cachedPrices = [];
-
   /// Cached positions from multiple scans.
   final List<RecognizedPosition> _cachedPositions = [];
+
+  /// Cached prices from multiple scans.
+  final List<String> _cachedPrices = [];
 
   /// Cached sum from multiple scans.
   RecognizedSum? _sum;
@@ -22,7 +23,7 @@ class ReceiptOptimizer implements Optimizer {
   /// Cached company from multiple scans.
   RecognizedCompany? _company;
 
-  /// Freeze if cached sum is reached.
+  /// Freeze if sum is reached from multiple scans.
   bool _freezeSum = false;
 
   /// Constructor to create an instance of [ReceiptOptimizer].
@@ -32,8 +33,8 @@ class ReceiptOptimizer implements Optimizer {
   /// Initializes optimizer.
   @override
   void init() {
-    _cachedPrices.clear();
     _cachedPositions.clear();
+    _cachedPrices.clear();
     _sum = null;
     _company = null;
     _freezeSum = false;
@@ -44,24 +45,25 @@ class ReceiptOptimizer implements Optimizer {
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
     final mergedReceipt = _mergeReceiptFromCache(receipt);
 
-    if (kDebugMode) {
-      if (mergedReceipt.positions.isNotEmpty) {
-        print('***************************');
-      }
-      for (final position in mergedReceipt.positions) {
-        print(
-          'Product: ${position.product.formattedValue}, Price: ${position.price.formattedValue}, Trust: ${position.product.trustworthiness}%',
-        );
-      }
-      if (mergedReceipt.positions.isNotEmpty) {
-        print(
-          'Calculated sum is ${mergedReceipt.calculatedSum.formattedValue}',
-        );
-        print('Receipt sum is ${mergedReceipt.sum?.formattedValue}');
-      }
-    }
-
     if (mergedReceipt.isValid) {
+      if (kDebugMode) {
+        if (mergedReceipt.positions.isNotEmpty) {
+          print('*************************** RECEIPT ***************************');
+          print('Store is ${mergedReceipt.company ?? "unknown"}');
+        }
+        for (final position in mergedReceipt.positions) {
+          print(
+            'Product: ${position.product.formattedValue}, Price: ${position.price.formattedValue}, Trust: ${position.product.trustworthiness}%',
+          );
+        }
+        if (mergedReceipt.positions.isNotEmpty) {
+          print(
+            'Calculated sum is ${mergedReceipt.calculatedSum.formattedValue}',
+          );
+          print('Receipt sum is ${mergedReceipt.sum?.formattedValue}');
+        }
+      }
+
       return mergedReceipt;
     }
 
@@ -79,10 +81,7 @@ class ReceiptOptimizer implements Optimizer {
     _writeSumToCache(receipt.sum);
     _writeCompanyToCache(receipt.company);
     _addPositionsToCache(receipt.positions);
-
-    if (!_freezeSum) {
-      _addPricesToCache(receipt.positions);
-    }
+    _addPricesToCache(receipt.positions);
 
     final updatedPositions = _updateValueAliases(receipt.positions);
     final updatedReceipt = RecognizedReceipt(
@@ -95,7 +94,7 @@ class ReceiptOptimizer implements Optimizer {
       return updatedReceipt;
     }
 
-    if (_isCorrectSum()) {
+    if (_sumFromCache() == _sum?.value) {
       final mergedPositions = _mergePositionsFromCache();
       final mergedReceipt = RecognizedReceipt(
         positions: mergedPositions,
@@ -106,18 +105,19 @@ class ReceiptOptimizer implements Optimizer {
       if (mergedReceipt.isValid) {
         return mergedReceipt;
       }
-
-      _freezeSum = true;
     }
 
     return receipt;
   }
 
-  /// Checks if sum of cached prices is equal to receipt sum from cache.
-  bool _isCorrectSum() {
-    final sum = _cachedPrices.fold(0.0, (a, b) => a + b);
+  /// Checks if a long receipt is scanned.
+  bool _isLongReceipt() {
+    return _freezeSum && _cachedPrices.length >= 20;
+  }
 
-    return sum == _sum?.value;
+  /// Adds up sum from cache.
+  num _sumFromCache() {
+    return _cachedPrices.fold(0.0, (a, b) => a + num.parse(b));
   }
 
   /// Writes sum to cache.
@@ -132,19 +132,36 @@ class ReceiptOptimizer implements Optimizer {
 
   /// Adds and updates prices to cache.
   void _addPricesToCache(List<RecognizedPosition> positions) {
-    final prices = List<num>.from(positions.map((p) => p.price.value));
+    final sum = _sum?.value;
 
-    final diffResult = calculateListDiff<num>(_cachedPrices, prices);
-
-    final updates = diffResult.getUpdatesWithData();
-
-    for (final update in updates) {
-      update.when(
-        insert: (pos, data) => _cachedPrices.insert(pos, data),
-        remove: (pos, data) => null,
-        change: (pos, oldData, newData) => null,
-        move: (from, to, data) => null,
+    if (!_freezeSum) {
+      final prices = List<String>.from(
+        positions.map((p) => p.price.formattedValue),
       );
+
+      final diffResult = calculateListDiff<String>(_cachedPrices, prices);
+
+      final updates = diffResult.getUpdatesWithData();
+
+      for (final update in updates) {
+        update.when(
+          insert: (pos, data) => _cachedPrices.insert(pos, data),
+          remove: (pos, data) => null,
+          change: (pos, oldData, newData) => null,
+          move: (from, to, data) => null,
+        );
+      }
+
+      if (sum == _sumFromCache()) {
+        _freezeSum = true;
+      } else if (sum != null && sum < _sumFromCache()) {
+        final rnd = Random();
+        if (rnd.nextInt(10) == 0) {
+          init();
+        } else {
+          _cachedPrices.clear();
+        }
+      }
     }
   }
 
@@ -163,6 +180,8 @@ class ReceiptOptimizer implements Optimizer {
         change: (pos, oldData, newData) {
           _cachedPositions[pos].product.addValueAlias(newData.product.value);
           _cachedPositions[pos].product.calculateTrustworthiness();
+          _cachedPositions[pos].price.addValueAlias(newData.price.value);
+          _cachedPositions[pos].price.calculateTrustworthiness();
         },
         move: (from, to, data) => null,
       );
@@ -176,17 +195,33 @@ class ReceiptOptimizer implements Optimizer {
     final List<RecognizedPosition> updatedPositions = [];
 
     for (final position in positions) {
-      final cachedPosition =
-          _cachedPositions.where((p) => p.isSimilar(position)).firstOrNull;
+      final cachedPositions = _cachedPositions.where(
+        (p) => p.isSimilar(position),
+      );
 
-      if (cachedPosition != null) {
+      if (cachedPositions.isNotEmpty) {
+        final cachedPosition =
+            cachedPositions
+                .where((p) => p.price.value == position.price.value)
+                .firstOrNull ??
+            cachedPositions.first;
+
         position.product.updateValueAliases(
           List.from(cachedPosition.product.valueAliases),
         );
+        position.price.updateValueAliases(
+          List.from(cachedPosition.price.valueAliases),
+        );
       }
 
-      if (position.product.valueAliases.length >= _minScansForTrustworthiness) {
+      if (_isLongReceipt() ||
+          position.product.valueAliases.length >= _minScansForTrustworthiness) {
         position.product.calculateTrustworthiness();
+      }
+
+      if (_isLongReceipt() ||
+          position.price.valueAliases.length >= _minScansForTrustworthiness) {
+        position.price.calculateTrustworthiness();
       }
 
       updatedPositions.add(position);
@@ -199,7 +234,27 @@ class ReceiptOptimizer implements Optimizer {
   List<RecognizedPosition> _mergePositionsFromCache() {
     final List<RecognizedPosition> mergedPositions = [];
 
-    // TODO: Merge positions from cache data
+    for (final price in _cachedPrices) {
+      List<RecognizedPosition> positionCandidates =
+          List<RecognizedPosition>.from(
+            _cachedPositions.where((p) => p.price.formattedValue == price),
+          );
+
+      if (positionCandidates.isNotEmpty) {
+        mergedPositions.add(positionCandidates.first);
+      } else {
+        positionCandidates = List<RecognizedPosition>.from(
+          _cachedPositions.where(
+            (p) => Formatter.format(p.price.value) == price,
+          ),
+        );
+        if (positionCandidates.isNotEmpty) {
+          positionCandidates.first.product.updateValueAliases([price]);
+          positionCandidates.first.product.calculateTrustworthiness();
+          mergedPositions.add(positionCandidates.first);
+        }
+      }
+    }
 
     return mergedPositions;
   }
