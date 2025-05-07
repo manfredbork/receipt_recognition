@@ -29,18 +29,14 @@ class ReceiptRecognizer {
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
+    script = TextRecognitionScript.latin,
     videoFeed = true,
     scanTimeout = const Duration(seconds: 30),
     onScanTimeout,
     onScanUpdate,
     onScanComplete,
-  }) : _textRecognizer =
-           textRecognizer ??
-           TextRecognizer(script: TextRecognitionScript.latin),
-       _optimizer =
-           optimizer ?? videoFeed
-               ? ReceiptOptimizer()
-               : ReceiptOptimizer(minScansForTrustworthiness: 1),
+  }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
+       _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
@@ -63,9 +59,8 @@ class ReceiptRecognizer {
 
       return optimizedReceipt;
     } else {
-      _onScanUpdate?.call(optimizedReceipt);
-
       _lastScan ??= now;
+      _onScanUpdate?.call(optimizedReceipt);
 
       if (now.difference(_lastScan ?? now) > _scanTimeout) {
         _lastScan = null;

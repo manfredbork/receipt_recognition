@@ -160,8 +160,7 @@ class ReceiptParser {
     RecognizedSumLabel sumLabel,
   ) {
     final ySumLabel = sumLabel.line.boundingBox.top;
-    final amounts = entities.whereType<RecognizedAmount>();
-    final yAmounts = List.from(amounts)..sort(
+    final yAmounts = List.from(entities.whereType<RecognizedAmount>())..sort(
       (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
         (b.line.boundingBox.top - ySumLabel).abs(),
       ),
@@ -228,11 +227,7 @@ class ReceiptParser {
 
   /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
-    final unknowns = entities.whereType<RecognizedUnknown>();
-
-    if (unknowns.isEmpty) return null;
-
-    final yUnknowns = List.from(unknowns);
+    final yUnknowns = List.from(entities.whereType<RecognizedUnknown>());
 
     RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
@@ -275,8 +270,11 @@ class ReceiptParser {
       }
     }
 
-    if (sumLabel == null) sum = null;
-
-    return RecognizedReceipt(positions: positions, sum: sum, company: company);
+    return RecognizedReceipt(
+      positions: positions,
+      sumLabel: sumLabel,
+      sum: sum,
+      company: company,
+    );
   }
 }
