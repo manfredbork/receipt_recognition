@@ -14,6 +14,9 @@ class ReceiptRecognizer {
   /// Use any optimizer implementing [Optimizer].
   final Optimizer _optimizer;
 
+  /// Indicates if a video feed should be optimized.
+  final bool _videoFeed;
+
   /// Duration for scan timeout.
   final Duration _scanTimeout;
 
@@ -36,7 +39,8 @@ class ReceiptRecognizer {
     onScanUpdate,
     onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
-       _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
+       _optimizer = optimizer ?? ReceiptOptimizer(),
+       _videoFeed = videoFeed,
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
@@ -48,11 +52,13 @@ class ReceiptRecognizer {
     final text = await _textRecognizer.processImage(inputImage);
     final receipt = ReceiptParser.processText(text);
 
-    if (receipt == null) return null;
+    if (receipt == null) {
+      return null;
+    }
 
     final optimizedReceipt = _optimizer.optimize(receipt);
 
-    if (optimizedReceipt.isValid) {
+    if (optimizedReceipt.isValid(_videoFeed)) {
       _lastScan = null;
       _optimizer.init();
       _onScanComplete?.call(optimizedReceipt);

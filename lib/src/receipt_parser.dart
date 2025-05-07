@@ -261,7 +261,6 @@ class ReceiptParser {
                   line: yUnknown.line,
                 ),
                 price: RecognizedPrice(line: entity.line, value: entity.value),
-                receipt: receipt,
               ),
             );
             forbidden.add(yUnknown);
