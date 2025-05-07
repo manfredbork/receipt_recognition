@@ -233,7 +233,7 @@ class ReceiptParser {
     RecognizedSum? sum;
     RecognizedCompany? company;
 
-    final List<RecognizedPosition> positions = [];
+    final RecognizedReceipt receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
 
     for (final entity in entities) {
@@ -254,13 +254,14 @@ class ReceiptParser {
 
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown)) {
-            positions.add(
+            receipt.positions.add(
               RecognizedPosition(
                 product: RecognizedProduct(
                   value: yUnknown.value,
                   line: yUnknown.line,
                 ),
                 price: RecognizedPrice(line: entity.line, value: entity.value),
+                receipt: receipt,
               ),
             );
             forbidden.add(yUnknown);
@@ -270,11 +271,10 @@ class ReceiptParser {
       }
     }
 
-    return RecognizedReceipt(
-      positions: positions,
-      sumLabel: sumLabel,
-      sum: sum,
-      company: company,
-    );
+    receipt.sumLabel = sumLabel;
+    receipt.sum = sum;
+    receipt.company = company;
+
+    return receipt;
   }
 }
