@@ -15,6 +15,8 @@ final class Formatter {
 }
 
 abstract class Optimizer {
+  Optimizer({required videoFeed});
+
   init();
 
   optimize(RecognizedReceipt receipt);
@@ -99,24 +101,26 @@ final class RecognizedPosition {
 
   final RecognizedPrice price;
 
-  int trustworthiness;
+  DateTime timestamp;
 
-  int scans;
+  RecognizedPosition? previous;
+
+  int trustworthiness;
 
   RecognizedPosition({
     required this.product,
     required this.price,
+    required this.timestamp,
+    this.previous,
     trustworthiness,
-    scans,
-  }) : trustworthiness = trustworthiness ?? 0,
-       scans = scans ?? 1;
+  }) : trustworthiness = trustworthiness ?? 0;
 
   int similarity(RecognizedPosition other) {
-    if (price.formattedValue == other.price.formattedValue) {
-      return ratio(product.value, other.product.value);
+    if (timestamp == other.timestamp) {
+      return 0;
     }
 
-    return 0;
+    return ratio(product.value, other.product.value);
   }
 }
 
@@ -143,13 +147,7 @@ final class RecognizedReceipt {
     return RecognizedReceipt(positions: []);
   }
 
-  bool isValid([videoFeed = false]) {
-    if (videoFeed && positions.any((p) => p.scans < 1)) {
-      return false;
-    }
-
-    return calculatedSum.formattedValue == sum?.formattedValue;
-  }
+  bool get isValid => calculatedSum.formattedValue == sum?.formattedValue;
 
   CalculatedSum get calculatedSum =>
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
@@ -158,10 +156,26 @@ final class RecognizedReceipt {
 final class CachedReceipt extends RecognizedReceipt {
   List<PositionGroup> positionGroups;
 
-  CachedReceipt({required super.positions, required this.positionGroups});
+  int minScans;
 
-  factory CachedReceipt.empty() {
-    return CachedReceipt(positions: [], positionGroups: []);
+  int similarityThreshold;
+
+  int maxCacheSize;
+
+  CachedReceipt({
+    required super.positions,
+    required this.positionGroups,
+    required this.minScans,
+    this.similarityThreshold = 50,
+    this.maxCacheSize = 100,
+  });
+
+  factory CachedReceipt.fromVideoFeed() {
+    return CachedReceipt(positions: [], positionGroups: [], minScans: 3);
+  }
+
+  factory CachedReceipt.fromImages() {
+    return CachedReceipt(positions: [], positionGroups: [], minScans: 1);
   }
 
   void clear() {
@@ -175,36 +189,35 @@ final class CachedReceipt extends RecognizedReceipt {
     company = receipt.company ?? company;
 
     for (final position in receipt.positions) {
-      position.scans++;
-
       final groups = positionGroups.where(
-        (g) =>
-            g.mostSimilar(position).price.formattedValue ==
-            position.price.formattedValue,
+        (g) => g.positions.every((p) => p.timestamp != position.timestamp),
       );
 
       if (groups.isNotEmpty) {
-        try {
-          final group = groups.reduce(
-            (a, b) =>
-                a.mostSimilar(position).similarity(position) >
-                        b.mostSimilar(position).similarity(position)
-                    ? a
-                    : b,
+        final group = groups.reduce(
+          (a, b) =>
+              a.mostSimilar(position).similarity(position) >
+                      b.mostSimilar(position).similarity(position)
+                  ? a
+                  : b,
+        );
+
+        if (group.mostSimilar(position).similarity(position) >
+            similarityThreshold) {
+          group.positions.add(position);
+        } else {
+          positionGroups.add(
+            PositionGroup(position: position, minScans: minScans),
           );
+        }
 
-          if (group.mostSimilar(position).similarity(position) > 75) {
-            group.positions.add(position);
-          } else {
-            positionGroups.add(PositionGroup(position: position));
-          }
-
-          if (group.positions.length > 100) {
-            group.positions.remove(group.positions.first);
-          }
-        } catch (_) {}
+        if (group.positions.length > maxCacheSize) {
+          group.positions.remove(group.positions.first);
+        }
       } else {
-        positionGroups.add(PositionGroup(position: position));
+        positionGroups.add(
+          PositionGroup(position: position, minScans: minScans),
+        );
       }
     }
   }
@@ -213,44 +226,67 @@ final class CachedReceipt extends RecognizedReceipt {
     positions.clear();
 
     for (final group in positionGroups) {
-      positions.add(group.mostTrustworthy());
+      final mostTrustworthy = group.mostTrustworthy();
+
+      if (mostTrustworthy.trustworthiness > 0) {
+        positions.add(mostTrustworthy);
+      }
     }
+  }
+
+  RecognizedReceipt get receipt {
+    positions.sort(
+      (a, b) => a.timestamp.millisecondsSinceEpoch.compareTo(
+        b.timestamp.millisecondsSinceEpoch,
+      ),
+    );
+
+    return this;
   }
 }
 
 final class PositionGroup {
   final List<RecognizedPosition> positions;
 
-  PositionGroup({required position}) : positions = [position];
+  final int minScans;
+
+  PositionGroup({required position, required this.minScans})
+    : positions = [position];
 
   RecognizedPosition mostTrustworthy() {
-    final Map<String, int> rank = {};
+    final Map<(String, String), int> rank = {};
 
     for (final position in positions) {
-      final value = position.product.value;
+      final product = position.product.value;
+      final price = position.price.formattedValue;
+      final key = (product, price);
 
-      if (rank.containsKey(value)) {
-        rank[value] = rank[value]! + 1;
+      if (rank.containsKey(key)) {
+        rank[key] = rank[key]! + 1;
       } else {
-        rank[value] = 1;
+        rank[key] = 1;
       }
     }
 
-    final ranked = List.from(rank.entries)
+    final ranked = List<MapEntry<(String, String), int>>.from(rank.entries)
       ..sort((a, b) => a.value.compareTo(b.value));
 
     if (ranked.isNotEmpty) {
       final position = positions.firstWhere(
-        (p) => p.product.value == ranked.last.key,
+        (p) =>
+            p.product.value == ranked.last.key.$1 &&
+            p.price.formattedValue == ranked.last.key.$2,
       );
 
-      position.trustworthiness =
-          (ranked.last.value / positions.length * 100).toInt();
+      if (positions.length >= minScans) {
+        position.trustworthiness =
+            (ranked.last.value / positions.length * 100).toInt();
+      }
 
       return position;
     }
 
-    return positions.first;
+    return positions.last;
   }
 
   RecognizedPosition mostSimilar(RecognizedPosition position) {

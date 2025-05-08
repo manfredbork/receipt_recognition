@@ -6,8 +6,9 @@ import 'receipt_models.dart';
 /// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
   /// RegExp patterns.
-  static const patternDisallowed =
-      r'(Geg.|Steuer|Brutto|Rückgeld|Handeingabe|Stk)';
+  static const patternStop = r'(Geg.|Rückgeld|Steuer|Brutto)';
+  static const patternIgnore =
+      r'(([0-9])+\s?([.,])\s?([0-9]){3})|(E-Bon|Handeingabe|Stk|EUR)';
   static const patternCompany =
       r'(Lidl|Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
   static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
@@ -44,7 +45,13 @@ class ReceiptParser {
     bool detectedSumLabel = false;
 
     for (final line in lines) {
-      if (RegExp(patternDisallowed).hasMatch(line.text)) continue;
+      if (RegExp(patternStop, caseSensitive: false).hasMatch(line.text)) {
+        break;
+      }
+
+      if (RegExp(patternIgnore, caseSensitive: false).hasMatch(line.text)) {
+        continue;
+      }
 
       final company = RegExp(
         patternCompany,
@@ -110,11 +117,13 @@ class ReceiptParser {
   static List<RecognizedEntity> _shrinkEntities(
     List<RecognizedEntity> entities,
   ) {
-    final List<RecognizedEntity> shrunken = List.from(entities);
+    final List<RecognizedEntity> shrunken = List<RecognizedEntity>.from(
+      entities,
+    );
 
     final beforeAmounts = shrunken.whereType<RecognizedAmount>();
 
-    final yAmounts = List.from(beforeAmounts)..sort(
+    final yAmounts = List<RecognizedAmount>.from(beforeAmounts)..sort(
       (a, b) => (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
     );
 
@@ -143,7 +152,7 @@ class ReceiptParser {
 
     final afterAmounts = shrunken.whereType<RecognizedAmount>();
 
-    final xAmounts = List.from(afterAmounts)..sort(
+    final xAmounts = List<RecognizedAmount>.from(afterAmounts)..sort(
       (a, b) => (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
     );
 
@@ -160,7 +169,9 @@ class ReceiptParser {
     RecognizedSumLabel sumLabel,
   ) {
     final ySumLabel = sumLabel.line.boundingBox.top;
-    final yAmounts = List.from(entities.whereType<RecognizedAmount>())..sort(
+    final yAmounts = List<RecognizedAmount>.from(
+      entities.whereType<RecognizedAmount>(),
+    )..sort(
       (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
         (b.line.boundingBox.top - ySumLabel).abs(),
       ),
@@ -227,7 +238,9 @@ class ReceiptParser {
 
   /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
-    final yUnknowns = List.from(entities.whereType<RecognizedUnknown>());
+    final yUnknowns = List<RecognizedUnknown>.from(
+      entities.whereType<RecognizedUnknown>(),
+    );
 
     RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
@@ -261,6 +274,11 @@ class ReceiptParser {
                   line: yUnknown.line,
                 ),
                 price: RecognizedPrice(line: entity.line, value: entity.value),
+                timestamp: receipt.timestamp,
+                previous:
+                    receipt.positions.isNotEmpty
+                        ? receipt.positions.last
+                        : null,
               ),
             );
             forbidden.add(yUnknown);

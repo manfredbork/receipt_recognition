@@ -46,6 +46,7 @@ void main() {
       final position = RecognizedPosition(
         product: RecognizedProduct(line: line1, value: 'Apple'),
         price: RecognizedPrice(line: line2, value: 0.99),
+        timestamp: DateTime.now(),
       );
 
       final receipt = RecognizedReceipt(
@@ -64,6 +65,7 @@ void main() {
       final position = RecognizedPosition(
         product: RecognizedProduct(line: line, value: 'Banana'),
         price: RecognizedPrice(line: line, value: 1.49),
+        timestamp: DateTime.now(),
       );
 
       final receipt = RecognizedReceipt(positions: [position]);
