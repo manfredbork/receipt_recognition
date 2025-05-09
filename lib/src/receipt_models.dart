@@ -17,11 +17,11 @@ final class Formatter {
 abstract class Optimizer {
   Optimizer({required videoFeed});
 
-  init();
+  void init();
 
-  optimize(RecognizedReceipt receipt);
+  RecognizedReceipt optimize(RecognizedReceipt receipt);
 
-  close();
+  void close();
 }
 
 abstract class Valuable<T> {
@@ -103,17 +103,20 @@ final class RecognizedPosition {
 
   DateTime timestamp;
 
-  RecognizedPosition? previous;
+  int? trustworthiness;
 
-  int trustworthiness;
+  PositionGroup? group;
+
+  RecognizedPosition? previous;
 
   RecognizedPosition({
     required this.product,
     required this.price,
     required this.timestamp,
+    this.trustworthiness,
+    this.group,
     this.previous,
-    trustworthiness,
-  }) : trustworthiness = trustworthiness ?? 0;
+  });
 
   int similarity(RecognizedPosition other) {
     if (timestamp == other.timestamp) {
@@ -127,27 +130,34 @@ final class RecognizedPosition {
 final class RecognizedReceipt {
   List<RecognizedPosition> positions;
 
+  DateTime timestamp;
+
   RecognizedSumLabel? sumLabel;
 
   RecognizedSum? sum;
 
   RecognizedCompany? company;
 
-  DateTime timestamp;
+  bool isValid;
 
   RecognizedReceipt({
     required this.positions,
+    required this.timestamp,
     this.sumLabel,
     this.sum,
     this.company,
-    timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
+    this.isValid = false,
+  });
+
+  RecognizedReceipt.clone(CachedReceipt cachedReceipt)
+    : this(
+        positions: cachedReceipt.positions,
+        timestamp: cachedReceipt.timestamp,
+      );
 
   factory RecognizedReceipt.empty() {
-    return RecognizedReceipt(positions: []);
+    return RecognizedReceipt(positions: [], timestamp: DateTime.now());
   }
-
-  bool get isValid => calculatedSum.formattedValue == sum?.formattedValue;
 
   CalculatedSum get calculatedSum =>
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
@@ -164,31 +174,53 @@ final class CachedReceipt extends RecognizedReceipt {
 
   int maxCacheSize;
 
+  int minScans;
+
   CachedReceipt({
     required super.positions,
+    required super.timestamp,
     required this.positionGroups,
     required this.videoFeed,
     this.similarityThreshold = 50,
-    this.trustworthyThreshold = 50,
-    this.maxCacheSize = 100,
-  });
+    this.trustworthyThreshold = 20,
+    this.maxCacheSize = 20,
+    super.isValid = false,
+    super.sumLabel,
+    super.sum,
+    super.company,
+  }) : minScans = videoFeed ? 5 : 1;
 
   CachedReceipt.clone(CachedReceipt cachedReceipt)
     : this(
         positions: cachedReceipt.positions,
+        timestamp: cachedReceipt.timestamp,
         positionGroups: cachedReceipt.positionGroups,
         videoFeed: cachedReceipt.videoFeed,
         similarityThreshold: cachedReceipt.similarityThreshold,
         trustworthyThreshold: cachedReceipt.trustworthyThreshold,
         maxCacheSize: cachedReceipt.maxCacheSize,
+        isValid: cachedReceipt.isValid,
+        sumLabel: cachedReceipt.sumLabel,
+        sum: cachedReceipt.sum,
+        company: cachedReceipt.company,
       );
 
   factory CachedReceipt.fromVideoFeed() {
-    return CachedReceipt(positions: [], positionGroups: [], videoFeed: true);
+    return CachedReceipt(
+      positions: [],
+      timestamp: DateTime.now(),
+      positionGroups: [],
+      videoFeed: true,
+    );
   }
 
   factory CachedReceipt.fromImages() {
-    return CachedReceipt(positions: [], positionGroups: [], videoFeed: false);
+    return CachedReceipt(
+      positions: [],
+      timestamp: DateTime.now(),
+      positionGroups: [],
+      videoFeed: false,
+    );
   }
 
   void clear() {
@@ -201,10 +233,14 @@ final class CachedReceipt extends RecognizedReceipt {
     sum = receipt.sum ?? sum;
     company = receipt.company ?? company;
 
+    RecognizedPosition? previous;
+
     for (final position in receipt.positions) {
       final groups = positionGroups.where(
         (g) => g.positions.every((p) => p.timestamp != position.timestamp),
       );
+
+      final newGroup = PositionGroup(position: position);
 
       if (groups.isNotEmpty) {
         final group = groups.reduce(
@@ -217,42 +253,58 @@ final class CachedReceipt extends RecognizedReceipt {
 
         if (group.mostSimilar(position).similarity(position) >
             similarityThreshold) {
+          position.group = group;
+          position.previous = previous;
           group.positions.add(position);
-        } else {
-          positionGroups.add(PositionGroup(position: position));
-        }
 
-        if (group.positions.length > maxCacheSize) {
-          group.positions.remove(group.positions.first);
+          if (group.positions.length > maxCacheSize) {
+            group.positions.remove(group.positions.first);
+          }
+        } else {
+          position.group = newGroup;
+          position.previous = previous;
+          positionGroups.add(newGroup);
         }
       } else {
-        positionGroups.add(PositionGroup(position: position));
+        position.group = newGroup;
+        position.previous = previous;
+        positionGroups.add(newGroup);
       }
+
+      previous = position;
     }
   }
 
   void merge() {
-    final minScans = videoFeed ? 3 : 1;
-
     positions.clear();
 
     for (final group in positionGroups) {
       final mostTrustworthy = group.mostTrustworthy();
 
-      if (mostTrustworthy.trustworthiness >= trustworthyThreshold &&
-          group.positions.length >= minScans) {
-        positions.add(mostTrustworthy);
+      if (mostTrustworthy.trustworthiness != null) {
+        if (mostTrustworthy.trustworthiness! >= trustworthyThreshold &&
+            group.positions.length >= minScans) {
+          positions.add(mostTrustworthy);
+        }
       }
     }
   }
 
-  RecognizedReceipt get receipt {
-    positions.sort(
-      (a, b) => a.timestamp.millisecondsSinceEpoch.compareTo(
-        b.timestamp.millisecondsSinceEpoch,
-      ),
+  bool get areMinScansReached {
+    final groups = positionGroups.where(
+      (g) => g.positions.any((p) => positions.contains(p)),
     );
 
+    if (groups.isNotEmpty) {
+      return groups.every((g) => g.positions.length >= minScans);
+    }
+
+    return false;
+  }
+
+  bool get isCorrectSum => calculatedSum.formattedValue == sum?.formattedValue;
+
+  RecognizedReceipt get receipt {
     return CachedReceipt.clone(this);
   }
 }
@@ -261,6 +313,18 @@ final class PositionGroup {
   final List<RecognizedPosition> positions;
 
   PositionGroup({required position}) : positions = [position];
+
+  DateTime oldestTimestamp() {
+    return positions
+        .reduce(
+          (a, b) =>
+              a.timestamp.millisecondsSinceEpoch <
+                      b.timestamp.millisecondsSinceEpoch
+                  ? a
+                  : b,
+        )
+        .timestamp;
+  }
 
   RecognizedPosition mostTrustworthy() {
     final Map<(String, String), int> rank = {};

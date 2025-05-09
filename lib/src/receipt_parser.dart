@@ -261,10 +261,6 @@ class ReceiptParser {
                 ),
                 price: RecognizedPrice(line: entity.line, value: entity.value),
                 timestamp: receipt.timestamp,
-                previous:
-                    receipt.positions.isNotEmpty
-                        ? receipt.positions.last
-                        : null,
               ),
             );
             forbidden.add(yUnknown);

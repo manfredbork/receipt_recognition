@@ -51,6 +51,7 @@ void main() {
 
       final receipt = RecognizedReceipt(
         positions: [position],
+        timestamp: DateTime.now(),
         sum: RecognizedSum(line: line2, value: 0.99),
         company: RecognizedCompany(line: line1, value: 'Store Inc.'),
       );
@@ -68,7 +69,10 @@ void main() {
         timestamp: DateTime.now(),
       );
 
-      final receipt = RecognizedReceipt(positions: [position]);
+      final receipt = RecognizedReceipt(
+        positions: [position],
+        timestamp: position.timestamp,
+      );
 
       expect(receipt.sum, isNull);
       expect(receipt.company, isNull);
