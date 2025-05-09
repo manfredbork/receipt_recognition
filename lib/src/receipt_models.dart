@@ -227,7 +227,7 @@ final class CachedReceipt extends RecognizedReceipt {
     }
   }
 
-  void merge() {
+  void merge({videoFeed}) {
     positions.clear();
 
     for (final group in positionGroups) {
