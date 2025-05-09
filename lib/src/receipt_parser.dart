@@ -3,9 +3,7 @@ import 'package:intl/intl.dart';
 
 import 'receipt_models.dart';
 
-/// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
-  /// RegExp patterns.
   static const patternStop = r'(Geg.|Rückgeld|Steuer|Brutto)';
   static const patternIgnore =
       r'(([0-9])+\s?([.,])\s?([0-9]){3})|(E-Bon|Handeingabe|Stk|EUR)';
@@ -15,7 +13,6 @@ class ReceiptParser {
   static const patternUnknown = r'([^0-9]){6,}';
   static const patternAmount = r'-?\s?([0-9])+\s?([.,])\s?([0-9]){2}';
 
-  /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
     final converted = _convertText(text);
     final parsed = _parseLines(converted);
@@ -25,7 +22,6 @@ class ReceiptParser {
     return receipt;
   }
 
-  /// Converts [RecognizedText]. Returns a list of [TextLine].
   static List<TextLine> _convertText(RecognizedText text) {
     final List<TextLine> lines = [];
 
@@ -37,7 +33,6 @@ class ReceiptParser {
       ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
-  /// Parses a list of [TextLine]. Returns a list of [RecognizedEntity].
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
     final List<RecognizedEntity> parsed = [];
 
@@ -102,7 +97,6 @@ class ReceiptParser {
     return parsed;
   }
 
-  /// Detects locale by separator. Returns a [String].
   static String? _detectsLocale(String text) {
     if (text.contains('.')) {
       return 'en_US';
@@ -113,7 +107,6 @@ class ReceiptParser {
     return Intl.defaultLocale;
   }
 
-  /// Shrinks a list of [RecognizedEntity]. Returns a list of [RecognizedEntity].
   static List<RecognizedEntity> _shrinkEntities(
     List<RecognizedEntity> entities,
   ) {
@@ -163,7 +156,6 @@ class ReceiptParser {
     return shrunken;
   }
 
-  /// Finds sum by sum label. Returns a [RecognizedSum].
   static RecognizedSum? _findSum(
     List<RecognizedEntity> entities,
     RecognizedSumLabel sumLabel,
@@ -192,7 +184,6 @@ class ReceiptParser {
     return null;
   }
 
-  /// Checks if [RecognizedEntity] is invalid. Returns a [bool].
   static bool _isInvalid(RecognizedEntity a, RecognizedEntity b) {
     return a is! RecognizedCompany &&
         a is! RecognizedSumLabel &&
@@ -200,7 +191,6 @@ class ReceiptParser {
         !_isOpposite(a, b);
   }
 
-  /// Checks if [RecognizedEntity] is opposite. Returns a [bool].
   static bool _isOpposite(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
@@ -209,7 +199,6 @@ class ReceiptParser {
         (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
   }
 
-  /// Checks if [RecognizedEntity] is smaller than left bound. Returns a [bool].
   static bool _isSmallerThanLeftBound(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
@@ -217,7 +206,6 @@ class ReceiptParser {
     return a is RecognizedAmount && aBox.right < bBox.left;
   }
 
-  /// Checks if [RecognizedEntity] is smaller than top bound. Returns a [bool].
   static bool _isSmallerThanTopBound(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
@@ -225,7 +213,6 @@ class ReceiptParser {
     return a is! RecognizedCompany && aBox.bottom < bBox.top;
   }
 
-  /// Checks if [RecognizedEntity] is greater than bottom bound. Returns a [bool].
   static bool _isGreaterThanBottomBound(
     RecognizedEntity a,
     RecognizedEntity b,
@@ -236,7 +223,6 @@ class ReceiptParser {
     return aBox.top > bBox.bottom;
   }
 
-  /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = List<RecognizedUnknown>.from(
       entities.whereType<RecognizedUnknown>(),

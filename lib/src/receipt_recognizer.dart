@@ -6,26 +6,19 @@ import 'receipt_models.dart';
 import 'receipt_optimizer.dart';
 import 'receipt_parser.dart';
 
-/// A receipt recognizer that scans a receipt from [InputImage].
 class ReceiptRecognizer {
-  /// Use [TextRecognizer] from Google's ML Kit.
   final TextRecognizer _textRecognizer;
 
-  /// Use any optimizer implementing [Optimizer].
   final Optimizer _optimizer;
 
-  /// Duration for scan timeout.
   final Duration _scanTimeout;
 
-  /// Different callback methods.
   final VoidCallback? _onScanTimeout;
   final Function(RecognizedReceipt)? _onScanComplete;
   final Function(RecognizedReceipt)? _onScanUpdate;
 
-  /// Time of last scan.
   DateTime? _lastScan;
 
-  /// Constructor to create an instance of [ReceiptRecognizer].
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
@@ -42,7 +35,6 @@ class ReceiptRecognizer {
        _onScanUpdate = onScanUpdate,
        _onScanComplete = onScanComplete;
 
-  /// Processes the [InputImage]. Returns a [RecognizedReceipt].
   Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
     final now = DateTime.now();
     final text = await _textRecognizer.processImage(inputImage);
@@ -74,7 +66,6 @@ class ReceiptRecognizer {
     }
   }
 
-  /// Closes the scanner and releases its resources.
   Future<void> close() async {
     _textRecognizer.close();
     _optimizer.close();
