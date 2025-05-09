@@ -6,7 +6,7 @@ import 'receipt_models.dart';
 class ReceiptParser {
   static const patternStop = r'(Geg.|Rückgeld|Steuer|Brutto)';
   static const patternIgnore =
-      r'(([0-9])+\s?([.,])\s?([0-9]){3})|(E-Bon|Handeingabe|Stk|EUR)';
+      r'(E-Bon|Handeingabe|Stk|EUR)|(([0-9])+\s?([.,])\s?([0-9]){3})';
   static const patternCompany =
       r'(Lidl|Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
   static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
