@@ -156,17 +156,20 @@ final class RecognizedReceipt {
 final class CachedReceipt extends RecognizedReceipt {
   List<PositionGroup> positionGroups;
 
-  int minScans;
+  bool videoFeed;
 
   int similarityThreshold;
+
+  int trustworthyThreshold;
 
   int maxCacheSize;
 
   CachedReceipt({
     required super.positions,
     required this.positionGroups,
-    required this.minScans,
+    required this.videoFeed,
     this.similarityThreshold = 50,
+    this.trustworthyThreshold = 50,
     this.maxCacheSize = 100,
   });
 
@@ -174,17 +177,18 @@ final class CachedReceipt extends RecognizedReceipt {
     : this(
         positions: cachedReceipt.positions,
         positionGroups: cachedReceipt.positionGroups,
-        minScans: cachedReceipt.minScans,
+        videoFeed: cachedReceipt.videoFeed,
         similarityThreshold: cachedReceipt.similarityThreshold,
+        trustworthyThreshold: cachedReceipt.trustworthyThreshold,
         maxCacheSize: cachedReceipt.maxCacheSize,
       );
 
   factory CachedReceipt.fromVideoFeed() {
-    return CachedReceipt(positions: [], positionGroups: [], minScans: 3);
+    return CachedReceipt(positions: [], positionGroups: [], videoFeed: true);
   }
 
   factory CachedReceipt.fromImages() {
-    return CachedReceipt(positions: [], positionGroups: [], minScans: 1);
+    return CachedReceipt(positions: [], positionGroups: [], videoFeed: false);
   }
 
   void clear() {
@@ -227,13 +231,18 @@ final class CachedReceipt extends RecognizedReceipt {
     }
   }
 
-  void merge({videoFeed}) {
+  void merge() {
+    final minScans = videoFeed ? 3 : 1;
+
     positions.clear();
 
     for (final group in positionGroups) {
       final mostTrustworthy = group.mostTrustworthy();
 
-      positions.add(mostTrustworthy);
+      if (mostTrustworthy.trustworthiness >= trustworthyThreshold &&
+          group.positions.length >= minScans) {
+        positions.add(mostTrustworthy);
+      }
     }
   }
 

@@ -5,11 +5,8 @@ import 'receipt_models.dart';
 class ReceiptOptimizer implements Optimizer {
   final CachedReceipt _cachedReceipt;
 
-  final bool _videoFeed;
-
   ReceiptOptimizer({required videoFeed})
-    : _videoFeed = videoFeed,
-      _cachedReceipt =
+    : _cachedReceipt =
           videoFeed
               ? CachedReceipt.fromVideoFeed()
               : CachedReceipt.fromImages();
@@ -22,7 +19,7 @@ class ReceiptOptimizer implements Optimizer {
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
     _cachedReceipt.apply(receipt);
-    _cachedReceipt.merge(videoFeed: _videoFeed);
+    _cachedReceipt.merge();
 
     if (kDebugMode) {
       if (_cachedReceipt.receipt.positions.isNotEmpty) {
@@ -36,10 +33,6 @@ class ReceiptOptimizer implements Optimizer {
     }
     if (_cachedReceipt.receipt.positions.isNotEmpty) {
       print(_cachedReceipt.receipt.calculatedSum.formattedValue);
-    }
-
-    if (_cachedReceipt.receipt.isValid) {
-      return _cachedReceipt.receipt;
     }
 
     return receipt;
