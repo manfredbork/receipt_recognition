@@ -118,6 +118,7 @@ await receiptRecognizer.close();
 | `RecognizedProduct`  | Alphanumeric value for product.                                   |
 | `RecognizedPrice`    | Numerical value for price.                                        |
 | `RecognizedSum`      | Numerical value for sum.                                          |
+| `RecognizedSumLabel` | Represents the detected label for the sum.                        |
 | `RecognizedCompany`  | Specialized entity for the store name.                            |
 
 ---
