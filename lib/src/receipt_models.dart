@@ -170,6 +170,15 @@ final class CachedReceipt extends RecognizedReceipt {
     this.maxCacheSize = 100,
   });
 
+  CachedReceipt.clone(CachedReceipt cachedReceipt)
+    : this(
+        positions: cachedReceipt.positions,
+        positionGroups: cachedReceipt.positionGroups,
+        minScans: cachedReceipt.minScans,
+        similarityThreshold: cachedReceipt.similarityThreshold,
+        maxCacheSize: cachedReceipt.maxCacheSize,
+      );
+
   factory CachedReceipt.fromVideoFeed() {
     return CachedReceipt(positions: [], positionGroups: [], minScans: 3);
   }
@@ -206,18 +215,14 @@ final class CachedReceipt extends RecognizedReceipt {
             similarityThreshold) {
           group.positions.add(position);
         } else {
-          positionGroups.add(
-            PositionGroup(position: position, minScans: minScans),
-          );
+          positionGroups.add(PositionGroup(position: position));
         }
 
         if (group.positions.length > maxCacheSize) {
           group.positions.remove(group.positions.first);
         }
       } else {
-        positionGroups.add(
-          PositionGroup(position: position, minScans: minScans),
-        );
+        positionGroups.add(PositionGroup(position: position));
       }
     }
   }
@@ -228,9 +233,7 @@ final class CachedReceipt extends RecognizedReceipt {
     for (final group in positionGroups) {
       final mostTrustworthy = group.mostTrustworthy();
 
-      if (mostTrustworthy.trustworthiness > 0) {
-        positions.add(mostTrustworthy);
-      }
+      positions.add(mostTrustworthy);
     }
   }
 
@@ -241,17 +244,14 @@ final class CachedReceipt extends RecognizedReceipt {
       ),
     );
 
-    return this;
+    return CachedReceipt.clone(this);
   }
 }
 
 final class PositionGroup {
   final List<RecognizedPosition> positions;
 
-  final int minScans;
-
-  PositionGroup({required position, required this.minScans})
-    : positions = [position];
+  PositionGroup({required position}) : positions = [position];
 
   RecognizedPosition mostTrustworthy() {
     final Map<(String, String), int> rank = {};
@@ -278,10 +278,8 @@ final class PositionGroup {
             p.price.formattedValue == ranked.last.key.$2,
       );
 
-      if (positions.length >= minScans) {
-        position.trustworthiness =
-            (ranked.last.value / positions.length * 100).toInt();
-      }
+      position.trustworthiness =
+          (ranked.last.value / positions.length * 100).toInt();
 
       return position;
     }

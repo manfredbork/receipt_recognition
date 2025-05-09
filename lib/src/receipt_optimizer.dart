@@ -23,7 +23,7 @@ class ReceiptOptimizer implements Optimizer {
   /// Optimizes the [RecognizedReceipt]. Returns a [RecognizedReceipt].
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
-    // _cachedReceipt.apply(receipt);
+    _cachedReceipt.apply(receipt);
     _cachedReceipt.merge();
 
     if (kDebugMode) {
