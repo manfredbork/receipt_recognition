@@ -28,26 +28,39 @@ class ReceiptOptimizer implements Optimizer {
 
     _cachedReceipt.apply(receipt);
     _cachedReceipt.merge();
+    _cachedReceipt.validate(receipt);
+
+    if (receipt.isValid) {
+      _cachedReceipt.normalize(receipt);
+
+      return receipt;
+    }
+
+    final cachedReceipt = _cachedReceipt.receipt;
+
+    _cachedReceipt.validate(cachedReceipt);
 
     if (kDebugMode) {
-      if (_cachedReceipt.receipt.positions.isNotEmpty) {
+      if (cachedReceipt.positions.isNotEmpty) {
         print('####################################');
       }
-      for (final position in _cachedReceipt.receipt.positions) {
+      for (final position in cachedReceipt.positions) {
         print(
           '${position.product.value} ${position.price.formattedValue} ${position.trustworthiness}',
         );
       }
-      if (_cachedReceipt.receipt.positions.isNotEmpty) {
-        print(_cachedReceipt.receipt.calculatedSum.formattedValue);
+      if (cachedReceipt.positions.isNotEmpty) {
+        print(cachedReceipt.calculatedSum.formattedValue);
       }
     }
 
-    if (_cachedReceipt.isCorrectSum && _cachedReceipt.areMinScansReached) {
-      _cachedReceipt.isValid = true;
+    if (cachedReceipt.isValid) {
+      _cachedReceipt.normalize(cachedReceipt);
+
+      return cachedReceipt;
     }
 
-    return _cachedReceipt.receipt;
+    return receipt;
   }
 
   @override

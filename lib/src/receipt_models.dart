@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
@@ -85,6 +87,13 @@ final class CalculatedSum extends Valuable<num> {
 final class RecognizedProduct extends RecognizedEntity<String> {
   RecognizedProduct({required super.line, required super.value});
 
+  RecognizedProduct copyWith({String? value, TextLine? line}) {
+    return RecognizedProduct(
+      value: value ?? this.value,
+      line: line ?? this.line,
+    );
+  }
+
   @override
   String format(String value) => value;
 }
@@ -107,7 +116,7 @@ final class RecognizedPosition {
 
   PositionGroup? group;
 
-  RecognizedPosition? previous;
+  RecognizedPosition? next;
 
   RecognizedPosition({
     required this.product,
@@ -115,8 +124,26 @@ final class RecognizedPosition {
     required this.timestamp,
     this.trustworthiness,
     this.group,
-    this.previous,
+    this.next,
   });
+
+  RecognizedPosition copyWith({
+    RecognizedProduct? product,
+    RecognizedPrice? price,
+    DateTime? timestamp,
+    int? trustworthiness,
+    PositionGroup? group,
+    RecognizedPosition? next,
+  }) {
+    return RecognizedPosition(
+      product: product ?? this.product,
+      price: price ?? this.price,
+      timestamp: timestamp ?? this.timestamp,
+      trustworthiness: trustworthiness ?? this.trustworthiness,
+      group: group ?? this.group,
+      next: next ?? this.next,
+    );
+  }
 
   int similarity(RecognizedPosition other) {
     if (timestamp == other.timestamp) {
@@ -149,18 +176,14 @@ final class RecognizedReceipt {
     this.isValid = false,
   });
 
-  RecognizedReceipt.clone(CachedReceipt cachedReceipt)
-    : this(
-        positions: cachedReceipt.positions,
-        timestamp: cachedReceipt.timestamp,
-      );
-
   factory RecognizedReceipt.empty() {
     return RecognizedReceipt(positions: [], timestamp: DateTime.now());
   }
 
   CalculatedSum get calculatedSum =>
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
+
+  bool get isCorrectSum => calculatedSum.formattedValue == sum?.formattedValue;
 }
 
 final class CachedReceipt extends RecognizedReceipt {
@@ -182,28 +205,41 @@ final class CachedReceipt extends RecognizedReceipt {
     required this.positionGroups,
     required this.videoFeed,
     this.similarityThreshold = 50,
-    this.trustworthyThreshold = 20,
-    this.maxCacheSize = 20,
-    super.isValid = false,
+    this.trustworthyThreshold = 25,
+    this.maxCacheSize = 10,
     super.sumLabel,
     super.sum,
     super.company,
-  }) : minScans = videoFeed ? 5 : 1;
+    super.isValid,
+  }) : minScans = videoFeed ? 3 : 1;
 
-  CachedReceipt.clone(CachedReceipt cachedReceipt)
-    : this(
-        positions: cachedReceipt.positions,
-        timestamp: cachedReceipt.timestamp,
-        positionGroups: cachedReceipt.positionGroups,
-        videoFeed: cachedReceipt.videoFeed,
-        similarityThreshold: cachedReceipt.similarityThreshold,
-        trustworthyThreshold: cachedReceipt.trustworthyThreshold,
-        maxCacheSize: cachedReceipt.maxCacheSize,
-        isValid: cachedReceipt.isValid,
-        sumLabel: cachedReceipt.sumLabel,
-        sum: cachedReceipt.sum,
-        company: cachedReceipt.company,
-      );
+  CachedReceipt copyWith({
+    List<RecognizedPosition>? positions,
+    DateTime? timestamp,
+    List<PositionGroup>? positionGroups,
+    bool? videoFeed,
+    int? similarityThreshold,
+    int? trustworthyThreshold,
+    int? maxCacheSize,
+    RecognizedSumLabel? sumLabel,
+    RecognizedSum? sum,
+    RecognizedCompany? company,
+    bool? isValid,
+  }) {
+    return CachedReceipt(
+      positions: positions ?? this.positions,
+      timestamp: timestamp ?? this.timestamp,
+      positionGroups: positionGroups ?? this.positionGroups,
+      videoFeed: videoFeed ?? this.videoFeed,
+      similarityThreshold: similarityThreshold ?? this.similarityThreshold,
+      trustworthyThreshold: trustworthyThreshold ?? this.trustworthyThreshold,
+      maxCacheSize: maxCacheSize ?? this.maxCacheSize,
+      sumLabel: sumLabel ?? this.sumLabel,
+      sum: sum ?? this.sum,
+      company: company ?? this.company,
+      isValid: isValid ?? this.isValid,
+    );
+  }
 
   factory CachedReceipt.fromVideoFeed() {
     return CachedReceipt(
@@ -233,28 +269,34 @@ final class CachedReceipt extends RecognizedReceipt {
     sum = receipt.sum ?? sum;
     company = receipt.company ?? company;
 
-    RecognizedPosition? previous;
+    for (int i = 0; i < receipt.positions.length; i++) {
+      final position = receipt.positions[i];
 
-    for (final position in receipt.positions) {
-      final groups = positionGroups.where(
-        (g) => g.positions.every((p) => p.timestamp != position.timestamp),
+      RecognizedPosition? next =
+          i + 1 < receipt.positions.length ? receipt.positions[i + 1] : null;
+
+      final groups = List<PositionGroup>.from(
+        positionGroups.where(
+          (g) => g.positions.every((p) => p.timestamp != position.timestamp),
+        ),
       );
 
       final newGroup = PositionGroup(position: position);
 
       if (groups.isNotEmpty) {
-        final group = groups.reduce(
-          (a, b) =>
-              a.mostSimilar(position).similarity(position) >
-                      b.mostSimilar(position).similarity(position)
-                  ? a
-                  : b,
+        groups.sort(
+          (a, b) => a
+              .mostSimilar(position)
+              .similarity(position)
+              .compareTo(b.mostSimilar(position).similarity(position)),
         );
 
-        if (group.mostSimilar(position).similarity(position) >
+        final group = groups.last;
+
+        if (group.mostSimilar(position).similarity(position) >=
             similarityThreshold) {
           position.group = group;
-          position.previous = previous;
+          position.next = next;
           group.positions.add(position);
 
           if (group.positions.length > maxCacheSize) {
@@ -262,16 +304,14 @@ final class CachedReceipt extends RecognizedReceipt {
           }
         } else {
           position.group = newGroup;
-          position.previous = previous;
+          position.next = next;
           positionGroups.add(newGroup);
         }
       } else {
         position.group = newGroup;
-        position.previous = previous;
+        position.next = next;
         positionGroups.add(newGroup);
       }
-
-      previous = position;
     }
   }
 
@@ -287,10 +327,48 @@ final class CachedReceipt extends RecognizedReceipt {
           positions.add(mostTrustworthy);
         }
       }
+
+      if (isCorrectSum) {
+        break;
+      }
+
+      if (sum != null) {
+        if (calculatedSum.value > sum!.value * pi) {
+          positionGroups.clear();
+          break;
+        }
+      }
     }
   }
 
-  bool get areMinScansReached {
+  void normalize(RecognizedReceipt receipt, {reorder = false}) {
+    final List<RecognizedPosition> positions = [];
+
+    for (final position in receipt.positions) {
+      final mostTrustworthy =
+          position.group?.mostTrustworthy(withPrice: false) ?? position;
+      final product = position.product.copyWith(
+        value: mostTrustworthy.product.value,
+      );
+      positions.add(
+        position.copyWith(
+          product: product,
+          trustworthiness: mostTrustworthy.trustworthiness,
+          group: mostTrustworthy.group,
+          next: mostTrustworthy.next,
+        ),
+      );
+    }
+
+    receipt.positions.clear();
+    receipt.positions.addAll(positions);
+  }
+
+  void validate(RecognizedReceipt receipt) {
+    receipt.isValid = receipt.isCorrectSum && areEnoughScans;
+  }
+
+  bool get areEnoughScans {
     final groups = positionGroups.where(
       (g) => g.positions.any((p) => positions.contains(p)),
     );
@@ -302,10 +380,8 @@ final class CachedReceipt extends RecognizedReceipt {
     return false;
   }
 
-  bool get isCorrectSum => calculatedSum.formattedValue == sum?.formattedValue;
-
   RecognizedReceipt get receipt {
-    return CachedReceipt.clone(this);
+    return copyWith();
   }
 }
 
@@ -326,13 +402,14 @@ final class PositionGroup {
         .timestamp;
   }
 
-  RecognizedPosition mostTrustworthy() {
+  RecognizedPosition mostTrustworthy({withPrice = true}) {
+    const withoutPrice = '';
     final Map<(String, String), int> rank = {};
 
     for (final position in positions) {
       final product = position.product.value;
       final price = position.price.formattedValue;
-      final key = (product, price);
+      final key = (product, withPrice ? price : withoutPrice);
 
       if (rank.containsKey(key)) {
         rank[key] = rank[key]! + 1;
@@ -347,8 +424,9 @@ final class PositionGroup {
     if (ranked.isNotEmpty) {
       final position = positions.firstWhere(
         (p) =>
-            p.product.value == ranked.last.key.$1 &&
-            p.price.formattedValue == ranked.last.key.$2,
+            ranked.last.key.$1 == p.product.value &&
+            (ranked.last.key.$2 == p.price.formattedValue ||
+                ranked.last.key.$2 == withoutPrice),
       );
 
       position.trustworthiness =

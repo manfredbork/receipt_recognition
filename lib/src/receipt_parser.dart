@@ -9,7 +9,7 @@ class ReceiptParser {
       r'(E-Bon|Handeingabe|Stk|EUR)|(([0-9])+\s?([.,])\s?([0-9]){3})';
   static const patternCompany =
       r'(Lidl|Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
-  static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
+  static const patternSumLabel = r'(Zu zahlen|Summe|Total)';
   static const patternUnknown = r'([^0-9]){6,}';
   static const patternAmount = r'-?\s?([0-9])+\s?([.,])\s?([0-9]){2}';
 
