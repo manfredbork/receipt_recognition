@@ -205,8 +205,8 @@ final class CachedReceipt extends RecognizedReceipt {
     required this.positionGroups,
     required this.videoFeed,
     this.similarityThreshold = 50,
-    this.trustworthyThreshold = 25,
-    this.maxCacheSize = 10,
+    this.trustworthyThreshold = 20,
+    this.maxCacheSize = 20,
     super.sumLabel,
     super.sum,
     super.company,
@@ -333,7 +333,7 @@ final class CachedReceipt extends RecognizedReceipt {
       }
 
       if (sum != null) {
-        if (calculatedSum.value > sum!.value * pi) {
+        if (calculatedSum.value > sum!.value * sqrt2) {
           positionGroups.clear();
           break;
         }
