@@ -404,7 +404,7 @@ final class CachedReceipt extends RecognizedReceipt {
         }
 
         while (len > 0 &&
-            values[len - 1].replaceAll(RegExp(r'[^A-Z]'), '').isEmpty) {
+            values[len - 1].replaceAll(RegExp(r'[^A-Z%]'), '').isEmpty) {
           len = len - 1;
         }
 
