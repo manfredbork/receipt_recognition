@@ -46,7 +46,7 @@ final class RecognizedCompany extends RecognizedEntity<String> {
   RecognizedCompany({required super.line, required super.value});
 
   @override
-  String format(String value) => value;
+  String format(String value) => value.toUpperCase();
 }
 
 final class RecognizedUnknown extends RecognizedEntity<String> {
@@ -180,6 +180,26 @@ final class RecognizedReceipt {
     return RecognizedReceipt(positions: [], timestamp: DateTime.now());
   }
 
+  RecognizedReceipt copyWith({
+    List<RecognizedPosition>? positions,
+    DateTime? timestamp,
+    int? similarityThreshold,
+    int? trustworthyThreshold,
+    RecognizedSumLabel? sumLabel,
+    RecognizedSum? sum,
+    RecognizedCompany? company,
+    bool? isValid,
+  }) {
+    return RecognizedReceipt(
+      positions: positions ?? this.positions,
+      timestamp: timestamp ?? this.timestamp,
+      sumLabel: sumLabel ?? this.sumLabel,
+      sum: sum ?? this.sum,
+      company: company ?? this.company,
+      isValid: isValid ?? this.isValid,
+    );
+  }
+
   CalculatedSum get calculatedSum =>
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
 
@@ -205,14 +225,15 @@ final class CachedReceipt extends RecognizedReceipt {
     required this.positionGroups,
     required this.videoFeed,
     this.similarityThreshold = 50,
-    this.trustworthyThreshold = 20,
+    this.trustworthyThreshold = 30,
     this.maxCacheSize = 20,
     super.sumLabel,
     super.sum,
     super.company,
     super.isValid,
-  }) : minScans = videoFeed ? 5 : 1;
+  }) : minScans = videoFeed ? 3 : 1;
 
+  @override
   CachedReceipt copyWith({
     List<RecognizedPosition>? positions,
     DateTime? timestamp,
@@ -284,13 +305,14 @@ final class CachedReceipt extends RecognizedReceipt {
       final newGroup = PositionGroup(position: position);
 
       if (groups.isNotEmpty) {
-        final group = groups.reduce(
-          (a, b) =>
-              a.mostSimilar(position).similarity(position) >
-                      b.mostSimilar(position).similarity(position)
-                  ? a
-                  : b,
+        groups.sort(
+          (a, b) => a
+              .mostSimilar(position)
+              .similarity(position)
+              .compareTo(b.mostSimilar(position).similarity(position)),
         );
+
+        PositionGroup group = groups.last;
 
         if (group.mostSimilar(position).similarity(position) >=
             similarityThreshold) {
@@ -333,20 +355,28 @@ final class CachedReceipt extends RecognizedReceipt {
 
       if (sum != null) {
         if (calculatedSum.value > sum!.value * sqrt2) {
-          positionGroups.clear();
+          final badPositions = List<RecognizedPosition>.from(positions)..sort(
+            (a, b) =>
+                (a.trustworthiness ?? 0).compareTo(b.trustworthiness ?? 0),
+          );
+
+          while (calculatedSum.value > sum!.value && badPositions.isNotEmpty) {
+            positions.remove(badPositions.last);
+            badPositions.removeLast();
+          }
           break;
         }
       }
     }
   }
 
-  void normalize(RecognizedReceipt receipt) {
+  RecognizedReceipt normalize(RecognizedReceipt receipt) {
     final List<RecognizedPosition> positions = [];
 
     for (final position in receipt.positions) {
       RecognizedPosition mostTrustworthy =
           position.group?.mostTrustworthy() ?? position;
-      print('${position.product.value} ${position.price.formattedValue}');
+
       final similarPositions = position.group!.positions.where(
         (p) =>
             partialRatio(p.product.value, mostTrustworthy.product.value) ==
@@ -366,33 +396,35 @@ final class CachedReceipt extends RecognizedReceipt {
 
           if (similarValues.length < len) {
             len = similarValues.length;
-
-            continue;
           }
 
           if (len > 1 && similarValues[len - 1] != values[len - 1]) {
             len = len - 1;
-
-            continue;
           }
         }
 
-        for (int i = 0; i < len; i++) {
-          if (i > 1 && values[i].replaceAll(RegExp(r'[0-9]'), '').length == 1) {
-            break;
-          }
+        while (len > 0 &&
+            values[len - 1].replaceAll(RegExp(r'[^A-Z]'), '').isEmpty) {
+          len = len - 1;
+        }
 
+        for (int i = 0; i < len; i++) {
           newValue += values[i] + (i < len - 1 ? ' ' : '');
         }
       }
 
       final newProduct = mostTrustworthy.product.copyWith(value: newValue);
 
-      positions.add(mostTrustworthy.copyWith(product: newProduct));
+      positions.add(
+        mostTrustworthy.copyWith(
+          product: newProduct,
+          trustworthiness: mostTrustworthy.trustworthiness,
+          timestamp: mostTrustworthy.timestamp,
+        ),
+      );
     }
 
-    receipt.positions.clear();
-    receipt.positions.addAll(positions);
+    return receipt.copyWith(positions: positions);
   }
 
   void validate(RecognizedReceipt receipt) {
