@@ -394,16 +394,16 @@ final class CachedReceipt extends RecognizedReceipt {
         for (final similarPosition in similarPositions) {
           List<String> similarValues = similarPosition.product.value.split(' ');
 
-          if (similarValues.length < len) {
+          if (len > 2 && similarValues.length < len) {
             len = similarValues.length;
           }
 
-          if (len > 1 && similarValues[len - 1] != values[len - 1]) {
+          if (len > 2 && similarValues[len - 1] != values[len - 1]) {
             len = len - 1;
           }
         }
 
-        while (len > 0 &&
+        while (len > 2 &&
             values[len - 1].replaceAll(RegExp(r'[^A-Z%]'), '').isEmpty) {
           len = len - 1;
         }
