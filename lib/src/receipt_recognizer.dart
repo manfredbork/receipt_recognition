@@ -11,11 +11,17 @@ class ReceiptRecognizer {
 
   final Optimizer _optimizer;
 
+  final bool _videoFeed;
+
+  final Duration _scanInterval;
+
   final Duration _scanTimeout;
 
   final VoidCallback? _onScanTimeout;
   final Function(RecognizedReceipt)? _onScanComplete;
   final Function(RecognizedReceipt)? _onScanUpdate;
+
+  DateTime? _initializedScan;
 
   DateTime? _lastScan;
 
@@ -24,12 +30,15 @@ class ReceiptRecognizer {
     Optimizer? optimizer,
     script = TextRecognitionScript.latin,
     videoFeed = true,
+    scanInterval = const Duration(milliseconds: 100),
     scanTimeout = const Duration(seconds: 30),
     onScanTimeout,
     onScanUpdate,
     onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
+       _videoFeed = videoFeed,
+       _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
@@ -37,6 +46,15 @@ class ReceiptRecognizer {
 
   Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
     final now = DateTime.now();
+
+    if (_videoFeed &&
+        _lastScan != null &&
+        now.difference(_lastScan!) < _scanInterval) {
+      return null;
+    }
+
+    _lastScan = now;
+
     final text = await _textRecognizer.processImage(inputImage);
     final receipt = ReceiptParser.processText(text);
 
@@ -47,17 +65,18 @@ class ReceiptRecognizer {
     final optimizedReceipt = _optimizer.optimize(receipt);
 
     if (optimizedReceipt.isValid) {
-      _lastScan = null;
+      _initializedScan = null;
       _optimizer.init();
       _onScanComplete?.call(optimizedReceipt);
 
       return optimizedReceipt;
     } else {
-      _lastScan ??= now;
+      _initializedScan ??= now;
       _onScanUpdate?.call(optimizedReceipt);
 
-      if (now.difference(_lastScan ?? now) > _scanTimeout) {
-        _lastScan = null;
+      if (_initializedScan != null &&
+          now.difference(_initializedScan!) > _scanTimeout) {
+        _initializedScan = null;
         _optimizer.init();
         _onScanTimeout?.call();
       }

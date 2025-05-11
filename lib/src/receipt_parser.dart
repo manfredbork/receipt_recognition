@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
@@ -6,7 +8,7 @@ import 'receipt_models.dart';
 class ReceiptParser {
   static const patternStop = r'(Geg.|Rückgeld|Steuer|Brutto)';
   static const patternIgnore =
-      r'(E-Bon|Handeingabe|Stk|EUR)|(([0-9])+\s?([.,])\s?([0-9]){3})';
+      r'(E-Bon|Coupon|Handeingabe|Posten|Stk|EUR)|^.*([0-9]){5,}$|^([0-9])+$|^€$|(([0-9])+\s?([.,])\s?([0-9]){3})';
   static const patternCompany =
       r'(Lidl|Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
   static const patternSumLabel = r'(Zu zahlen|Summe|Total)';
@@ -243,16 +245,18 @@ class ReceiptParser {
       } else if (entity is RecognizedCompany) {
         company = entity;
       } else if (entity is RecognizedAmount) {
-        final yAmount = entity.line.boundingBox.top;
+        final yAmount = entity.line.boundingBox;
 
         yUnknowns.sort(
-          (a, b) => (yAmount - a.line.boundingBox.top).abs().compareTo(
-            (yAmount - b.line.boundingBox.top).abs(),
+          (a, b) => (yAmount.top - a.line.boundingBox.top).abs().compareTo(
+            (yAmount.top - b.line.boundingBox.top).abs(),
           ),
         );
 
         for (final yUnknown in yUnknowns) {
-          if (!forbidden.contains(yUnknown)) {
+          if (!forbidden.contains(yUnknown) &&
+              (yAmount.top - yUnknown.line.boundingBox.top).abs() <
+                  yAmount.height * pi) {
             receipt.positions.add(
               RecognizedPosition(
                 product: RecognizedProduct(

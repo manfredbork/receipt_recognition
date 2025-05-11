@@ -160,10 +160,12 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     await _cameraController?.lockCaptureOrientation(
       DeviceOrientation.portraitUp,
     );
-    await _cameraController?.startImageStream(_processCameraImage);
-    setState(() {
+    await _cameraController?.startImageStream(_processCameraImage).then((
+      value,
+    ) {
       _isReady = true;
     });
+    setState(() {});
   }
 
   Future _stopLiveFeed() async {

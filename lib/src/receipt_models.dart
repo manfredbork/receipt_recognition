@@ -211,7 +211,7 @@ final class CachedReceipt extends RecognizedReceipt {
     super.sum,
     super.company,
     super.isValid,
-  }) : minScans = videoFeed ? 3 : 1;
+  }) : minScans = videoFeed ? 5 : 1;
 
   CachedReceipt copyWith({
     List<RecognizedPosition>? positions,
@@ -284,14 +284,13 @@ final class CachedReceipt extends RecognizedReceipt {
       final newGroup = PositionGroup(position: position);
 
       if (groups.isNotEmpty) {
-        groups.sort(
-          (a, b) => a
-              .mostSimilar(position)
-              .similarity(position)
-              .compareTo(b.mostSimilar(position).similarity(position)),
+        final group = groups.reduce(
+          (a, b) =>
+              a.mostSimilar(position).similarity(position) >
+                      b.mostSimilar(position).similarity(position)
+                  ? a
+                  : b,
         );
-
-        final group = groups.last;
 
         if (group.mostSimilar(position).similarity(position) >=
             similarityThreshold) {
@@ -341,23 +340,55 @@ final class CachedReceipt extends RecognizedReceipt {
     }
   }
 
-  void normalize(RecognizedReceipt receipt, {reorder = false}) {
+  void normalize(RecognizedReceipt receipt) {
     final List<RecognizedPosition> positions = [];
 
     for (final position in receipt.positions) {
-      final mostTrustworthy =
-          position.group?.mostTrustworthy(withPrice: false) ?? position;
-      final product = position.product.copyWith(
-        value: mostTrustworthy.product.value,
+      RecognizedPosition mostTrustworthy =
+          position.group?.mostTrustworthy() ?? position;
+      print('${position.product.value} ${position.price.formattedValue}');
+      final similarPositions = position.group!.positions.where(
+        (p) =>
+            partialRatio(p.product.value, mostTrustworthy.product.value) ==
+                100 &&
+            p.price.formattedValue == mostTrustworthy.price.formattedValue,
       );
-      positions.add(
-        position.copyWith(
-          product: product,
-          trustworthiness: mostTrustworthy.trustworthiness,
-          group: mostTrustworthy.group,
-          next: mostTrustworthy.next,
-        ),
-      );
+
+      final List<String> values = mostTrustworthy.product.value.split(' ');
+
+      int len = values.length;
+
+      String newValue = '';
+
+      if (similarPositions.isNotEmpty) {
+        for (final similarPosition in similarPositions) {
+          List<String> similarValues = similarPosition.product.value.split(' ');
+
+          if (similarValues.length < len) {
+            len = similarValues.length;
+
+            continue;
+          }
+
+          if (len > 1 && similarValues[len - 1] != values[len - 1]) {
+            len = len - 1;
+
+            continue;
+          }
+        }
+
+        for (int i = 0; i < len; i++) {
+          if (i > 1 && values[i].replaceAll(RegExp(r'[0-9]'), '').length == 1) {
+            break;
+          }
+
+          newValue += values[i] + (i < len - 1 ? ' ' : '');
+        }
+      }
+
+      final newProduct = mostTrustworthy.product.copyWith(value: newValue);
+
+      positions.add(mostTrustworthy.copyWith(product: newProduct));
     }
 
     receipt.positions.clear();
@@ -402,14 +433,13 @@ final class PositionGroup {
         .timestamp;
   }
 
-  RecognizedPosition mostTrustworthy({withPrice = true}) {
-    const withoutPrice = '';
+  RecognizedPosition mostTrustworthy() {
     final Map<(String, String), int> rank = {};
 
     for (final position in positions) {
       final product = position.product.value;
       final price = position.price.formattedValue;
-      final key = (product, withPrice ? price : withoutPrice);
+      final key = (product, price);
 
       if (rank.containsKey(key)) {
         rank[key] = rank[key]! + 1;
@@ -425,8 +455,7 @@ final class PositionGroup {
       final position = positions.firstWhere(
         (p) =>
             ranked.last.key.$1 == p.product.value &&
-            (ranked.last.key.$2 == p.price.formattedValue ||
-                ranked.last.key.$2 == withoutPrice),
+            ranked.last.key.$2 == p.price.formattedValue,
       );
 
       position.trustworthiness =

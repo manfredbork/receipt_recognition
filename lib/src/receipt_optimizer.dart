@@ -28,16 +28,16 @@ class ReceiptOptimizer implements Optimizer {
 
     _cachedReceipt.apply(receipt);
     _cachedReceipt.merge();
+    _cachedReceipt.normalize(receipt);
     _cachedReceipt.validate(receipt);
 
     if (receipt.isValid) {
-      _cachedReceipt.normalize(receipt);
-
       return receipt;
     }
 
     final cachedReceipt = _cachedReceipt.receipt;
 
+    _cachedReceipt.normalize(cachedReceipt);
     _cachedReceipt.validate(cachedReceipt);
 
     if (kDebugMode) {
@@ -55,8 +55,6 @@ class ReceiptOptimizer implements Optimizer {
     }
 
     if (cachedReceipt.isValid) {
-      _cachedReceipt.normalize(cachedReceipt);
-
       return cachedReceipt;
     }
 
