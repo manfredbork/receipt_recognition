@@ -85,7 +85,7 @@ class ReceiptRecognizer {
 
       final numerator = optimizedReceipt.calculatedSum.value;
 
-      final denominator = optimizedReceipt.sum?.value ?? numerator;
+      final denominator = optimizedReceipt.sum?.value ?? 1;
 
       int estimatedPercentage =
           numerator < denominator
