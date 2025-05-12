@@ -4,6 +4,8 @@ import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
+enum Operation { added, updated }
+
 final class Formatter {
   static String format(num value) => NumberFormat.decimalPatternDigits(
     locale: Intl.defaultLocale,
@@ -116,7 +118,7 @@ final class RecognizedPosition {
 
   PositionGroup? group;
 
-  RecognizedPosition? next;
+  Operation? operation;
 
   RecognizedPosition({
     required this.product,
@@ -124,7 +126,7 @@ final class RecognizedPosition {
     required this.timestamp,
     this.trustworthiness,
     this.group,
-    this.next,
+    this.operation,
   });
 
   RecognizedPosition copyWith({
@@ -133,7 +135,7 @@ final class RecognizedPosition {
     DateTime? timestamp,
     int? trustworthiness,
     PositionGroup? group,
-    RecognizedPosition? next,
+    Operation? operation,
   }) {
     return RecognizedPosition(
       product: product ?? this.product,
@@ -141,7 +143,7 @@ final class RecognizedPosition {
       timestamp: timestamp ?? this.timestamp,
       trustworthiness: trustworthiness ?? this.trustworthiness,
       group: group ?? this.group,
-      next: next ?? this.next,
+      operation: operation ?? this.operation,
     );
   }
 
@@ -290,12 +292,7 @@ final class CachedReceipt extends RecognizedReceipt {
     sum = receipt.sum ?? sum;
     company = receipt.company ?? company;
 
-    for (int i = 0; i < receipt.positions.length; i++) {
-      final position = receipt.positions[i];
-
-      RecognizedPosition? next =
-          i + 1 < receipt.positions.length ? receipt.positions[i + 1] : null;
-
+    for (final position in receipt.positions) {
       final groups = List<PositionGroup>.from(
         positionGroups.where(
           (g) => g.positions.every((p) => p.timestamp != position.timestamp),
@@ -317,7 +314,7 @@ final class CachedReceipt extends RecognizedReceipt {
         if (group.mostSimilar(position).similarity(position) >=
             similarityThreshold) {
           position.group = group;
-          position.next = next;
+          position.operation = Operation.updated;
           group.positions.add(position);
 
           if (group.positions.length > maxCacheSize) {
@@ -325,12 +322,12 @@ final class CachedReceipt extends RecognizedReceipt {
           }
         } else {
           position.group = newGroup;
-          position.next = next;
+          position.operation = Operation.added;
           positionGroups.add(newGroup);
         }
       } else {
         position.group = newGroup;
-        position.next = next;
+        position.operation = Operation.added;
         positionGroups.add(newGroup);
       }
     }
@@ -504,4 +501,16 @@ final class PositionGroup {
       (a, b) => a.similarity(position) > b.similarity(position) ? a : b,
     );
   }
+}
+
+final class Progress {
+  final List<RecognizedPosition> addedPositions;
+  final List<RecognizedPosition> updatedPositions;
+  final int? estimatedPercentage;
+
+  Progress({
+    required this.addedPositions,
+    required this.updatedPositions,
+    this.estimatedPercentage,
+  });
 }

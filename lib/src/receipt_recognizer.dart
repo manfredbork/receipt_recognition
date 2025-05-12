@@ -18,8 +18,10 @@ class ReceiptRecognizer {
   final Duration _scanTimeout;
 
   final VoidCallback? _onScanTimeout;
+
   final Function(RecognizedReceipt)? _onScanComplete;
-  final Function(RecognizedReceipt)? _onScanUpdate;
+
+  final Function(Progress)? _onScanUpdate;
 
   DateTime? _initializedScan;
 
@@ -71,8 +73,34 @@ class ReceiptRecognizer {
 
       return optimizedReceipt;
     } else {
+      final addedPositions = List<RecognizedPosition>.from(
+        optimizedReceipt.positions.where((p) => p.operation == Operation.added),
+      );
+
+      final updatedPositions = List<RecognizedPosition>.from(
+        optimizedReceipt.positions.where(
+          (p) => p.operation == Operation.updated,
+        ),
+      );
+
+      final numerator = optimizedReceipt.calculatedSum.value;
+
+      final denominator = optimizedReceipt.sum?.value ?? numerator;
+
+      int estimatedPercentage =
+          numerator < denominator
+              ? (numerator / denominator * 100).toInt()
+              : (denominator / numerator * 100).toInt();
+
       _initializedScan ??= now;
-      _onScanUpdate?.call(optimizedReceipt);
+      _onScanUpdate?.call(
+        Progress(
+          addedPositions: addedPositions,
+          updatedPositions: updatedPositions,
+          estimatedPercentage:
+              optimizedReceipt.sum != null ? estimatedPercentage : null,
+        ),
+      );
 
       if (_initializedScan != null &&
           now.difference(_initializedScan!) > _scanTimeout) {
