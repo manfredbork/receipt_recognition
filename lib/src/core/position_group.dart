@@ -3,55 +3,45 @@ import 'recognized_position.dart';
 final class PositionGroup {
   final List<RecognizedPosition> positions;
 
-  PositionGroup({required position}) : positions = [position];
+  PositionGroup({required RecognizedPosition position})
+    : positions = [position];
 
   DateTime oldestTimestamp() {
     return positions
-        .reduce(
-          (a, b) =>
-              a.timestamp.millisecondsSinceEpoch <
-                      b.timestamp.millisecondsSinceEpoch
-                  ? a
-                  : b,
-        )
+        .reduce((a, b) => a.timestamp.isBefore(b.timestamp) ? a : b)
         .timestamp;
   }
 
   RecognizedPosition? mostTrustworthy({
     RecognizedPosition? defaultPosition,
-    priceRequired = false,
+    bool priceRequired = false,
   }) {
-    final Map<(String, String), int> rank = {};
+    final rank = <(String, String), int>{};
 
     for (final position in positions) {
       final product = position.product.value;
       final price = position.price.formattedValue;
       final key = (product, price);
-
-      if (rank.containsKey(key)) {
-        rank[key] = rank[key]! + 1;
-      } else {
-        rank[key] = 1;
-      }
+      rank[key] = (rank[key] ?? 0) + 1;
     }
 
-    final ranked = List<MapEntry<(String, String), int>>.from(rank.entries)
-      ..sort((a, b) => a.value.compareTo(b.value));
+    final ranked =
+        rank.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
     if (ranked.isNotEmpty) {
+      final topRank = ranked.first.key;
       final position = positions.firstWhere(
         (p) =>
-            ranked.last.key.$1 == p.product.value &&
-            ranked.last.key.$2 == p.price.formattedValue &&
-            ranked.last.key.$2 ==
-                (defaultPosition != null && priceRequired
-                    ? defaultPosition.price.formattedValue
-                    : ranked.last.key.$2),
+            p.product.value == topRank.$1 &&
+            p.price.formattedValue == topRank.$2 &&
+            (priceRequired
+                ? p.price.formattedValue ==
+                    defaultPosition?.price.formattedValue
+                : true),
       );
 
       position.trustworthiness =
-          (ranked.last.value / positions.length * 100).toInt();
-
+          (ranked.first.value / positions.length * 100).toInt();
       return position;
     }
 

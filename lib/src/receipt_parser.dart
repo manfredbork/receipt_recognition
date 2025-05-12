@@ -1,111 +1,65 @@
 import 'dart:math';
-
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
-
 import 'receipt_core.dart';
-import 'core/receipt_models.dart';
 
 class ReceiptParser {
-  static const patternStopKeywords = r'(Geg.|Rückgeld|Steuer|Brutto)';
-  static const patternIgnoreKeywords = r'(E-Bon|Coupon|Handeingabe|Posten|Stk)';
-  static const patternIgnoreNumbers = r'\d{1,3}(?:\s?[.,]\s?\d{3})+';
-  static const patternCompany =
-      r'(Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
-  static const patternSumLabel = r'(Zu zahlen|Summe|Total)';
-  static const patternUnknown = r'[^\d]{6,}';
-  static const patternAmount = r'-?\s*\d+\s*[.,]\s*\d{2}';
+  static final RegExp patternStopKeywords = RegExp(r'(Geg.|Rückgeld|Steuer|Brutto)', caseSensitive: false);
+  static final RegExp patternIgnoreKeywords = RegExp(r'(E-Bon|Coupon|Handeingabe|Posten|Stk)', caseSensitive: false);
+  static final RegExp patternIgnoreNumbers = RegExp(r'\d{1,3}(?:\s?[.,]\s?\d{3})+');
+  static final RegExp patternCompany = RegExp(r'(Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)', caseSensitive: false);
+  static final RegExp patternSumLabel = RegExp(r'(Zu zahlen|Summe|Total)', caseSensitive: false);
+  static final RegExp patternUnknown = RegExp(r'[^\d]{6,}');
+  static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 
   static RecognizedReceipt? processText(RecognizedText text) {
-    final converted = _convertText(text);
-    final parsed = _parseLines(converted);
-    final shrunken = _shrinkEntities(parsed);
-    final receipt = _buildReceipt(shrunken);
-
-    return receipt;
+    final lines = _convertText(text);
+    final parsedEntities = _parseLines(lines);
+    final shrunkEntities = _shrinkEntities(parsedEntities);
+    return _buildReceipt(shrunkEntities);
   }
 
   static List<TextLine> _convertText(RecognizedText text) {
-    final List<TextLine> lines = [];
-
-    for (final block in text.blocks) {
-      lines.addAll(block.lines.map((line) => line));
-    }
-
-    return lines
+    return text.blocks
+        .expand((block) => block.lines)
+        .toList()
       ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
-    final List<RecognizedEntity> parsed = [];
+    final parsed = <RecognizedEntity>[];
 
     bool detectedCompany = false;
     bool detectedSumLabel = false;
 
     for (final line in lines) {
-      if (RegExp(
-        patternStopKeywords,
-        caseSensitive: false,
-      ).hasMatch(line.text)) {
-        break;
-      }
+      if (patternStopKeywords.hasMatch(line.text)) break;
+      if (patternIgnoreKeywords.hasMatch(line.text) || patternIgnoreNumbers.hasMatch(line.text)) continue;
 
-      if (RegExp(
-        patternIgnoreKeywords,
-        caseSensitive: false,
-      ).hasMatch(line.text)) {
+      final company = patternCompany.stringMatch(line.text);
+      if (company != null && !detectedCompany) {
+        parsed.add(RecognizedCompany(line: line, value: company));
+        detectedCompany = true;
         continue;
       }
 
-      if (RegExp(
-        patternIgnoreNumbers,
-        caseSensitive: false,
-      ).hasMatch(line.text)) {
+      final sumLabel = patternSumLabel.stringMatch(line.text);
+      if (sumLabel != null && !detectedSumLabel) {
+        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+        detectedSumLabel = true;
         continue;
       }
 
-      final company = RegExp(
-        patternCompany,
-        caseSensitive: false,
-      ).stringMatch(line.text);
-
-      if (company != null) {
-        if (!detectedCompany) {
-          parsed.add(RecognizedCompany(line: line, value: company));
-          detectedCompany = true;
-        }
-
-        continue;
-      }
-
-      final sumLabel = RegExp(
-        patternSumLabel,
-        caseSensitive: false,
-      ).stringMatch(line.text);
-
-      if (sumLabel != null) {
-        if (!detectedSumLabel) {
-          parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-          detectedSumLabel = true;
-        }
-
-        continue;
-      }
-
-      final unknown = RegExp(patternUnknown).stringMatch(line.text);
-
+      final unknown = patternUnknown.stringMatch(line.text);
       if (unknown != null) {
         parsed.add(RecognizedUnknown(line: line, value: line.text));
-
         continue;
       }
 
-      final amount = RegExp(patternAmount).stringMatch(line.text);
-
+      final amount = patternAmount.stringMatch(line.text);
       if (amount != null) {
         final locale = _detectsLocale(amount);
         final value = NumberFormat.decimalPattern(locale).parse(amount);
-
         parsed.add(RecognizedAmount(line: line, value: value));
       }
     }
@@ -114,27 +68,14 @@ class ReceiptParser {
   }
 
   static String? _detectsLocale(String text) {
-    if (text.contains('.')) {
-      return 'en_US';
-    } else if (text.contains(',')) {
-      return 'eu';
-    }
-
+    if (text.contains('.')) return 'en_US';
+    if (text.contains(',')) return 'eu';
     return Intl.defaultLocale;
   }
 
-  static List<RecognizedEntity> _shrinkEntities(
-    List<RecognizedEntity> entities,
-  ) {
-    final List<RecognizedEntity> shrunken = List<RecognizedEntity>.from(
-      entities,
-    );
-
-    final beforeAmounts = shrunken.whereType<RecognizedAmount>();
-
-    final yAmounts = List<RecognizedAmount>.from(beforeAmounts)..sort(
-      (a, b) => (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
-    );
+  static List<RecognizedEntity> _shrinkEntities(List<RecognizedEntity> entities) {
+    final List<RecognizedEntity> shrunken = List.from(entities);
+    final yAmounts = shrunken.whereType<RecognizedAmount>().toList()..sort((a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top));
 
     if (yAmounts.isNotEmpty) {
       shrunken.removeWhere((e) => _isSmallerThanTopBound(e, yAmounts.first));
@@ -142,13 +83,10 @@ class ReceiptParser {
     }
 
     final sumLabels = shrunken.whereType<RecognizedSumLabel>();
-
     if (sumLabels.isNotEmpty) {
       final sum = _findSum(shrunken, sumLabels.first);
-
       if (sum != null) {
         final indexSum = shrunken.indexWhere((e) => e.value == sum.value);
-
         if (indexSum >= 0) {
           shrunken.removeAt(indexSum);
           shrunken.insert(indexSum, sum);
@@ -158,46 +96,13 @@ class ReceiptParser {
     }
 
     shrunken.removeWhere((a) => shrunken.every((b) => _isInvalid(a, b)));
-
-    final afterAmounts = shrunken.whereType<RecognizedAmount>();
-
-    final xAmounts = List<RecognizedAmount>.from(afterAmounts)..sort(
-      (a, b) => (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
-    );
+    final xAmounts = shrunken.whereType<RecognizedAmount>().toList()..sort((a, b) => a.line.boundingBox.left.compareTo(b.line.boundingBox.left));
 
     if (xAmounts.isNotEmpty) {
       shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, xAmounts.last));
     }
 
     return shrunken;
-  }
-
-  static RecognizedSum? _findSum(
-    List<RecognizedEntity> entities,
-    RecognizedSumLabel sumLabel,
-  ) {
-    final ySumLabel = sumLabel.line.boundingBox.top;
-    final yAmounts = List<RecognizedAmount>.from(
-      entities.whereType<RecognizedAmount>(),
-    )..sort(
-      (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
-        (b.line.boundingBox.top - ySumLabel).abs(),
-      ),
-    );
-
-    if (yAmounts.isNotEmpty) {
-      final yAmount = yAmounts.first.line.boundingBox.top;
-      final hSumLabel = (ySumLabel - sumLabel.line.boundingBox.bottom).abs();
-
-      if ((yAmount - ySumLabel).abs() < hSumLabel) {
-        return RecognizedSum(
-          line: yAmounts.first.line,
-          value: yAmounts.first.value,
-        );
-      }
-    }
-
-    return null;
   }
 
   static bool _isInvalid(RecognizedEntity a, RecognizedEntity b) {
@@ -210,45 +115,44 @@ class ReceiptParser {
   static bool _isOpposite(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
-
-    return !aBox.overlaps(bBox) &&
-        (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
+    return !aBox.overlaps(bBox) && (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
   }
 
   static bool _isSmallerThanLeftBound(RecognizedEntity a, RecognizedEntity b) {
-    final aBox = a.line.boundingBox;
-    final bBox = b.line.boundingBox;
-
-    return a is RecognizedAmount && aBox.right < bBox.left;
+    return a is RecognizedAmount && a.line.boundingBox.right < b.line.boundingBox.left;
   }
 
   static bool _isSmallerThanTopBound(RecognizedEntity a, RecognizedEntity b) {
-    final aBox = a.line.boundingBox;
-    final bBox = b.line.boundingBox;
-
-    return a is! RecognizedCompany && aBox.bottom < bBox.top;
+    return a is! RecognizedCompany && a.line.boundingBox.bottom < b.line.boundingBox.top;
   }
 
-  static bool _isGreaterThanBottomBound(
-    RecognizedEntity a,
-    RecognizedEntity b,
-  ) {
-    final aBox = a.line.boundingBox;
-    final bBox = b.line.boundingBox;
+  static bool _isGreaterThanBottomBound(RecognizedEntity a, RecognizedEntity b) {
+    return a.line.boundingBox.top > b.line.boundingBox.bottom;
+  }
 
-    return aBox.top > bBox.bottom;
+  static RecognizedSum? _findSum(List<RecognizedEntity> entities, RecognizedSumLabel sumLabel) {
+    final ySumLabel = sumLabel.line.boundingBox.top;
+    final yAmounts = entities.whereType<RecognizedAmount>().toList()
+      ..sort((a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo((b.line.boundingBox.top - ySumLabel).abs()));
+
+    if (yAmounts.isNotEmpty) {
+      final yAmount = yAmounts.first.line.boundingBox.top;
+      final hSumLabel = (ySumLabel - sumLabel.line.boundingBox.bottom).abs();
+      if ((yAmount - ySumLabel).abs() < hSumLabel) {
+        return RecognizedSum(line: yAmounts.first.line, value: yAmounts.first.value);
+      }
+    }
+    return null;
   }
 
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
-    final yUnknowns = List<RecognizedUnknown>.from(
-      entities.whereType<RecognizedUnknown>(),
-    );
+    final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
 
     RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
     RecognizedCompany? company;
 
-    final RecognizedReceipt receipt = RecognizedReceipt.empty();
+    final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
 
     for (final entity in entities) {
@@ -261,26 +165,15 @@ class ReceiptParser {
       } else if (entity is RecognizedAmount) {
         final yAmount = entity.line.boundingBox;
 
-        yUnknowns.sort(
-          (a, b) => (yAmount.top - a.line.boundingBox.top).abs().compareTo(
-            (yAmount.top - b.line.boundingBox.top).abs(),
-          ),
-        );
+        yUnknowns.sort((a, b) => (yAmount.top - a.line.boundingBox.top).abs().compareTo((yAmount.top - b.line.boundingBox.top).abs()));
 
         for (final yUnknown in yUnknowns) {
-          if (!forbidden.contains(yUnknown) &&
-              (yAmount.top - yUnknown.line.boundingBox.top).abs() <
-                  yAmount.height * pi) {
-            receipt.positions.add(
-              RecognizedPosition(
-                product: RecognizedProduct(
-                  value: yUnknown.value,
-                  line: yUnknown.line,
-                ),
-                price: RecognizedPrice(line: entity.line, value: entity.value),
-                timestamp: receipt.timestamp,
-              ),
-            );
+          if (!forbidden.contains(yUnknown) && (yAmount.top - yUnknown.line.boundingBox.top).abs() < yAmount.height * pi) {
+            receipt.positions.add(RecognizedPosition(
+              product: RecognizedProduct(value: yUnknown.value, line: yUnknown.line),
+              price: RecognizedPrice(line: entity.line, value: entity.value),
+              timestamp: receipt.timestamp,
+            ));
             forbidden.add(yUnknown);
             break;
           }
@@ -291,7 +184,6 @@ class ReceiptParser {
     receipt.sumLabel = sumLabel;
     receipt.sum = sum;
     receipt.company = company;
-
     return receipt;
   }
 }

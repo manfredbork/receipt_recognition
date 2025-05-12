@@ -3,15 +3,10 @@ import 'recognized_position.dart';
 
 class RecognizedReceipt {
   List<RecognizedPosition> positions;
-
   DateTime timestamp;
-
   RecognizedSumLabel? sumLabel;
-
   RecognizedSum? sum;
-
   RecognizedCompany? company;
-
   bool isValid;
 
   RecognizedReceipt({
@@ -30,8 +25,6 @@ class RecognizedReceipt {
   RecognizedReceipt copyWith({
     List<RecognizedPosition>? positions,
     DateTime? timestamp,
-    int? similarityThreshold,
-    int? trustworthyThreshold,
     RecognizedSumLabel? sumLabel,
     RecognizedSum? sum,
     RecognizedCompany? company,
@@ -47,8 +40,7 @@ class RecognizedReceipt {
     );
   }
 
-  CalculatedSum get calculatedSum =>
-      CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
+  CalculatedSum get calculatedSum => CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
 
   bool get isCorrectSum => calculatedSum.formattedValue == sum?.formattedValue;
 }

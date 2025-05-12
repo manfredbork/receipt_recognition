@@ -5,15 +5,10 @@ import 'receipt_models.dart';
 
 final class RecognizedPosition {
   final RecognizedProduct product;
-
   final RecognizedPrice price;
-
   DateTime timestamp;
-
   int? trustworthiness;
-
   PositionGroup? group;
-
   Operation? operation;
 
   RecognizedPosition({
@@ -47,7 +42,6 @@ final class RecognizedPosition {
     if (timestamp == other.timestamp) {
       return 0;
     }
-
     return ratio(product.value, other.product.value);
   }
 }
