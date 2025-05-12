@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'receipt_core.dart';
 import 'receipt_models.dart';
 
 class ReceiptOptimizer implements Optimizer {

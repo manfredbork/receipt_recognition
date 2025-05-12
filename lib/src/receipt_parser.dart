@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
+import 'receipt_core.dart';
 import 'receipt_models.dart';
 
 class ReceiptParser {

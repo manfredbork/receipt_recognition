@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+import 'receipt_core.dart';
 import 'receipt_models.dart';
 import 'receipt_optimizer.dart';
 import 'receipt_parser.dart';
