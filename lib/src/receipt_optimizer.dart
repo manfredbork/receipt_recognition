@@ -45,7 +45,7 @@ class ReceiptOptimizer implements Optimizer {
   void _logDebugInfo(RecognizedReceipt cachedReceipt) {
     if (kDebugMode) {
       if (cachedReceipt.positions.isNotEmpty) {
-        print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
+        print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
         for (final position in cachedReceipt.positions) {
           print(
             '${position.product.value} ${position.price.formattedValue} ${position.trustworthiness}',
