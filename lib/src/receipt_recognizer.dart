@@ -83,27 +83,29 @@ class ReceiptRecognizer {
         ),
       );
 
+      int? estimatedPercentage;
+
       final numerator = optimizedReceipt.calculatedSum.value;
+      final denominator = optimizedReceipt.sum?.value;
 
-      final denominator = optimizedReceipt.sum?.value ?? 1;
-
-      int estimatedPercentage =
-          numerator < denominator
-              ? (numerator / denominator * 100).toInt()
-              : (denominator / numerator * 100).toInt();
+      if (denominator != null) {
+        estimatedPercentage =
+            numerator < denominator
+                ? (numerator / denominator * 100).toInt()
+                : (denominator / numerator * 100).toInt();
+      }
 
       _initializedScan ??= now;
       _onScanUpdate?.call(
         Progress(
           addedPositions: addedPositions,
           updatedPositions: updatedPositions,
-          estimatedPercentage:
-              optimizedReceipt.sum != null ? estimatedPercentage : null,
+          estimatedPercentage: denominator != null ? estimatedPercentage : null,
         ),
       );
 
       if (_initializedScan != null &&
-          now.difference(_initializedScan!) > _scanTimeout) {
+          now.difference(_initializedScan!) >= _scanTimeout) {
         _initializedScan = null;
         _optimizer.init();
         _onScanTimeout?.call();

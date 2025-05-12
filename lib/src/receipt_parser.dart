@@ -6,14 +6,14 @@ import 'package:intl/intl.dart';
 import 'receipt_models.dart';
 
 class ReceiptParser {
-  static const patternStop = r'(Geg.|Rückgeld|Steuer|Brutto)';
-  static const patternIgnore =
-      r'(E-Bon|Coupon|Handeingabe|Posten|Stk)|^([0-9])+$|(([0-9])+\s?([.,])\s?([0-9]){3})';
+  static const patternStopKeywords = r'(Geg.|Rückgeld|Steuer|Brutto)';
+  static const patternIgnoreKeywords = r'(E-Bon|Coupon|Handeingabe|Posten|Stk)';
+  static const patternIgnoreNumbers = r'\d{1,3}(?:\s?[.,]\s?\d{3})+';
   static const patternCompany =
-      r'(Lidl|Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
+      r'(Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
   static const patternSumLabel = r'(Zu zahlen|Summe|Total)';
-  static const patternUnknown = r'([^0-9]){6,}';
-  static const patternAmount = r'-?\s?([0-9])+\s?([.,])\s?([0-9]){2}';
+  static const patternUnknown = r'[^\d]{6,}';
+  static const patternAmount = r'-?\s*\d+\s*[.,]\s*\d{2}';
 
   static RecognizedReceipt? processText(RecognizedText text) {
     final converted = _convertText(text);
@@ -42,11 +42,24 @@ class ReceiptParser {
     bool detectedSumLabel = false;
 
     for (final line in lines) {
-      if (RegExp(patternStop, caseSensitive: false).hasMatch(line.text)) {
+      if (RegExp(
+        patternStopKeywords,
+        caseSensitive: false,
+      ).hasMatch(line.text)) {
         break;
       }
 
-      if (RegExp(patternIgnore, caseSensitive: false).hasMatch(line.text)) {
+      if (RegExp(
+        patternIgnoreKeywords,
+        caseSensitive: false,
+      ).hasMatch(line.text)) {
+        continue;
+      }
+
+      if (RegExp(
+        patternIgnoreNumbers,
+        caseSensitive: false,
+      ).hasMatch(line.text)) {
         continue;
       }
 

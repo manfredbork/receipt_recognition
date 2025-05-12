@@ -219,7 +219,11 @@ final class CachedReceipt extends RecognizedReceipt {
 
   int maxCacheSize;
 
+  int minLongReceiptSize;
+
   int minScans;
+
+  Duration minDurationBeforeInvalidate;
 
   CachedReceipt({
     required super.positions,
@@ -227,13 +231,15 @@ final class CachedReceipt extends RecognizedReceipt {
     required this.positionGroups,
     required this.videoFeed,
     this.similarityThreshold = 50,
-    this.trustworthyThreshold = 30,
+    this.trustworthyThreshold = 20,
     this.maxCacheSize = 20,
+    this.minLongReceiptSize = 20,
     super.sumLabel,
     super.sum,
     super.company,
     super.isValid,
-  }) : minScans = videoFeed ? 3 : 1;
+  }) : minScans = videoFeed ? 3 : 1,
+       minDurationBeforeInvalidate = Duration(seconds: 3);
 
   @override
   CachedReceipt copyWith({
@@ -336,32 +342,41 @@ final class CachedReceipt extends RecognizedReceipt {
   void merge() {
     positions.clear();
 
+    final groupsToRemove = [];
+
     for (final group in positionGroups) {
       final mostTrustworthy = group.mostTrustworthy();
 
-      if (mostTrustworthy.trustworthiness != null) {
-        if (mostTrustworthy.trustworthiness! >= trustworthyThreshold &&
+      if (mostTrustworthy?.trustworthiness != null) {
+        if (mostTrustworthy!.trustworthiness! >= trustworthyThreshold &&
             group.positions.length >= minScans) {
           positions.add(mostTrustworthy);
         }
-      }
 
-      if (isCorrectSum) {
-        break;
-      }
+        if (group.positions.length < minScans) {
+          final now = DateTime.now();
 
-      if (sum != null) {
-        if (calculatedSum.value > sum!.value * sqrt2) {
-          final badPositions = List<RecognizedPosition>.from(positions)..sort(
-            (a, b) =>
-                (a.trustworthiness ?? 0).compareTo(b.trustworthiness ?? 0),
-          );
-
-          while (calculatedSum.value > sum!.value && badPositions.isNotEmpty) {
-            positions.remove(badPositions.last);
-            badPositions.removeLast();
+          if (now.difference(group.oldestTimestamp()) >=
+              minDurationBeforeInvalidate) {
+            groupsToRemove.add(group);
           }
-          break;
+        }
+
+        if (isCorrectSum) {
+          return;
+        }
+      }
+    }
+
+    if (sum != null) {
+      if (calculatedSum.value > sum!.value * sqrt2) {
+        final badPositions = List<RecognizedPosition>.from(positions)..sort(
+          (a, b) => (a.trustworthiness ?? 0).compareTo(b.trustworthiness ?? 0),
+        );
+
+        while (calculatedSum.value > sum!.value && badPositions.isNotEmpty) {
+          positions.remove(badPositions.last);
+          badPositions.removeLast();
         }
       }
     }
@@ -372,13 +387,17 @@ final class CachedReceipt extends RecognizedReceipt {
 
     for (final position in receipt.positions) {
       RecognizedPosition mostTrustworthy =
-          position.group?.mostTrustworthy() ?? position;
+          position.group?.mostTrustworthy(
+            defaultPosition: position,
+            priceRequired: true,
+          ) ??
+          position;
 
       final similarPositions = position.group!.positions.where(
         (p) =>
             partialRatio(p.product.value, mostTrustworthy.product.value) ==
                 100 &&
-            p.price.formattedValue == mostTrustworthy.price.formattedValue,
+            p.price.formattedValue == position.price.formattedValue,
       );
 
       final List<String> values = mostTrustworthy.product.value.split(' ');
@@ -425,7 +444,11 @@ final class CachedReceipt extends RecognizedReceipt {
   }
 
   void validate(RecognizedReceipt receipt) {
-    receipt.isValid = receipt.isCorrectSum && areEnoughScans;
+    receipt.isValid = receipt.isCorrectSum && (areEnoughScans || isLongReceipt);
+  }
+
+  bool get isLongReceipt {
+    return positions.length >= minLongReceiptSize;
   }
 
   bool get areEnoughScans {
@@ -462,7 +485,10 @@ final class PositionGroup {
         .timestamp;
   }
 
-  RecognizedPosition mostTrustworthy() {
+  RecognizedPosition? mostTrustworthy({
+    RecognizedPosition? defaultPosition,
+    priceRequired = false,
+  }) {
     final Map<(String, String), int> rank = {};
 
     for (final position in positions) {
@@ -484,7 +510,11 @@ final class PositionGroup {
       final position = positions.firstWhere(
         (p) =>
             ranked.last.key.$1 == p.product.value &&
-            ranked.last.key.$2 == p.price.formattedValue,
+            ranked.last.key.$2 == p.price.formattedValue &&
+            ranked.last.key.$2 ==
+                (defaultPosition != null && priceRequired
+                    ? defaultPosition.price.formattedValue
+                    : ranked.last.key.$2),
       );
 
       position.trustworthiness =
@@ -493,7 +523,7 @@ final class PositionGroup {
       return position;
     }
 
-    return positions.last;
+    return defaultPosition;
   }
 
   RecognizedPosition mostSimilar(RecognizedPosition position) {
