@@ -4,7 +4,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:intl/intl.dart';
 
 import 'receipt_core.dart';
-import 'receipt_models.dart';
+import 'core/receipt_models.dart';
 
 class ReceiptParser {
   static const patternStopKeywords = r'(Geg.|Rückgeld|Steuer|Brutto)';

@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import 'receipt_core.dart';
-import 'receipt_models.dart';
 
 class ReceiptOptimizer implements Optimizer {
   final CachedReceipt _cachedReceipt;
@@ -65,4 +64,14 @@ class ReceiptOptimizer implements Optimizer {
     _cachedReceipt.clear();
     _init = false;
   }
+}
+
+abstract class Optimizer {
+  Optimizer({required videoFeed});
+
+  void init();
+
+  RecognizedReceipt optimize(RecognizedReceipt receipt);
+
+  void close();
 }

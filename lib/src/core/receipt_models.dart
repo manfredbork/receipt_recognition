@@ -1,8 +1,6 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
-import 'receipt_core.dart';
-
 enum Operation { added, updated }
 
 final class Formatter {
@@ -15,16 +13,6 @@ final class Formatter {
     locale: Intl.defaultLocale,
     decimalDigits: 2,
   ).parse(value);
-}
-
-abstract class Optimizer {
-  Optimizer({required videoFeed});
-
-  void init();
-
-  RecognizedReceipt optimize(RecognizedReceipt receipt);
-
-  void close();
 }
 
 abstract class Valuable<T> {
@@ -104,16 +92,4 @@ final class RecognizedPrice extends RecognizedEntity<num> {
 
   @override
   String format(num value) => Formatter.format(value);
-}
-
-final class Progress {
-  final List<RecognizedPosition> addedPositions;
-  final List<RecognizedPosition> updatedPositions;
-  final int? estimatedPercentage;
-
-  Progress({
-    required this.addedPositions,
-    required this.updatedPositions,
-    this.estimatedPercentage,
-  });
 }
