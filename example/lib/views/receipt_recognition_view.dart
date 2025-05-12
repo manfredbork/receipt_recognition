@@ -50,12 +50,10 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     }
   }
 
-  /// Creates and initializes instance of [ReceiptRecognizer].
   void _initializeReceiptRecognizer() {
     _receiptRecognizer = ReceiptRecognizer(onScanTimeout: _onScanTimeout);
   }
 
-  /// Callback if [ReceiptRecognizer] runs in a timeout.
   void _onScanTimeout() {
     _canProcess = false;
     HapticFeedback.lightImpact();
@@ -69,7 +67,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     if (mounted) setState(() {});
   }
 
-  /// Processes image with [ReceiptRecognizer].
   Future<void> _processImage(InputImage inputImage) async {
     if (_receiptRecognizer == null || !_canProcess || !_isReady || _isBusy) {
       return;
@@ -163,10 +160,12 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     await _cameraController?.lockCaptureOrientation(
       DeviceOrientation.portraitUp,
     );
-    await _cameraController?.startImageStream(_processCameraImage);
-    setState(() {
+    await _cameraController?.startImageStream(_processCameraImage).then((
+      value,
+    ) {
       _isReady = true;
     });
+    setState(() {});
   }
 
   Future _stopLiveFeed() async {

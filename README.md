@@ -73,8 +73,10 @@ final receiptRecognizer = ReceiptRecognizer(
     print('Scan complete! Store: ${receipt.company?.formattedValue}');
     print('Total: ${receipt.sum?.formattedValue}');
   },
-  onScanUpdate: (partial) {
-    print('In-progress scan: ${partial.positions.length} items detected so far.');
+  onScanUpdate: (progress) {
+    if (progress.estimatedPercentage != null) {
+      print('In-progress scan: ${progress.estimatedPercentage}% detected so far.');
+    }
   },
 );
 
@@ -118,6 +120,7 @@ await receiptRecognizer.close();
 | `RecognizedProduct`  | Alphanumeric value for product.                                   |
 | `RecognizedPrice`    | Numerical value for price.                                        |
 | `RecognizedSum`      | Numerical value for sum.                                          |
+| `RecognizedSumLabel` | Represents the detected label for the sum.                        |
 | `RecognizedCompany`  | Specialized entity for the store name.                            |
 
 ---
@@ -144,7 +147,7 @@ RecognizedReceipt
 ## 🔮 Roadmap
 
 - [x] Product name normalization
-- [ ] Long receipt support and merging mechanism
+- [x] Long receipt support and merging mechanism
 - [ ] TSE detection and categorization
 - [ ] Tax and discount detection
 - [ ] Smart OCR region selection

@@ -1,20 +1,21 @@
+import 'dart:math';
+
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
+import 'receipt_core.dart';
 import 'receipt_models.dart';
 
-/// A receipt parser that parses a receipt from [RecognizedText].
 class ReceiptParser {
-  /// RegExp patterns.
-  static const patternDisallowed =
-      r'(Geg.|Steuer|Brutto|Rückgeld|Handeingabe|Stk)';
+  static const patternStopKeywords = r'(Geg.|Rückgeld|Steuer|Brutto)';
+  static const patternIgnoreKeywords = r'(E-Bon|Coupon|Handeingabe|Posten|Stk)';
+  static const patternIgnoreNumbers = r'\d{1,3}(?:\s?[.,]\s?\d{3})+';
   static const patternCompany =
-      r'(Lidl|Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
-  static const patternSumLabel = r'(Zu zahlen|Summe|Total|Sum)';
-  static const patternUnknown = r'([^0-9]){6,}';
-  static const patternAmount = r'-?\s?([0-9])+\s?([.,])\s?([0-9]){2}';
+      r'(Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)';
+  static const patternSumLabel = r'(Zu zahlen|Summe|Total)';
+  static const patternUnknown = r'[^\d]{6,}';
+  static const patternAmount = r'-?\s*\d+\s*[.,]\s*\d{2}';
 
-  /// Processes [RecognizedText]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
     final converted = _convertText(text);
     final parsed = _parseLines(converted);
@@ -24,7 +25,6 @@ class ReceiptParser {
     return receipt;
   }
 
-  /// Converts [RecognizedText]. Returns a list of [TextLine].
   static List<TextLine> _convertText(RecognizedText text) {
     final List<TextLine> lines = [];
 
@@ -36,7 +36,6 @@ class ReceiptParser {
       ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
-  /// Parses a list of [TextLine]. Returns a list of [RecognizedEntity].
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
     final List<RecognizedEntity> parsed = [];
 
@@ -44,16 +43,37 @@ class ReceiptParser {
     bool detectedSumLabel = false;
 
     for (final line in lines) {
-      if (RegExp(patternDisallowed).hasMatch(line.text)) continue;
+      if (RegExp(
+        patternStopKeywords,
+        caseSensitive: false,
+      ).hasMatch(line.text)) {
+        break;
+      }
+
+      if (RegExp(
+        patternIgnoreKeywords,
+        caseSensitive: false,
+      ).hasMatch(line.text)) {
+        continue;
+      }
+
+      if (RegExp(
+        patternIgnoreNumbers,
+        caseSensitive: false,
+      ).hasMatch(line.text)) {
+        continue;
+      }
 
       final company = RegExp(
         patternCompany,
         caseSensitive: false,
       ).stringMatch(line.text);
 
-      if (company != null && !detectedCompany) {
-        parsed.add(RecognizedCompany(line: line, value: company));
-        detectedCompany = true;
+      if (company != null) {
+        if (!detectedCompany) {
+          parsed.add(RecognizedCompany(line: line, value: company));
+          detectedCompany = true;
+        }
 
         continue;
       }
@@ -63,9 +83,11 @@ class ReceiptParser {
         caseSensitive: false,
       ).stringMatch(line.text);
 
-      if (sumLabel != null && !detectedSumLabel) {
-        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-        detectedSumLabel = true;
+      if (sumLabel != null) {
+        if (!detectedSumLabel) {
+          parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+          detectedSumLabel = true;
+        }
 
         continue;
       }
@@ -91,7 +113,6 @@ class ReceiptParser {
     return parsed;
   }
 
-  /// Detects locale by separator. Returns a [String].
   static String? _detectsLocale(String text) {
     if (text.contains('.')) {
       return 'en_US';
@@ -102,15 +123,16 @@ class ReceiptParser {
     return Intl.defaultLocale;
   }
 
-  /// Shrinks a list of [RecognizedEntity]. Returns a list of [RecognizedEntity].
   static List<RecognizedEntity> _shrinkEntities(
     List<RecognizedEntity> entities,
   ) {
-    final List<RecognizedEntity> shrunken = List.from(entities);
+    final List<RecognizedEntity> shrunken = List<RecognizedEntity>.from(
+      entities,
+    );
 
     final beforeAmounts = shrunken.whereType<RecognizedAmount>();
 
-    final yAmounts = List.from(beforeAmounts)..sort(
+    final yAmounts = List<RecognizedAmount>.from(beforeAmounts)..sort(
       (a, b) => (a.line.boundingBox.top).compareTo((b.line.boundingBox.top)),
     );
 
@@ -139,7 +161,7 @@ class ReceiptParser {
 
     final afterAmounts = shrunken.whereType<RecognizedAmount>();
 
-    final xAmounts = List.from(afterAmounts)..sort(
+    final xAmounts = List<RecognizedAmount>.from(afterAmounts)..sort(
       (a, b) => (a.line.boundingBox.left).compareTo((b.line.boundingBox.left)),
     );
 
@@ -150,14 +172,14 @@ class ReceiptParser {
     return shrunken;
   }
 
-  /// Finds sum by sum label. Returns a [RecognizedSum].
   static RecognizedSum? _findSum(
     List<RecognizedEntity> entities,
     RecognizedSumLabel sumLabel,
   ) {
     final ySumLabel = sumLabel.line.boundingBox.top;
-    final amounts = entities.whereType<RecognizedAmount>();
-    final yAmounts = List.from(amounts)..sort(
+    final yAmounts = List<RecognizedAmount>.from(
+      entities.whereType<RecognizedAmount>(),
+    )..sort(
       (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
         (b.line.boundingBox.top - ySumLabel).abs(),
       ),
@@ -178,7 +200,6 @@ class ReceiptParser {
     return null;
   }
 
-  /// Checks if [RecognizedEntity] is invalid. Returns a [bool].
   static bool _isInvalid(RecognizedEntity a, RecognizedEntity b) {
     return a is! RecognizedCompany &&
         a is! RecognizedSumLabel &&
@@ -186,7 +207,6 @@ class ReceiptParser {
         !_isOpposite(a, b);
   }
 
-  /// Checks if [RecognizedEntity] is opposite. Returns a [bool].
   static bool _isOpposite(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
@@ -195,7 +215,6 @@ class ReceiptParser {
         (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
   }
 
-  /// Checks if [RecognizedEntity] is smaller than left bound. Returns a [bool].
   static bool _isSmallerThanLeftBound(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
@@ -203,7 +222,6 @@ class ReceiptParser {
     return a is RecognizedAmount && aBox.right < bBox.left;
   }
 
-  /// Checks if [RecognizedEntity] is smaller than top bound. Returns a [bool].
   static bool _isSmallerThanTopBound(RecognizedEntity a, RecognizedEntity b) {
     final aBox = a.line.boundingBox;
     final bBox = b.line.boundingBox;
@@ -211,7 +229,6 @@ class ReceiptParser {
     return a is! RecognizedCompany && aBox.bottom < bBox.top;
   }
 
-  /// Checks if [RecognizedEntity] is greater than bottom bound. Returns a [bool].
   static bool _isGreaterThanBottomBound(
     RecognizedEntity a,
     RecognizedEntity b,
@@ -222,20 +239,17 @@ class ReceiptParser {
     return aBox.top > bBox.bottom;
   }
 
-  /// Builds receipt from list of [RecognizedEntity]. Returns a [RecognizedReceipt].
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
-    final unknowns = entities.whereType<RecognizedUnknown>();
-
-    if (unknowns.isEmpty) return null;
-
-    final yUnknowns = List.from(unknowns);
+    final yUnknowns = List<RecognizedUnknown>.from(
+      entities.whereType<RecognizedUnknown>(),
+    );
 
     RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
     RecognizedCompany? company;
 
-    List<RecognizedPosition> positions = [];
-    List<RecognizedUnknown> forbidden = [];
+    final RecognizedReceipt receipt = RecognizedReceipt.empty();
+    final List<RecognizedUnknown> forbidden = [];
 
     for (final entity in entities) {
       if (entity is RecognizedSumLabel) {
@@ -245,23 +259,26 @@ class ReceiptParser {
       } else if (entity is RecognizedCompany) {
         company = entity;
       } else if (entity is RecognizedAmount) {
-        final yAmount = entity.line.boundingBox.top;
+        final yAmount = entity.line.boundingBox;
 
         yUnknowns.sort(
-          (a, b) => (yAmount - a.line.boundingBox.top).abs().compareTo(
-            (yAmount - b.line.boundingBox.top).abs(),
+          (a, b) => (yAmount.top - a.line.boundingBox.top).abs().compareTo(
+            (yAmount.top - b.line.boundingBox.top).abs(),
           ),
         );
 
         for (final yUnknown in yUnknowns) {
-          if (!forbidden.contains(yUnknown)) {
-            positions.add(
+          if (!forbidden.contains(yUnknown) &&
+              (yAmount.top - yUnknown.line.boundingBox.top).abs() <
+                  yAmount.height * pi) {
+            receipt.positions.add(
               RecognizedPosition(
                 product: RecognizedProduct(
                   value: yUnknown.value,
                   line: yUnknown.line,
                 ),
                 price: RecognizedPrice(line: entity.line, value: entity.value),
+                timestamp: receipt.timestamp,
               ),
             );
             forbidden.add(yUnknown);
@@ -271,8 +288,10 @@ class ReceiptParser {
       }
     }
 
-    if (sumLabel == null) sum = null;
+    receipt.sumLabel = sumLabel;
+    receipt.sum = sum;
+    receipt.company = company;
 
-    return RecognizedReceipt(positions: positions, sum: sum, company: company);
+    return receipt;
   }
 }
