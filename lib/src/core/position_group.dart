@@ -6,16 +6,13 @@ final class PositionGroup {
   PositionGroup({required RecognizedPosition position})
     : positions = [position];
 
-  DateTime oldestTimestamp() {
+  DateTime youngestTimestamp() {
     return positions
-        .reduce((a, b) => a.timestamp.isBefore(b.timestamp) ? a : b)
+        .reduce((a, b) => a.timestamp.isAfter(b.timestamp) ? a : b)
         .timestamp;
   }
 
-  RecognizedPosition? mostTrustworthy({
-    RecognizedPosition? defaultPosition,
-    bool priceRequired = false,
-  }) {
+  RecognizedPosition mostTrustworthy(RecognizedPosition defaultPosition) {
     final rank = <(String, String), int>{};
 
     for (final position in positions) {
@@ -34,10 +31,8 @@ final class PositionGroup {
         (p) =>
             p.product.value == topRank.$1 &&
             p.price.formattedValue == topRank.$2 &&
-            (priceRequired
-                ? p.price.formattedValue ==
-                    defaultPosition?.price.formattedValue
-                : true),
+            p.price.formattedValue == defaultPosition.price.formattedValue,
+        orElse: () => defaultPosition,
       );
 
       position.trustworthiness =

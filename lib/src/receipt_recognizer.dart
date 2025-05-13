@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 import 'receipt_core.dart';
-import 'core/receipt_models.dart';
 import 'receipt_optimizer.dart';
 import 'receipt_parser.dart';
 
@@ -30,14 +29,14 @@ class ReceiptRecognizer {
     VoidCallback? onScanTimeout,
     Function(Progress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
-  })  : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
-        _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
-        _videoFeed = videoFeed,
-        _scanInterval = scanInterval,
-        _scanTimeout = scanTimeout,
-        _onScanTimeout = onScanTimeout,
-        _onScanUpdate = onScanUpdate,
-        _onScanComplete = onScanComplete;
+  }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
+       _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
+       _videoFeed = videoFeed,
+       _scanInterval = scanInterval,
+       _scanTimeout = scanTimeout,
+       _onScanTimeout = onScanTimeout,
+       _onScanUpdate = onScanUpdate,
+       _onScanComplete = onScanComplete;
 
   Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
     final now = DateTime.now();
@@ -63,15 +62,18 @@ class ReceiptRecognizer {
       _initializedScan = null;
       _optimizer.init();
       _onScanComplete?.call(optimizedReceipt);
+
       return optimizedReceipt;
     } else {
-      final addedPositions = optimizedReceipt.positions
-          .where((p) => p.operation == Operation.added)
-          .toList();
+      final addedPositions =
+          optimizedReceipt.positions
+              .where((p) => p.operation == Operation.added)
+              .toList();
 
-      final updatedPositions = optimizedReceipt.positions
-          .where((p) => p.operation == Operation.updated)
-          .toList();
+      final updatedPositions =
+          optimizedReceipt.positions
+              .where((p) => p.operation == Operation.updated)
+              .toList();
 
       final estimatedPercentage = _calculatePercentage(optimizedReceipt);
 
@@ -101,8 +103,8 @@ class ReceiptRecognizer {
 
     if (denominator != null) {
       return (numerator < denominator
-          ? (numerator / denominator * 100)
-          : (denominator / numerator * 100))
+              ? (numerator / denominator * 100)
+              : (denominator / numerator * 100))
           .toInt();
     }
     return null;

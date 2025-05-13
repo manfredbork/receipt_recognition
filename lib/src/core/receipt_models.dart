@@ -13,6 +13,13 @@ final class Formatter {
     locale: Intl.defaultLocale,
     decimalDigits: 2,
   ).parse(value);
+
+  static String normalizeCommas(String value) {
+    return value.replaceAllMapped(
+      RegExp(r'(\d)\s*([,.])\s*(\d)'),
+      (match) => '${match[1]}${match[2]}${match[3]}',
+    );
+  }
 }
 
 abstract class Valuable<T> {

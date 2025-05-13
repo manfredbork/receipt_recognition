@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 
 import 'position_group.dart';
@@ -24,15 +22,15 @@ final class CachedReceipt extends RecognizedReceipt {
     required this.positionGroups,
     required this.videoFeed,
     this.similarityThreshold = 50,
-    this.trustworthyThreshold = 20,
-    this.maxCacheSize = 20,
+    this.trustworthyThreshold = 25,
+    this.maxCacheSize = 10,
     this.minLongReceiptSize = 20,
     super.sumLabel,
     super.sum,
     super.company,
     super.isValid,
-  })  : minScans = videoFeed ? 3 : 1,
-        minDurationBeforeInvalidate = const Duration(seconds: 3);
+  }) : minScans = videoFeed ? 3 : 1,
+       minDurationBeforeInvalidate = const Duration(seconds: 3);
 
   @override
   CachedReceipt copyWith({
@@ -93,10 +91,7 @@ final class CachedReceipt extends RecognizedReceipt {
   }
 
   void _applyPosition(RecognizedPosition position) {
-    final groups = positionGroups
-        .where((g) => g.positions.every((p) => p.timestamp != position.timestamp))
-        .toList();
-
+    final groups = positionGroups;
     final newGroup = PositionGroup(position: position);
 
     if (groups.isEmpty) {
@@ -140,67 +135,67 @@ final class CachedReceipt extends RecognizedReceipt {
     final groupsToRemove = <PositionGroup>[];
 
     for (final group in positionGroups) {
-      final mostTrustworthy = group.mostTrustworthy();
+      final mostTrustworthy = group.mostTrustworthy(group.positions.first);
 
-      if (mostTrustworthy?.trustworthiness == null) continue;
+      if (mostTrustworthy.trustworthiness == null) continue;
 
-      if (mostTrustworthy!.trustworthiness! >= trustworthyThreshold &&
+      if (mostTrustworthy.trustworthiness! >= trustworthyThreshold &&
           group.positions.length >= minScans) {
         positions.add(mostTrustworthy);
       }
 
       if (group.positions.length < minScans &&
-          DateTime.now().difference(group.oldestTimestamp()) >= minDurationBeforeInvalidate) {
+          DateTime.now().difference(group.youngestTimestamp()) >=
+              minDurationBeforeInvalidate) {
         groupsToRemove.add(group);
       }
 
       if (isCorrectSum) return;
     }
-
-    final calcSum = calculatedSum.value;
-    if (sum != null && calcSum > sum!.value * sqrt2) {
-      final badPositions = List<RecognizedPosition>.from(positions)
-        ..sort((a, b) => (a.trustworthiness ?? 0).compareTo(b.trustworthiness ?? 0));
-
-      while (calculatedSum.value > sum!.value && badPositions.isNotEmpty) {
-        positions.remove(badPositions.removeLast());
-      }
-    }
   }
 
   RecognizedReceipt normalize(RecognizedReceipt receipt) {
-    final normalized = receipt.positions.map((position) {
-      final mostTrustworthy = position.group?.mostTrustworthy(
-        defaultPosition: position,
-        priceRequired: true,
-      ) ??
-          position;
+    final normalized =
+        receipt.positions.map((position) {
+          final group = position.group;
+          final mostTrustworthy = group?.mostTrustworthy(position) ?? position;
 
-      final similarPositions = position.group?.positions.where(
-            (p) =>
-        partialRatio(p.product.value, mostTrustworthy.product.value) == 100 &&
-            p.price.formattedValue == position.price.formattedValue,
-      ) ??
-          [];
+          final normalizedMostProduct = Formatter.normalizeCommas(
+            mostTrustworthy.product.value,
+          );
+          final words = normalizedMostProduct.split(' ');
 
-      final words = mostTrustworthy.product.value.split(' ');
-      int len = words.length;
+          final similarPositions =
+              group?.positions.where((p) {
+                final normalizedP = Formatter.normalizeCommas(p.product.value);
+                return partialRatio(normalizedP, normalizedMostProduct) ==
+                        100 &&
+                    p.price.formattedValue == position.price.formattedValue;
+              }).toList() ??
+              [];
 
-      for (final sim in similarPositions) {
-        final simWords = sim.product.value.split(' ');
-        if (len > 2 && simWords.length < len) len = simWords.length;
-        if (len > 2 && simWords[len - 1] != words[len - 1]) len--;
-      }
+          int wordLimit = words.length;
+          for (final sim in similarPositions) {
+            if (wordLimit > 3) {
+              final simWords = Formatter.normalizeCommas(
+                sim.product.value,
+              ).split(' ');
+              final minLength = simWords.length;
+              if (minLength < wordLimit) wordLimit = minLength;
+              if (simWords.length >= wordLimit &&
+                  simWords[wordLimit - 1] != words[wordLimit - 1]) {
+                wordLimit--;
+              }
+            }
+          }
 
-      while (len > 2 && words[len - 1].replaceAll(RegExp(r'[^A-Z%]'), '').isEmpty) {
-        len--;
-      }
+          final normalizedValue = words.take(wordLimit).join(' ');
+          final newProduct = mostTrustworthy.product.copyWith(
+            value: normalizedValue,
+          );
 
-      final normalizedValue = words.take(len).join(' ');
-      final newProduct = mostTrustworthy.product.copyWith(value: normalizedValue);
-
-      return mostTrustworthy.copyWith(product: newProduct);
-    }).toList();
+          return mostTrustworthy.copyWith(product: newProduct);
+        }).toList();
 
     return receipt.copyWith(positions: normalized);
   }
@@ -213,9 +208,10 @@ final class CachedReceipt extends RecognizedReceipt {
 
   bool get areEnoughScans {
     final groups = positionGroups.where(
-          (g) => g.positions.any((p) => positions.contains(p)),
+      (g) => g.positions.any((p) => positions.contains(p)),
     );
-    return groups.isNotEmpty && groups.every((g) => g.positions.length >= minScans);
+    return groups.isNotEmpty &&
+        groups.every((g) => g.positions.length >= minScans);
   }
 
   RecognizedReceipt get receipt => copyWith();

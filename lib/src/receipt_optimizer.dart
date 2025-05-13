@@ -35,25 +35,22 @@ class ReceiptOptimizer implements Optimizer {
 
     _cachedReceipt.validate(cachedReceipt);
 
-    _logDebugInfo(cachedReceipt);
-
-    return cachedReceipt.isValid
-        ? _cachedReceipt.normalize(cachedReceipt)
-        : receipt;
-  }
-
-  void _logDebugInfo(RecognizedReceipt cachedReceipt) {
     if (kDebugMode) {
-      if (cachedReceipt.positions.isNotEmpty) {
+      final debugReceipt = _cachedReceipt.normalize(cachedReceipt);
+      if (debugReceipt.positions.isNotEmpty) {
         print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
-        for (final position in cachedReceipt.positions) {
+        for (final position in debugReceipt.positions) {
           print(
             '${position.product.value} ${position.price.formattedValue} ${position.trustworthiness}',
           );
         }
-        print(cachedReceipt.calculatedSum.formattedValue);
+        print(debugReceipt.calculatedSum.formattedValue);
       }
     }
+
+    return cachedReceipt.isValid
+        ? _cachedReceipt.normalize(cachedReceipt)
+        : receipt;
   }
 
   @override

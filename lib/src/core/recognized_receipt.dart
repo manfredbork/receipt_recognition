@@ -40,7 +40,8 @@ class RecognizedReceipt {
     );
   }
 
-  CalculatedSum get calculatedSum => CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
+  CalculatedSum get calculatedSum =>
+      CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
 
   bool get isCorrectSum => calculatedSum.formattedValue == sum?.formattedValue;
 }
