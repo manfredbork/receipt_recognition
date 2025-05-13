@@ -9,17 +9,17 @@ final class RecognizedPosition {
   final RecognizedProduct product;
   final RecognizedPrice price;
   DateTime timestamp;
-  int? trustworthiness;
-  PositionGroup? group;
-  Operation? operation;
+  int trustworthiness;
+  PositionGroup group;
+  Operation operation;
 
   RecognizedPosition({
     required this.product,
     required this.price,
     required this.timestamp,
-    this.trustworthiness,
-    this.group,
-    this.operation,
+    required this.trustworthiness,
+    required this.group,
+    required this.operation,
   });
 
   RecognizedPosition copyWith({

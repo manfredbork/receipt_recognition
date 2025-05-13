@@ -41,7 +41,7 @@ class ReceiptOptimizer implements Optimizer {
         print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
         for (final position in debugReceipt.positions) {
           print(
-            '${position.product.value} ${position.price.formattedValue} ${position.trustworthiness}',
+            '${position.product.value} ${position.price.formattedValue} ${position.trustworthiness} ${position.group.timestamp}',
           );
         }
         print(debugReceipt.calculatedSum.formattedValue);

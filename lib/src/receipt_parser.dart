@@ -49,8 +49,9 @@ class ReceiptParser {
     for (final line in lines) {
       if (patternStopKeywords.hasMatch(line.text)) break;
       if (patternIgnoreKeywords.hasMatch(line.text) ||
-          patternIgnoreNumbers.hasMatch(line.text))
+          patternIgnoreNumbers.hasMatch(line.text)) {
         continue;
+      }
 
       final company = patternCompany.stringMatch(line.text);
       if (company != null && !detectedCompany) {
@@ -188,13 +189,12 @@ class ReceiptParser {
 
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
+    final receipt = RecognizedReceipt.empty();
+    final List<RecognizedUnknown> forbidden = [];
 
     RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
     RecognizedCompany? company;
-
-    final receipt = RecognizedReceipt.empty();
-    final List<RecognizedUnknown> forbidden = [];
 
     for (final entity in entities) {
       if (entity is RecognizedSumLabel) {
@@ -224,6 +224,9 @@ class ReceiptParser {
                 ),
                 price: RecognizedPrice(line: entity.line, value: entity.value),
                 timestamp: receipt.timestamp,
+                trustworthiness: 0,
+                group: PositionGroup.empty(),
+                operation: Operation.added,
               ),
             );
             forbidden.add(yUnknown);

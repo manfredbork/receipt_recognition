@@ -3,13 +3,14 @@ import 'recognized_position.dart';
 final class PositionGroup {
   final List<RecognizedPosition> positions;
 
-  PositionGroup({required RecognizedPosition position})
-    : positions = [position];
+  PositionGroup({required this.positions});
 
-  DateTime youngestTimestamp() {
-    return positions
-        .reduce((a, b) => a.timestamp.isAfter(b.timestamp) ? a : b)
-        .timestamp;
+  factory PositionGroup.empty() {
+    return PositionGroup(positions: []);
+  }
+
+  factory PositionGroup.fromPosition(RecognizedPosition position) {
+    return PositionGroup(positions: [position]);
   }
 
   RecognizedPosition mostTrustworthy(RecognizedPosition defaultPosition) {
@@ -37,6 +38,7 @@ final class PositionGroup {
 
       position.trustworthiness =
           (ranked.first.value / positions.length * 100).toInt();
+
       return position;
     }
 
@@ -47,5 +49,11 @@ final class PositionGroup {
     return positions.reduce(
       (a, b) => a.similarity(position) > b.similarity(position) ? a : b,
     );
+  }
+
+  DateTime get timestamp {
+    return positions
+        .reduce((a, b) => a.timestamp.isAfter(b.timestamp) ? a : b)
+        .timestamp;
   }
 }

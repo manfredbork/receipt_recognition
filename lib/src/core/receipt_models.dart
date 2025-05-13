@@ -81,7 +81,8 @@ final class CalculatedSum extends Valuable<num> {
 }
 
 final class RecognizedProduct extends RecognizedEntity<String> {
-  RecognizedProduct({required super.line, required super.value});
+  RecognizedProduct({required super.line, required super.value})
+    : formattedValue = value;
 
   RecognizedProduct copyWith({String? value, TextLine? line}) {
     return RecognizedProduct(
@@ -92,6 +93,9 @@ final class RecognizedProduct extends RecognizedEntity<String> {
 
   @override
   String format(String value) => value;
+
+  @override
+  String formattedValue;
 }
 
 final class RecognizedPrice extends RecognizedEntity<num> {

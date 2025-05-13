@@ -47,6 +47,9 @@ void main() {
         product: RecognizedProduct(line: line1, value: 'Apple'),
         price: RecognizedPrice(line: line2, value: 0.99),
         timestamp: DateTime.now(),
+        trustworthiness: 0,
+        group: PositionGroup.empty(),
+        operation: Operation.added,
       );
 
       final receipt = RecognizedReceipt(
@@ -67,6 +70,9 @@ void main() {
         product: RecognizedProduct(line: line, value: 'Banana'),
         price: RecognizedPrice(line: line, value: 1.49),
         timestamp: DateTime.now(),
+        trustworthiness: 0,
+        group: PositionGroup.empty(),
+        operation: Operation.added,
       );
 
       final receipt = RecognizedReceipt(
