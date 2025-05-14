@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 
 import 'position_group.dart';
@@ -37,14 +35,15 @@ final class RecognizedPosition {
     );
   }
 
-  int similarity(RecognizedPosition other) {
-    if (timestamp.isAtSameMomentAs(other.timestamp) ||
-        price.formattedValue != other.price.formattedValue) {
-      return 0;
-    }
-    return max(
-      ratio(product.value, other.product.value),
-      partialRatio(product.value, other.product.value),
-    );
+  bool samePrice(RecognizedPosition other) {
+    return price.formattedValue == other.price.formattedValue;
+  }
+
+  int ratioProduct(RecognizedPosition other) {
+    return ratio(product.value, other.product.value);
+  }
+
+  int partialRatioProduct(RecognizedPosition other) {
+    return partialRatio(product.value, other.product.value);
   }
 }

@@ -1,5 +1,4 @@
 import 'position_group.dart';
-import 'position_normalizer.dart';
 import 'receipt_models.dart';
 import 'recognized_position.dart';
 import 'recognized_receipt.dart';
@@ -21,12 +20,11 @@ final class CachedReceipt extends RecognizedReceipt {
     required this.videoFeed,
     this.similarityThreshold = 50,
     this.trustworthyThreshold = 25,
-    this.maxCacheSize = 10,
+    this.maxCacheSize = 20,
     this.minLongReceiptSize = 20,
     super.sumLabel,
     super.sum,
     super.company,
-    super.scanComplete = false,
   }) : minScans = videoFeed ? 3 : 1;
 
   @override
@@ -41,7 +39,6 @@ final class CachedReceipt extends RecognizedReceipt {
     RecognizedSumLabel? sumLabel,
     RecognizedSum? sum,
     RecognizedCompany? company,
-    bool? scanComplete,
   }) {
     return CachedReceipt(
       positions: positions ?? this.positions,
@@ -54,7 +51,6 @@ final class CachedReceipt extends RecognizedReceipt {
       sumLabel: sumLabel ?? this.sumLabel,
       sum: sum ?? this.sum,
       company: company ?? this.company,
-      scanComplete: scanComplete ?? this.scanComplete,
     );
   }
 
@@ -97,20 +93,35 @@ final class CachedReceipt extends RecognizedReceipt {
     }
 
     groups.sort((a, b) {
-      final simA = a.mostSimilarPosition(position).similarity(position);
-      final simB = b.mostSimilarPosition(position).similarity(position);
-      return simA.compareTo(simB);
+      final simA = a.mostSimilarPosition(
+        compare: position,
+        similarityThreshold: similarityThreshold,
+        orElse: () => position,
+      );
+      final ratioA = simA.ratioProduct(position);
+      final simB = b.mostSimilarPosition(
+        compare: position,
+        similarityThreshold: similarityThreshold,
+        orElse: () => position,
+      );
+      final ratioB = simB.ratioProduct(position);
+      if (simA == position && simB == position) return 0;
+      if (simA == position) return 1;
+      if (simB == position) return -1;
+      return ratioA.compareTo(ratioB);
     });
 
     final bestGroup = groups.last;
-    final bestSim = bestGroup
-        .mostSimilarPosition(position)
-        .similarity(position);
+    final bestSim = bestGroup.mostSimilarPosition(
+      compare: position,
+      similarityThreshold: similarityThreshold,
+      orElse: () => position,
+    );
 
-    if (bestSim >= similarityThreshold) {
-      _addToExistingGroup(position, bestGroup);
-    } else {
+    if (bestSim.group.positions.isEmpty) {
       _addToNewGroup(position, newGroup);
+    } else {
+      _addToExistingGroup(position, bestGroup);
     }
   }
 
@@ -129,45 +140,23 @@ final class CachedReceipt extends RecognizedReceipt {
     positionGroups.add(group);
   }
 
-  RecognizedReceipt normalizeFromCache(RecognizedReceipt receipt) {
-    final List<RecognizedPosition> positions = [];
-
-    for (final position in receipt.positions) {
-      final mostTrustworthy = position.group.mostTrustworthyPosition(
-        trustworthyThreshold: trustworthyThreshold,
-        orElse: () => position,
-      );
-      positions.add(mostTrustworthy);
-    }
-
-    return receipt.copyWith(
-      positions: PositionNormalizer.normalize(positions),
-    );
-  }
-
   void consolidatePositions() {
+    final isLongReceipt = positions.length >= minLongReceiptSize;
+
     positions.clear();
 
     for (final group in positionGroups) {
       final mostTrustworthy = group.mostTrustworthyPosition(
+        compare: group.positions.first,
         trustworthyThreshold: trustworthyThreshold,
         orElse: () => group.positions.first,
       );
 
-      positions.add(mostTrustworthy);
+      if (group.positions.length >= minScans || isLongReceipt) {
+        positions.add(mostTrustworthy);
+      }
 
-      if (isCorrectSum) return;
+      if (isValid) return;
     }
-
-    final groups = positionGroups.where(
-      (g) => g.positions.any((p) => positions.contains(p)),
-    );
-    scanComplete =
-        groups.isNotEmpty &&
-        groups.every((g) => g.positions.length >= minScans);
   }
-
-  bool get isLongReceipt => positions.length >= minLongReceiptSize;
-
-  RecognizedReceipt get normalizedReceipt => normalizeFromCache(copyWith());
 }

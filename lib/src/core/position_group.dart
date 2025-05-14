@@ -14,7 +14,8 @@ final class PositionGroup {
   }
 
   RecognizedPosition mostTrustworthyPosition({
-    required trustworthyThreshold,
+    required RecognizedPosition compare,
+    required int trustworthyThreshold,
     required RecognizedPosition Function() orElse,
   }) {
     final rank = <(String, String), int>{};
@@ -34,21 +35,36 @@ final class PositionGroup {
       final position = positions.firstWhere(
         (p) =>
             p.product.value == topRank.$1 &&
-            p.price.formattedValue == topRank.$2,
-        orElse: () => orElse(),
+            p.price.formattedValue == topRank.$2 &&
+            p.samePrice(compare),
+        orElse: orElse,
       );
 
       final trustworthy = (ranked.first.value / positions.length * 100).toInt();
 
-      return trustworthy >= trustworthyThreshold ? position : orElse();
+      if (trustworthy >= trustworthyThreshold) {
+        return position;
+      }
     }
 
     return orElse();
   }
 
-  RecognizedPosition mostSimilarPosition(RecognizedPosition other) {
-    return positions.reduce(
-      (a, b) => a.similarity(other) > b.similarity(other) ? a : b,
+  RecognizedPosition mostSimilarPosition({
+    required RecognizedPosition compare,
+    required int similarityThreshold,
+    required RecognizedPosition Function() orElse,
+  }) {
+    final ranked =
+        positions..sort(
+          (a, b) => b.ratioProduct(compare).compareTo(a.ratioProduct(compare)),
+        );
+
+    final position = ranked.firstWhere(
+      (p) => p.samePrice(compare),
+      orElse: orElse,
     );
+
+    return position;
   }
 }

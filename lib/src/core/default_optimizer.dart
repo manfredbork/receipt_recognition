@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'cached_receipt.dart';
 import 'optimizer_interface.dart';
+import 'receipt_normalizer.dart';
 import 'recognized_receipt.dart';
 
 final class DefaultOptimizer implements Optimizer {
@@ -30,10 +31,10 @@ final class DefaultOptimizer implements Optimizer {
     _cachedReceipt.consolidatePositions();
 
     if (receipt.isValid) {
-      return _cachedReceipt.normalizeFromCache(receipt);
+      return ReceiptNormalizer.normalize(receipt);
     }
 
-    final cachedReceipt = _cachedReceipt.normalizedReceipt;
+    final cachedReceipt = ReceiptNormalizer.normalize(_cachedReceipt);
 
     if (kDebugMode) {
       if (cachedReceipt.positions.isNotEmpty) {

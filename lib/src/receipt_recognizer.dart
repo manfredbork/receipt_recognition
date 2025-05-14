@@ -13,7 +13,7 @@ final class ReceiptRecognizer {
   final Duration _scanTimeout;
   final VoidCallback? _onScanTimeout;
   final Function(RecognizedReceipt)? _onScanComplete;
-  final Function(Progress)? _onScanUpdate;
+  final Function(ScanProgress)? _onScanUpdate;
 
   DateTime? _initializedScan;
   DateTime? _lastScan;
@@ -26,7 +26,7 @@ final class ReceiptRecognizer {
     Duration scanInterval = const Duration(milliseconds: 100),
     Duration scanTimeout = const Duration(seconds: 30),
     VoidCallback? onScanTimeout,
-    Function(Progress)? onScanUpdate,
+    Function(ScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? DefaultOptimizer(videoFeed: videoFeed),
@@ -78,7 +78,7 @@ final class ReceiptRecognizer {
 
       _initializedScan ??= now;
       _onScanUpdate?.call(
-        Progress(
+        ScanProgress(
           addedPositions: addedPositions,
           updatedPositions: updatedPositions,
           estimatedPercentage: estimatedPercentage,

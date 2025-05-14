@@ -73,9 +73,9 @@ final receiptRecognizer = ReceiptRecognizer(
     print('Scan complete! Store: ${receipt.company?.formattedValue}');
     print('Total: ${receipt.sum?.formattedValue}');
   },
-  onScanUpdate: (progress) {
-    if (progress.estimatedPercentage != null) {
-      print('In-progress scan: ${progress.estimatedPercentage}% detected so far.');
+  onScanUpdate: (scanProgress) {
+    if (scanProgress.estimatedPercentage != null) {
+      print('In-progress scan: ${scanProgress.estimatedPercentage}% detected so far.');
     }
   },
 );
