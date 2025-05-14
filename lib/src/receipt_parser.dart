@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'receipt_core.dart';
 
-class ReceiptParser {
+final class ReceiptParser {
   static final RegExp patternStopKeywords = RegExp(
     r'(Geg.|Rückgeld|Steuer|Brutto)',
     caseSensitive: false,
@@ -224,7 +224,6 @@ class ReceiptParser {
                 ),
                 price: RecognizedPrice(line: entity.line, value: entity.value),
                 timestamp: receipt.timestamp,
-                trustworthiness: 0,
                 group: PositionGroup.empty(),
                 operation: Operation.added,
               ),

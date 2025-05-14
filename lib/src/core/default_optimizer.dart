@@ -4,7 +4,7 @@ import 'cached_receipt.dart';
 import 'optimizer_interface.dart';
 import 'recognized_receipt.dart';
 
-class DefaultOptimizer implements Optimizer {
+final class DefaultOptimizer implements Optimizer {
   final CachedReceipt _cachedReceipt;
   bool _isInitialized = false;
 
@@ -28,32 +28,26 @@ class DefaultOptimizer implements Optimizer {
 
     _cachedReceipt.apply(receipt);
     _cachedReceipt.consolidatePositions();
-    _cachedReceipt.validate(receipt);
 
     if (receipt.isValid) {
-      return _cachedReceipt.normalize(receipt);
+      return _cachedReceipt.normalizeFromCache(receipt);
     }
 
-    final cachedReceipt = _cachedReceipt.receipt;
-
-    _cachedReceipt.validate(cachedReceipt);
+    final cachedReceipt = _cachedReceipt.normalizedReceipt;
 
     if (kDebugMode) {
-      final debugReceipt = _cachedReceipt.normalize(cachedReceipt);
-      if (debugReceipt.positions.isNotEmpty) {
+      if (cachedReceipt.positions.isNotEmpty) {
         print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
-        for (final position in debugReceipt.positions) {
+        for (final position in cachedReceipt.positions) {
           print(
-            '${position.product.value} ${position.price.formattedValue} ${position.trustworthiness} ${position.group.timestamp}',
+            '${position.product.value} ${position.price.formattedValue} ${position.timestamp}',
           );
         }
-        print(debugReceipt.calculatedSum.formattedValue);
+        print(cachedReceipt.calculatedSum.formattedValue);
       }
     }
 
-    return cachedReceipt.isValid
-        ? _cachedReceipt.normalize(cachedReceipt)
-        : receipt;
+    return cachedReceipt.isValid ? cachedReceipt : receipt;
   }
 
   @override

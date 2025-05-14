@@ -9,7 +9,6 @@ final class RecognizedPosition {
   final RecognizedProduct product;
   final RecognizedPrice price;
   DateTime timestamp;
-  int trustworthiness;
   PositionGroup group;
   Operation operation;
 
@@ -17,7 +16,6 @@ final class RecognizedPosition {
     required this.product,
     required this.price,
     required this.timestamp,
-    required this.trustworthiness,
     required this.group,
     required this.operation,
   });
@@ -34,7 +32,6 @@ final class RecognizedPosition {
       product: product ?? this.product,
       price: price ?? this.price,
       timestamp: timestamp ?? this.timestamp,
-      trustworthiness: trustworthiness ?? this.trustworthiness,
       group: group ?? this.group,
       operation: operation ?? this.operation,
     );

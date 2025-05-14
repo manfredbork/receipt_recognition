@@ -7,7 +7,7 @@ class RecognizedReceipt {
   RecognizedSumLabel? sumLabel;
   RecognizedSum? sum;
   RecognizedCompany? company;
-  bool isValid;
+  bool scanComplete;
 
   RecognizedReceipt({
     required this.positions,
@@ -15,7 +15,7 @@ class RecognizedReceipt {
     this.sumLabel,
     this.sum,
     this.company,
-    this.isValid = false,
+    this.scanComplete = true,
   });
 
   factory RecognizedReceipt.empty() {
@@ -28,7 +28,7 @@ class RecognizedReceipt {
     RecognizedSumLabel? sumLabel,
     RecognizedSum? sum,
     RecognizedCompany? company,
-    bool? isValid,
+    bool? scanComplete,
   }) {
     return RecognizedReceipt(
       positions: positions ?? this.positions,
@@ -36,7 +36,7 @@ class RecognizedReceipt {
       sumLabel: sumLabel ?? this.sumLabel,
       sum: sum ?? this.sum,
       company: company ?? this.company,
-      isValid: isValid ?? this.isValid,
+      scanComplete: scanComplete ?? this.scanComplete,
     );
   }
 
@@ -44,6 +44,10 @@ class RecognizedReceipt {
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
 
   bool get isCorrectSum => calculatedSum.formattedValue == sum?.formattedValue;
+
+  bool get isScanComplete => scanComplete;
+
+  bool get isValid => isCorrectSum && isScanComplete;
 }
 
 final class Progress {

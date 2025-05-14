@@ -13,7 +13,10 @@ final class PositionGroup {
     return PositionGroup(positions: [position]);
   }
 
-  RecognizedPosition mostTrustworthy(RecognizedPosition defaultPosition) {
+  RecognizedPosition mostTrustworthyPosition({
+    required trustworthyThreshold,
+    required RecognizedPosition Function() orElse,
+  }) {
     final rank = <(String, String), int>{};
 
     for (final position in positions) {
@@ -31,29 +34,21 @@ final class PositionGroup {
       final position = positions.firstWhere(
         (p) =>
             p.product.value == topRank.$1 &&
-            p.price.formattedValue == topRank.$2 &&
-            p.price.formattedValue == defaultPosition.price.formattedValue,
-        orElse: () => defaultPosition,
+            p.price.formattedValue == topRank.$2,
+        orElse: () => orElse(),
       );
 
-      position.trustworthiness =
-          (ranked.first.value / positions.length * 100).toInt();
+      final trustworthy = (ranked.first.value / positions.length * 100).toInt();
 
-      return position;
+      return trustworthy >= trustworthyThreshold ? position : orElse();
     }
 
-    return defaultPosition;
+    return orElse();
   }
 
-  RecognizedPosition mostSimilar(RecognizedPosition position) {
+  RecognizedPosition mostSimilarPosition(RecognizedPosition other) {
     return positions.reduce(
-      (a, b) => a.similarity(position) > b.similarity(position) ? a : b,
+      (a, b) => a.similarity(other) > b.similarity(other) ? a : b,
     );
-  }
-
-  DateTime get timestamp {
-    return positions
-        .reduce((a, b) => a.timestamp.isAfter(b.timestamp) ? a : b)
-        .timestamp;
   }
 }

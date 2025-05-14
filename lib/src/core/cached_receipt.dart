@@ -1,4 +1,5 @@
 import 'position_group.dart';
+import 'position_normalizer.dart';
 import 'receipt_models.dart';
 import 'recognized_position.dart';
 import 'recognized_receipt.dart';
@@ -25,7 +26,7 @@ final class CachedReceipt extends RecognizedReceipt {
     super.sumLabel,
     super.sum,
     super.company,
-    super.isValid,
+    super.scanComplete = false,
   }) : minScans = videoFeed ? 3 : 1;
 
   @override
@@ -40,7 +41,7 @@ final class CachedReceipt extends RecognizedReceipt {
     RecognizedSumLabel? sumLabel,
     RecognizedSum? sum,
     RecognizedCompany? company,
-    bool? isValid,
+    bool? scanComplete,
   }) {
     return CachedReceipt(
       positions: positions ?? this.positions,
@@ -53,7 +54,7 @@ final class CachedReceipt extends RecognizedReceipt {
       sumLabel: sumLabel ?? this.sumLabel,
       sum: sum ?? this.sum,
       company: company ?? this.company,
-      isValid: isValid ?? this.isValid,
+      scanComplete: scanComplete ?? this.scanComplete,
     );
   }
 
@@ -96,13 +97,15 @@ final class CachedReceipt extends RecognizedReceipt {
     }
 
     groups.sort((a, b) {
-      final simA = a.mostSimilar(position).similarity(position);
-      final simB = b.mostSimilar(position).similarity(position);
+      final simA = a.mostSimilarPosition(position).similarity(position);
+      final simB = b.mostSimilarPosition(position).similarity(position);
       return simA.compareTo(simB);
     });
 
     final bestGroup = groups.last;
-    final bestSim = bestGroup.mostSimilar(position).similarity(position);
+    final bestSim = bestGroup
+        .mostSimilarPosition(position)
+        .similarity(position);
 
     if (bestSim >= similarityThreshold) {
       _addToExistingGroup(position, bestGroup);
@@ -126,47 +129,45 @@ final class CachedReceipt extends RecognizedReceipt {
     positionGroups.add(group);
   }
 
+  RecognizedReceipt normalizeFromCache(RecognizedReceipt receipt) {
+    final List<RecognizedPosition> positions = [];
+
+    for (final position in receipt.positions) {
+      final mostTrustworthy = position.group.mostTrustworthyPosition(
+        trustworthyThreshold: trustworthyThreshold,
+        orElse: () => position,
+      );
+      positions.add(mostTrustworthy);
+    }
+
+    return receipt.copyWith(
+      positions: PositionNormalizer.normalize(positions),
+    );
+  }
+
   void consolidatePositions() {
     positions.clear();
 
     for (final group in positionGroups) {
-      final mostTrustworthy = group.mostTrustworthy(group.positions.first);
+      final mostTrustworthy = group.mostTrustworthyPosition(
+        trustworthyThreshold: trustworthyThreshold,
+        orElse: () => group.positions.first,
+      );
 
-      if (mostTrustworthy.trustworthiness >= trustworthyThreshold &&
-          group.positions.length >= minScans) {
-        positions.add(mostTrustworthy);
-      }
+      positions.add(mostTrustworthy);
 
       if (isCorrectSum) return;
     }
-  }
 
-  RecognizedReceipt normalize(RecognizedReceipt receipt) {
-    final List<RecognizedPosition> normalized = [];
-
-    for (final position in receipt.positions) {
-      final mostTrustworthy = position.group.mostTrustworthy(position);
-      normalized.add(mostTrustworthy);
-    }
-
-    normalized.sort((a, b) => b.group.timestamp.compareTo(a.group.timestamp));
-
-    return receipt.copyWith(positions: normalized);
-  }
-
-  void validate(RecognizedReceipt receipt) {
-    receipt.isValid = receipt.isCorrectSum && (isScanComplete || isLongReceipt);
-  }
-
-  bool get isScanComplete {
     final groups = positionGroups.where(
       (g) => g.positions.any((p) => positions.contains(p)),
     );
-    return groups.isNotEmpty &&
+    scanComplete =
+        groups.isNotEmpty &&
         groups.every((g) => g.positions.length >= minScans);
   }
 
   bool get isLongReceipt => positions.length >= minLongReceiptSize;
 
-  RecognizedReceipt get receipt => copyWith();
+  RecognizedReceipt get normalizedReceipt => normalizeFromCache(copyWith());
 }

@@ -5,7 +5,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'receipt_core.dart';
 import 'receipt_parser.dart';
 
-class ReceiptRecognizer {
+final class ReceiptRecognizer {
   final TextRecognizer _textRecognizer;
   final Optimizer _optimizer;
   final bool _videoFeed;
