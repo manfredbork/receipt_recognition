@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 import 'receipt_core.dart';
-import 'receipt_optimizer.dart';
+import 'core/default_optimizer.dart';
 import 'receipt_parser.dart';
 
 class ReceiptRecognizer {
@@ -30,7 +30,7 @@ class ReceiptRecognizer {
     Function(Progress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
-       _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
+       _optimizer = optimizer ?? DefaultOptimizer(videoFeed: videoFeed),
        _videoFeed = videoFeed,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
