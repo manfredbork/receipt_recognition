@@ -93,29 +93,20 @@ final class CachedReceipt extends RecognizedReceipt {
     }
 
     groups.sort((a, b) {
-      final simA = a.mostSimilarPosition(
-        compare: position,
-        similarityThreshold: similarityThreshold,
-        orElse: () => position,
-      );
-      final ratioA = simA.ratioProduct(position);
-      final simB = b.mostSimilarPosition(
-        compare: position,
-        similarityThreshold: similarityThreshold,
-        orElse: () => position,
-      );
-      final ratioB = simB.ratioProduct(position);
-      if (simA == position && simB == position) return 0;
-      if (simA == position) return 1;
-      if (simB == position) return -1;
-      return ratioA.compareTo(ratioB);
+      final simA = a
+          .mostSimilarPosition(compare: position, orElse: () => position)
+          .ratioProduct(position);
+      final simB = b
+          .mostSimilarPosition(compare: position, orElse: () => position)
+          .ratioProduct(position);
+      return simA.compareTo(simB);
     });
 
     final bestGroup = groups.last;
     final bestSim = bestGroup.mostSimilarPosition(
       compare: position,
-      similarityThreshold: similarityThreshold,
       orElse: () => position,
+      similarityThreshold: similarityThreshold,
     );
 
     if (bestSim.group.positions.isEmpty) {

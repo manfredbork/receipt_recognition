@@ -52,15 +52,15 @@ final class PositionGroup {
 
   RecognizedPosition mostSimilarPosition({
     required RecognizedPosition compare,
-    required int similarityThreshold,
     required RecognizedPosition Function() orElse,
+    int similarityThreshold = 0,
   }) {
     final ranked =
         positions..sort(
-          (a, b) => b.ratioProduct(compare).compareTo(a.ratioProduct(compare)),
+          (a, b) => a.ratioProduct(compare).compareTo(b.ratioProduct(compare)),
         );
 
-    final position = ranked.firstWhere(
+    final position = ranked.lastWhere(
       (p) => p.samePrice(compare),
       orElse: orElse,
     );
