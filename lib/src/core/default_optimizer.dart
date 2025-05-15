@@ -30,8 +30,7 @@ final class DefaultOptimizer implements Optimizer {
     _cachedReceipt.apply(receipt);
     _cachedReceipt.consolidatePositions();
 
-    if (receipt.isValid &&
-        (receipt.isSufficientlyScanned || receipt.isLongReceipt)) {
+    if (receipt.isValid) {
       return ReceiptNormalizer.normalize(receipt);
     }
 

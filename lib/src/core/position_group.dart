@@ -84,12 +84,15 @@ final class PositionGroup {
 
   RecognizedPosition mostSimilarPosition(RecognizedPosition compare) {
     final ranked = List<RecognizedPosition>.from(positions)..sort((a, b) {
-      if (a.timestamp.isAtSameMomentAs(b.timestamp)) {
-        return a.sameTimestamp(compare).compareTo(b.sameTimestamp(compare));
-      } else if (a.ratioProduct(compare) == b.ratioProduct(compare)) {
+      final compareTo = a
+          .ratioProduct(compare)
+          .compareTo(b.ratioProduct(compare));
+
+      if (compareTo == 0) {
         return a.samePrice(compare).compareTo(b.samePrice(compare));
       }
-      return a.ratioProduct(compare).compareTo(b.ratioProduct(compare));
+
+      return compareTo;
     });
 
     return ranked.last;

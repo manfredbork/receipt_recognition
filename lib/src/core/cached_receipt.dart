@@ -15,7 +15,7 @@ final class CachedReceipt extends RecognizedReceipt {
     required super.videoFeed,
     required this.positionGroups,
     this.similarityThreshold = 75,
-    this.trustworthyThreshold = 50,
+    this.trustworthyThreshold = 25,
     this.maxCacheSize = 20,
     super.sumLabel,
     super.sum,
@@ -113,9 +113,11 @@ final class CachedReceipt extends RecognizedReceipt {
     for (final group in positionGroups) {
       final mostTrustworthy = group.mostTrustworthyPosition(
         group.positions.first,
+        samePrice: false,
       );
 
-      if (mostTrustworthy.trustworthiness >= trustworthyThreshold) {
+      if (mostTrustworthy.trustworthiness >= trustworthyThreshold &&
+          isSufficientlyScanned) {
         positions.add(mostTrustworthy);
       }
 

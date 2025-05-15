@@ -58,13 +58,16 @@ final class ReceiptRecognizer {
 
     if (kDebugMode) {
       if (optimizedReceipt.positions.isNotEmpty) {
-        print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
+        print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
+        print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
+        print('======================================================');
         for (final position in optimizedReceipt.positions) {
           print(
             '${position.product.value} ${position.price.formattedValue} ${position.timestamp} ${position.trustworthiness}',
           );
         }
-        print(optimizedReceipt.calculatedSum.formattedValue);
+        print('======================================================');
+        print('Total: ${optimizedReceipt.calculatedSum.formattedValue}');
       }
     }
 
