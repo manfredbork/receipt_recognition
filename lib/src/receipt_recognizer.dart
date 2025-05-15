@@ -1,5 +1,4 @@
-import 'dart:ui';
-
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 import 'receipt_core.dart';
@@ -49,13 +48,25 @@ final class ReceiptRecognizer {
     _lastScan = now;
 
     final text = await _textRecognizer.processImage(inputImage);
-    final receipt = ReceiptParser.processText(text);
+    final receipt = ReceiptParser.processText(text)?.fromVideoFeed(_videoFeed);
 
     if (receipt == null) {
       return null;
     }
 
     final optimizedReceipt = _optimizer.optimize(receipt);
+
+    if (kDebugMode) {
+      if (optimizedReceipt.positions.isNotEmpty) {
+        print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
+        for (final position in optimizedReceipt.positions) {
+          print(
+            '${position.product.value} ${position.price.formattedValue} ${position.timestamp} ${position.trustworthiness}',
+          );
+        }
+        print(optimizedReceipt.calculatedSum.formattedValue);
+      }
+    }
 
     if (optimizedReceipt.isValid) {
       _initializedScan = null;

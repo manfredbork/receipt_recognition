@@ -4,35 +4,30 @@ import 'recognized_position.dart';
 import 'recognized_receipt.dart';
 
 final class CachedReceipt extends RecognizedReceipt {
-  final int minScans;
-
   List<PositionGroup> positionGroups;
-  bool videoFeed;
   int similarityThreshold;
   int trustworthyThreshold;
   int maxCacheSize;
-  int minLongReceiptSize;
 
   CachedReceipt({
     required super.positions,
     required super.timestamp,
+    required super.videoFeed,
     required this.positionGroups,
-    required this.videoFeed,
-    this.similarityThreshold = 50,
-    this.trustworthyThreshold = 25,
+    this.similarityThreshold = 75,
+    this.trustworthyThreshold = 50,
     this.maxCacheSize = 20,
-    this.minLongReceiptSize = 20,
     super.sumLabel,
     super.sum,
     super.company,
-  }) : minScans = videoFeed ? 3 : 1;
+  });
 
   @override
   CachedReceipt copyWith({
     List<RecognizedPosition>? positions,
     DateTime? timestamp,
-    List<PositionGroup>? positionGroups,
     bool? videoFeed,
+    List<PositionGroup>? positionGroups,
     int? similarityThreshold,
     int? trustworthyThreshold,
     int? maxCacheSize,
@@ -43,8 +38,8 @@ final class CachedReceipt extends RecognizedReceipt {
     return CachedReceipt(
       positions: positions ?? this.positions,
       timestamp: timestamp ?? this.timestamp,
-      positionGroups: positionGroups ?? this.positionGroups,
       videoFeed: videoFeed ?? this.videoFeed,
+      positionGroups: positionGroups ?? this.positionGroups,
       similarityThreshold: similarityThreshold ?? this.similarityThreshold,
       trustworthyThreshold: trustworthyThreshold ?? this.trustworthyThreshold,
       maxCacheSize: maxCacheSize ?? this.maxCacheSize,
@@ -53,20 +48,6 @@ final class CachedReceipt extends RecognizedReceipt {
       company: company ?? this.company,
     );
   }
-
-  factory CachedReceipt.fromVideoFeed() => CachedReceipt(
-    positions: [],
-    timestamp: DateTime.now(),
-    positionGroups: [],
-    videoFeed: true,
-  );
-
-  factory CachedReceipt.fromImages() => CachedReceipt(
-    positions: [],
-    timestamp: DateTime.now(),
-    positionGroups: [],
-    videoFeed: false,
-  );
 
   void clear() {
     positions.clear();
@@ -93,23 +74,18 @@ final class CachedReceipt extends RecognizedReceipt {
     }
 
     groups.sort((a, b) {
-      final simA = a
-          .mostSimilarPosition(compare: position, orElse: () => position)
-          .ratioProduct(position);
-      final simB = b
-          .mostSimilarPosition(compare: position, orElse: () => position)
-          .ratioProduct(position);
-      return simA.compareTo(simB);
+      return a
+          .mostSimilarPosition(position)
+          .ratioProduct(position)
+          .compareTo(b.mostSimilarPosition(position).ratioProduct(position));
     });
 
     final bestGroup = groups.last;
-    final bestSim = bestGroup.mostSimilarPosition(
-      compare: position,
-      orElse: () => position,
-      similarityThreshold: similarityThreshold,
-    );
+    final bestSim = bestGroup
+        .mostSimilarPosition(position)
+        .ratioProduct(position);
 
-    if (bestSim.group.positions.isEmpty) {
+    if (bestSim < similarityThreshold) {
       _addToNewGroup(position, newGroup);
     } else {
       _addToExistingGroup(position, bestGroup);
@@ -132,22 +108,21 @@ final class CachedReceipt extends RecognizedReceipt {
   }
 
   void consolidatePositions() {
-    final isLongReceipt = positions.length >= minLongReceiptSize;
-
-    positions.clear();
+    final List<RecognizedPosition> positions = [];
 
     for (final group in positionGroups) {
       final mostTrustworthy = group.mostTrustworthyPosition(
-        compare: group.positions.first,
-        trustworthyThreshold: trustworthyThreshold,
-        orElse: () => group.positions.first,
+        group.positions.first,
       );
 
-      if (group.positions.length >= minScans || isLongReceipt) {
+      if (mostTrustworthy.trustworthiness >= trustworthyThreshold) {
         positions.add(mostTrustworthy);
       }
 
-      if (isValid) return;
+      if (isValid) break;
     }
+
+    this.positions.clear();
+    this.positions.addAll(positions);
   }
 }

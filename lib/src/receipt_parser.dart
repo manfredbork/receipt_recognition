@@ -94,7 +94,7 @@ final class ReceiptParser {
   static List<RecognizedEntity> _shrinkEntities(
     List<RecognizedEntity> entities,
   ) {
-    final List<RecognizedEntity> shrunken = List.from(entities);
+    final shrunken = List<RecognizedEntity>.from(entities);
     final yAmounts =
         shrunken.whereType<RecognizedAmount>().toList()..sort(
           (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),

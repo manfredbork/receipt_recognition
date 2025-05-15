@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'cached_receipt.dart';
 import 'optimizer_interface.dart';
 import 'receipt_normalizer.dart';
@@ -10,10 +8,12 @@ final class DefaultOptimizer implements Optimizer {
   bool _isInitialized = false;
 
   DefaultOptimizer({required bool videoFeed})
-    : _cachedReceipt =
-          videoFeed
-              ? CachedReceipt.fromVideoFeed()
-              : CachedReceipt.fromImages();
+    : _cachedReceipt = CachedReceipt(
+        positions: [],
+        timestamp: DateTime.now(),
+        videoFeed: videoFeed,
+        positionGroups: [],
+      );
 
   @override
   void init() {
@@ -30,25 +30,12 @@ final class DefaultOptimizer implements Optimizer {
     _cachedReceipt.apply(receipt);
     _cachedReceipt.consolidatePositions();
 
-    if (receipt.isValid) {
+    if (receipt.isValid &&
+        (receipt.isSufficientlyScanned || receipt.isLongReceipt)) {
       return ReceiptNormalizer.normalize(receipt);
     }
 
-    final cachedReceipt = ReceiptNormalizer.normalize(_cachedReceipt);
-
-    if (kDebugMode) {
-      if (cachedReceipt.positions.isNotEmpty) {
-        print('-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_');
-        for (final position in cachedReceipt.positions) {
-          print(
-            '${position.product.value} ${position.price.formattedValue} ${position.timestamp}',
-          );
-        }
-        print(cachedReceipt.calculatedSum.formattedValue);
-      }
-    }
-
-    return cachedReceipt.isValid ? cachedReceipt : receipt;
+    return ReceiptNormalizer.normalize(_cachedReceipt);
   }
 
   @override
