@@ -6,7 +6,6 @@ import 'recognized_receipt.dart';
 final class CachedReceipt extends RecognizedReceipt {
   List<PositionGroup> positionGroups;
   int similarityThreshold;
-  int trustworthyThreshold;
   int maxCacheSize;
 
   CachedReceipt({
@@ -14,8 +13,7 @@ final class CachedReceipt extends RecognizedReceipt {
     required super.timestamp,
     required super.videoFeed,
     required this.positionGroups,
-    this.similarityThreshold = 75,
-    this.trustworthyThreshold = 25,
+    this.similarityThreshold = 50,
     this.maxCacheSize = 20,
     super.sumLabel,
     super.sum,
@@ -29,7 +27,6 @@ final class CachedReceipt extends RecognizedReceipt {
     bool? videoFeed,
     List<PositionGroup>? positionGroups,
     int? similarityThreshold,
-    int? trustworthyThreshold,
     int? maxCacheSize,
     RecognizedSumLabel? sumLabel,
     RecognizedSum? sum,
@@ -41,7 +38,6 @@ final class CachedReceipt extends RecognizedReceipt {
       videoFeed: videoFeed ?? this.videoFeed,
       positionGroups: positionGroups ?? this.positionGroups,
       similarityThreshold: similarityThreshold ?? this.similarityThreshold,
-      trustworthyThreshold: trustworthyThreshold ?? this.trustworthyThreshold,
       maxCacheSize: maxCacheSize ?? this.maxCacheSize,
       sumLabel: sumLabel ?? this.sumLabel,
       sum: sum ?? this.sum,
@@ -114,10 +110,10 @@ final class CachedReceipt extends RecognizedReceipt {
       final mostTrustworthy = group.mostTrustworthyPosition(
         group.positions.first,
         samePrice: false,
+        similarityThreshold: similarityThreshold,
       );
 
-      if (mostTrustworthy.trustworthiness >= trustworthyThreshold &&
-          isSufficientlyScanned) {
+      if (group.positions.length >= minScans) {
         positions.add(mostTrustworthy);
       }
 

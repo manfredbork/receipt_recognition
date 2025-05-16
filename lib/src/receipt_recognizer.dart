@@ -63,7 +63,7 @@ final class ReceiptRecognizer {
         print('======================================================');
         for (final position in optimizedReceipt.positions) {
           print(
-            '${position.product.value} ${position.price.formattedValue} ${position.timestamp} ${position.trustworthiness}',
+            '${position.product.value} ${position.price.formattedValue} ${position.timestamp}',
           );
         }
         print('======================================================');

@@ -1,3 +1,5 @@
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
+
 import 'recognized_position.dart';
 
 final class PositionGroup {
@@ -13,32 +15,17 @@ final class PositionGroup {
     return PositionGroup(positions: [position]);
   }
 
-  int calculateTrustworthiness(
-    RecognizedPosition compare, {
-    sameProduct = true,
-    samePrice = true,
-  }) {
-    final topRank = bestTrustworthyRank(
-      compare,
-      sameProduct: sameProduct,
-      samePrice: samePrice,
-    );
-
-    if (topRank == null) return 0;
-
-    return (topRank.value / positions.length * 100).toInt();
-  }
-
   MapEntry<(String, String), int>? bestTrustworthyRank(
     RecognizedPosition compare, {
-    sameProduct = false,
+    similarProduct = false,
     samePrice = true,
+    similarityThreshold = 50,
   }) {
     final rank = <(String, String), int>{};
 
     for (final position in positions) {
-      final product = position.product.value;
-      final price = position.price.formattedValue;
+      final product = similarProduct ? position.product.value : '';
+      final price = samePrice ? position.price.formattedValue : '';
       final key = (product, price);
       rank[key] = (rank[key] ?? 0) + 1;
     }
@@ -49,7 +36,10 @@ final class PositionGroup {
     if (ranked.isNotEmpty) {
       final lastIndex = ranked.lastIndexWhere(
         (r) =>
-            (sameProduct ? compare.product.formattedValue == r.key.$1 : true) &&
+            (similarProduct
+                ? ratio(compare.product.formattedValue, r.key.$1) >=
+                    similarityThreshold
+                : true) &&
             (samePrice ? compare.price.formattedValue == r.key.$2 : true),
       );
       if (lastIndex < 0) {
@@ -63,21 +53,21 @@ final class PositionGroup {
 
   RecognizedPosition mostTrustworthyPosition(
     RecognizedPosition compare, {
-    sameProduct = false,
+    similarProduct = false,
     samePrice = true,
+    similarityThreshold = 50,
   }) {
     final topRank = bestTrustworthyRank(
       compare,
-      sameProduct: sameProduct,
+      similarProduct: similarProduct,
       samePrice: samePrice,
+      similarityThreshold: similarityThreshold,
     );
 
     if (topRank == null) return compare;
 
     return positions.firstWhere(
-      (p) =>
-          p.product.value == topRank.key.$1 &&
-          p.price.formattedValue == topRank.key.$2,
+      (p) => (samePrice ? p.price.formattedValue == topRank.key.$2 : true),
       orElse: () => compare,
     );
   }
