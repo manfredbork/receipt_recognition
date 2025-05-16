@@ -11,7 +11,7 @@ final class ReceiptParser {
     caseSensitive: false,
   );
   static final RegExp patternIgnoreKeywords = RegExp(
-    r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk|EUR/kg)',
+    r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk|EUR[A-Za-z])',
     caseSensitive: false,
   );
   static final RegExp patternIgnoreNumbers = RegExp(

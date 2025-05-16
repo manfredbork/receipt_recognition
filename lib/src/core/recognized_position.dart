@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 
 import 'position_group.dart';
@@ -22,7 +24,6 @@ final class RecognizedPosition {
     RecognizedProduct? product,
     RecognizedPrice? price,
     DateTime? timestamp,
-    int? trustworthiness,
     PositionGroup? group,
     Operation? operation,
   }) {
@@ -35,15 +36,12 @@ final class RecognizedPosition {
     );
   }
 
-  int samePrice(RecognizedPosition other) {
-    return 1 - price.formattedValue.compareTo(other.price.formattedValue).abs();
-  }
-
   int ratioProduct(RecognizedPosition other) {
-    if (timestamp.isAtSameMomentAs(other.timestamp)) {
-      return 0;
-    }
-
-    return ratio(product.value, other.product.value);
+    return max(
+      ratio(product.value, other.product.value),
+      partialRatio(product.value, other.product.value),
+    );
   }
+
+  int get trustworthiness => group.calculateTrustworthiness(this);
 }

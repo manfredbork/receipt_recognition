@@ -4,7 +4,6 @@ import 'recognized_position.dart';
 class RecognizedReceipt {
   List<RecognizedPosition> positions;
   DateTime timestamp;
-  int minLongReceiptSize;
   int minScans;
   bool? videoFeed;
   RecognizedSumLabel? sumLabel;
@@ -18,8 +17,7 @@ class RecognizedReceipt {
     this.sumLabel,
     this.sum,
     this.company,
-  }) : minLongReceiptSize = 20,
-       minScans = videoFeed == true ? 3 : 1;
+  }) : minScans = videoFeed == true ? 3 : 1;
 
   factory RecognizedReceipt.empty() =>
       RecognizedReceipt(positions: [], timestamp: DateTime.now());
@@ -44,6 +42,7 @@ class RecognizedReceipt {
 
   RecognizedReceipt fromVideoFeed(bool videoFeed) {
     this.videoFeed = videoFeed;
+
     return this;
   }
 
@@ -51,9 +50,4 @@ class RecognizedReceipt {
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
 
   bool get isValid => calculatedSum.formattedValue == sum?.formattedValue;
-
-  bool get isLongReceipt => positions.length >= minLongReceiptSize;
-
-  bool get isSufficientlyScanned =>
-      positions.every((p) => p.group.positions.length >= minScans);
 }

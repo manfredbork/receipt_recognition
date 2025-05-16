@@ -1,5 +1,4 @@
-import 'package:fuzzywuzzy/fuzzywuzzy.dart';
-
+import 'receipt_models.dart';
 import 'recognized_position.dart';
 
 final class PositionGroup {
@@ -15,17 +14,20 @@ final class PositionGroup {
     return PositionGroup(positions: [position]);
   }
 
-  MapEntry<(String, String), int>? bestTrustworthyRank(
-    RecognizedPosition compare, {
-    similarProduct = false,
-    samePrice = true,
-    similarityThreshold = 50,
+  PositionGroup copyWith({
+    List<RecognizedPosition>? positions,
+    RecognizedProduct? frozenProduct,
+    RecognizedPrice? frozenPrice,
   }) {
+    return PositionGroup(positions: positions ?? this.positions);
+  }
+
+  MapEntry<(String, String), int>? bestTrustworthyRank() {
     final rank = <(String, String), int>{};
 
     for (final position in positions) {
-      final product = similarProduct ? position.product.value : '';
-      final price = samePrice ? position.price.formattedValue : '';
+      final product = position.product.value;
+      final price = position.price.formattedValue;
       final key = (product, price);
       rank[key] = (rank[key] ?? 0) + 1;
     }
@@ -34,57 +36,35 @@ final class PositionGroup {
         rank.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
 
     if (ranked.isNotEmpty) {
-      final lastIndex = ranked.lastIndexWhere(
-        (r) =>
-            (similarProduct
-                ? ratio(compare.product.formattedValue, r.key.$1) >=
-                    similarityThreshold
-                : true) &&
-            (samePrice ? compare.price.formattedValue == r.key.$2 : true),
-      );
-      if (lastIndex < 0) {
-        return null;
-      }
-      return ranked[lastIndex];
+      return ranked.last;
     }
 
     return null;
   }
 
-  RecognizedPosition mostTrustworthyPosition(
-    RecognizedPosition compare, {
-    similarProduct = false,
-    samePrice = true,
-    similarityThreshold = 50,
-  }) {
-    final topRank = bestTrustworthyRank(
-      compare,
-      similarProduct: similarProduct,
-      samePrice: samePrice,
-      similarityThreshold: similarityThreshold,
-    );
-
-    if (topRank == null) return compare;
+  RecognizedPosition mostTrustworthyPosition() {
+    final topRank = bestTrustworthyRank();
 
     return positions.firstWhere(
-      (p) => (samePrice ? p.price.formattedValue == topRank.key.$2 : true),
-      orElse: () => compare,
+      (p) =>
+          p.product.value == topRank?.key.$1 &&
+          p.price.formattedValue == topRank?.key.$2,
     );
   }
 
-  RecognizedPosition mostSimilarPosition(RecognizedPosition compare) {
-    final ranked = List<RecognizedPosition>.from(positions)..sort((a, b) {
-      final compareTo = a
-          .ratioProduct(compare)
-          .compareTo(b.ratioProduct(compare));
+  int calculateTrustworthiness(RecognizedPosition position) {
+    final count = positions.fold(
+      0,
+      (a, b) =>
+          a +
+          (b.product.formattedValue == position.product.formattedValue ? 1 : 0),
+    );
 
-      if (compareTo == 0) {
-        return a.samePrice(compare).compareTo(b.samePrice(compare));
-      }
-
-      return compareTo;
-    });
-
-    return ranked.last;
+    return (count / positions.length * 100).toInt();
   }
+
+  RecognizedPosition mostSimilarPosition(RecognizedPosition compare) =>
+      positions.reduce(
+        (a, b) => a.ratioProduct(compare) > b.ratioProduct(compare) ? a : b,
+      );
 }
