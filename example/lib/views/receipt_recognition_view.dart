@@ -38,9 +38,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
   }
 
   void _initializeCamera() async {
-    if (_cameras.isEmpty) {
-      _cameras = await availableCameras();
-    }
+    _cameras = await availableCameras();
     for (var cam in _cameras) {
       if (cam.lensDirection == CameraLensDirection.back) {
         _cameraBack = cam;
@@ -71,27 +69,30 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     if (_receiptRecognizer == null || !_canProcess || !_isReady || _isBusy) {
       return;
     }
+
     _isBusy = true;
-
-    final receipt = await _receiptRecognizer?.processImage(inputImage);
-
-    if (receipt != null && receipt.positions.isNotEmpty) {
-      _receipt = receipt;
-      _canProcess = false;
-      if (mounted) {
-        HapticFeedback.lightImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Scan succeed', textAlign: TextAlign.center),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
+    try {
+      final receipt = await _receiptRecognizer?.processImage(inputImage);
+      if (receipt != null && receipt.positions.isNotEmpty) {
+        _receipt = receipt;
+        _canProcess = false;
+        if (mounted) {
+          HapticFeedback.lightImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Scan succeed', textAlign: TextAlign.center),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
       }
+    } catch (e, st) {
+      debugPrint('Image processing error: $e\n$st');
+    } finally {
+      _isBusy = false;
+      if (mounted) setState(() {});
     }
-
-    _isBusy = false;
-    if (mounted) setState(() {});
   }
 
   @override
@@ -103,7 +104,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     if (_cameraBack == null ||
         _cameraController == null ||
         !_cameraController!.value.isInitialized) {
-      return Container();
+      return const Center(child: CircularProgressIndicator());
     }
     return Scaffold(
       body: ColoredBox(
@@ -120,7 +121,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
       ),
       floatingActionButton:
           !_isReady || _canProcess
-              ? Container()
+              ? null
               : FloatingActionButton.extended(
                 onPressed: () {
                   setState(() {
@@ -128,15 +129,15 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
                     _canProcess = true;
                   });
                 },
-                label: Text('Scan receipt'),
-                icon: Icon(Icons.document_scanner_outlined),
+                label: const Text('Scan receipt'),
+                icon: const Icon(Icons.document_scanner_outlined),
               ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
   @override
-  void dispose() async {
+  void dispose() {
     _canProcess = false;
     _isReady = false;
     _isBusy = false;
@@ -145,7 +146,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     super.dispose();
   }
 
-  Future _startLiveFeed() async {
+  Future<void> _startLiveFeed() async {
     _cameraController = CameraController(
       _cameraBack!,
       ResolutionPreset.high,
@@ -155,20 +156,20 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
               ? ImageFormatGroup.nv21
               : ImageFormatGroup.bgra8888,
     );
+
     await _cameraController?.initialize();
     if (!mounted) return;
     await _cameraController?.lockCaptureOrientation(
       DeviceOrientation.portraitUp,
     );
-    await _cameraController?.startImageStream(_processCameraImage).then((
-      value,
-    ) {
+
+    _cameraController?.startImageStream(_processCameraImage).then((_) {
       _isReady = true;
+      if (mounted) setState(() {});
     });
-    setState(() {});
   }
 
-  Future _stopLiveFeed() async {
+  Future<void> _stopLiveFeed() async {
     await _cameraController?.stopImageStream();
     await _cameraController?.dispose();
     _cameraController = null;
@@ -176,13 +177,16 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
 
   void _processCameraImage(CameraImage image) {
     if (!_canProcess || _isBusy) return;
+
     final inputImage = _inputImageFromCameraImage(image);
-    if (inputImage == null) return;
-    _processImage(inputImage);
+    if (inputImage != null) {
+      _processImage(inputImage);
+    }
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {
-    if (_cameraController == null) return null;
+    if (_cameraController == null || image.planes.isEmpty) return null;
+
     final sensorOrientation = _cameraBack?.sensorOrientation ?? 0;
     InputImageRotation? rotation;
     if (Platform.isIOS) {
@@ -195,22 +199,29 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
         (sensorOrientation - rotationCompensation + 360) % 360,
       );
     }
+
     if (rotation == null) return null;
+
     final format = InputImageFormatValue.fromRawValue(image.format.raw);
     if (format == null ||
         (Platform.isAndroid && format != InputImageFormat.nv21) ||
         (Platform.isIOS && format != InputImageFormat.bgra8888)) {
       return null;
     }
-    if (image.planes.isEmpty) return null;
-    final plane = image.planes.first;
+
+    final WriteBuffer allBytes = WriteBuffer();
+    for (final Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
+    }
+    final bytes = allBytes.done().buffer.asUint8List();
+
     return InputImage.fromBytes(
-      bytes: plane.bytes,
+      bytes: bytes,
       metadata: InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
         rotation: rotation,
         format: format,
-        bytesPerRow: plane.bytesPerRow,
+        bytesPerRow: image.planes.first.bytesPerRow,
       ),
     );
   }

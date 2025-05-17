@@ -15,7 +15,7 @@ final class CachedReceipt extends RecognizedReceipt {
     required super.videoFeed,
     required this.positionGroups,
     this.similarityThreshold = 75,
-    this.trustworthyThreshold = 50,
+    this.trustworthyThreshold = 40,
     this.maxCacheSize = 20,
     super.sumLabel,
     super.sum,

@@ -23,7 +23,7 @@ final class ReceiptRecognizer {
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
     bool videoFeed = true,
-    Duration scanInterval = const Duration(milliseconds: 100),
+    Duration scanInterval = const Duration(milliseconds: 50),
     Duration scanTimeout = const Duration(seconds: 30),
     VoidCallback? onScanTimeout,
     Function(ScanProgress)? onScanUpdate,
@@ -42,7 +42,9 @@ final class ReceiptRecognizer {
 
     if (_isProcessing) return null;
 
-    if (_videoFeed && now.difference(_lastScan ?? now) < _scanInterval) {
+    if (_videoFeed &&
+        _lastScan != null &&
+        now.difference(_lastScan!) < _scanInterval) {
       return null;
     }
 
