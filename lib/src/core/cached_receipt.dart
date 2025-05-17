@@ -16,7 +16,7 @@ final class CachedReceipt extends RecognizedReceipt {
     required this.positionGroups,
     this.similarityThreshold = 75,
     this.trustworthyThreshold = 50,
-    this.maxCacheSize = 10,
+    this.maxCacheSize = 20,
     super.sumLabel,
     super.sum,
     super.company,
@@ -52,16 +52,16 @@ final class CachedReceipt extends RecognizedReceipt {
   void clear() {
     positions.clear();
     positionGroups.clear();
+    sumLabel = null;
+    sum = null;
+    company = null;
   }
 
   void apply(RecognizedReceipt receipt) {
-    sumLabel ??= receipt.sumLabel;
-    sum ??= receipt.sum;
-    company ??= receipt.company;
-
-    receipt.sumLabel = sumLabel;
-    receipt.sum = sum;
-    receipt.company = company;
+    timestamp = receipt.timestamp;
+    sumLabel = receipt.sumLabel ?? sumLabel;
+    sum = receipt.sum ?? sum;
+    company = receipt.company ?? company;
 
     for (final position in receipt.positions) {
       _applyPosition(position);
@@ -69,8 +69,15 @@ final class CachedReceipt extends RecognizedReceipt {
   }
 
   void _applyPosition(RecognizedPosition position) {
-    final groups = positionGroups;
     final newGroup = PositionGroup.fromPosition(position);
+    final groups =
+        positionGroups
+            .where(
+              (g) => g.positions.every(
+                (p) => !p.timestamp.isAtSameMomentAs(position.timestamp),
+              ),
+            )
+            .toList();
 
     if (groups.isEmpty) {
       _addToNewGroup(position, newGroup);
@@ -85,10 +92,11 @@ final class CachedReceipt extends RecognizedReceipt {
     );
 
     final bestGroup = groups.last;
-    final bestSim = bestGroup.mostSimilarPosition(position);
-    final bestRatio = bestSim.ratioProduct(position);
+    final bestSim = bestGroup
+        .mostSimilarPosition(position)
+        .ratioProduct(position);
 
-    if (bestRatio < similarityThreshold) {
+    if (bestSim < similarityThreshold) {
       _addToNewGroup(position, newGroup);
     } else {
       _addToExistingGroup(position, bestGroup);
@@ -109,23 +117,35 @@ final class CachedReceipt extends RecognizedReceipt {
   void _addToNewGroup(RecognizedPosition position, PositionGroup group) {
     position.group = group;
     position.operation = Operation.added;
+
     positionGroups.add(group);
   }
 
   void consolidatePositions() {
     final List<RecognizedPosition> positions = [];
+    final List<PositionGroup> groupsToRemove = [];
+
+    positionGroups.sort(
+      (b, a) => a.trustworthiness.compareTo(b.trustworthiness),
+    );
 
     for (final group in positionGroups) {
-      final mostTrustworthy = group.mostTrustworthyPosition();
-
       if (group.positions.length >= minScans) {
-        positions.add(mostTrustworthy);
+        final mostTrustworthy = group.mostTrustworthyPosition();
+        if (mostTrustworthy.trustworthiness > trustworthyThreshold) {
+          positions.add(mostTrustworthy);
+        } else {
+          groupsToRemove.add(mostTrustworthy.group);
+        }
       }
 
-      if (isValid) break;
+      if (isValid) {
+        break;
+      }
     }
 
-    positions.removeWhere((p) => p.trustworthiness < trustworthyThreshold);
+    positionGroups.removeWhere((g) => groupsToRemove.contains(g));
+    positions.sort((b, a) => a.timestamp.compareTo(b.timestamp));
 
     this.positions.clear();
     this.positions.addAll(positions);

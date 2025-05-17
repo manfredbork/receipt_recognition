@@ -67,4 +67,6 @@ final class PositionGroup {
       positions.reduce(
         (a, b) => a.ratioProduct(compare) > b.ratioProduct(compare) ? a : b,
       );
+
+  int get trustworthiness => mostTrustworthyPosition().trustworthiness;
 }

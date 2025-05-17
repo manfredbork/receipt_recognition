@@ -67,7 +67,10 @@ final class ReceiptRecognizer {
           );
         }
         print('======================================================');
-        print('Total: ${optimizedReceipt.calculatedSum.formattedValue}');
+        print('Recognized sum: ${optimizedReceipt.sum?.formattedValue}');
+        print(
+          'Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
+        );
       }
     }
 
