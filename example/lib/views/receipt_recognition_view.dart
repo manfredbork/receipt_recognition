@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:example/views/receipt_widget.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// A Flutter widget that opens the camera, scans supermarket receipts,
+/// and overlays the parsed receipt items.
+///
+/// It integrates with the [ReceiptRecognizer] and handles platform-specific
+/// image stream conversion for ML Kit OCR.
 class ReceiptRecognitionView extends StatefulWidget {
   const ReceiptRecognitionView({super.key});
 
@@ -37,6 +43,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     _initializeCamera();
   }
 
+  /// Initializes the camera and starts the live feed.
   void _initializeCamera() async {
     _cameras = await availableCameras();
     for (var cam in _cameras) {
@@ -48,10 +55,12 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     }
   }
 
+  /// Instantiates the [ReceiptRecognizer] with timeout handling.
   void _initializeReceiptRecognizer() {
     _receiptRecognizer = ReceiptRecognizer(onScanTimeout: _onScanTimeout);
   }
 
+  /// Called if scanning times out without producing a valid receipt.
   void _onScanTimeout() {
     _canProcess = false;
     HapticFeedback.lightImpact();
@@ -65,6 +74,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     if (mounted) setState(() {});
   }
 
+  /// Sends the image to [ReceiptRecognizer] and handles result or failure.
   Future<void> _processImage(InputImage inputImage) async {
     if (_receiptRecognizer == null || !_canProcess || !_isReady || _isBusy) {
       return;
@@ -100,6 +110,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     return _liveFeed();
   }
 
+  /// Shows the live camera feed with overlaid receipt results, if any.
   Widget _liveFeed() {
     if (_cameraBack == null ||
         _cameraController == null ||
@@ -146,6 +157,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     super.dispose();
   }
 
+  /// Starts camera stream and feeds image frames to the OCR engine.
   Future<void> _startLiveFeed() async {
     _cameraController = CameraController(
       _cameraBack!,
@@ -169,12 +181,14 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     });
   }
 
+  /// Stops the camera and releases camera controller resources.
   Future<void> _stopLiveFeed() async {
     await _cameraController?.stopImageStream();
     await _cameraController?.dispose();
     _cameraController = null;
   }
 
+  /// Converts raw [CameraImage] into [InputImage] and processes it.
   void _processCameraImage(CameraImage image) {
     if (!_canProcess || _isBusy) return;
 
@@ -184,11 +198,13 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     }
   }
 
+  /// Converts platform-specific camera image format to ML Kit-compatible [InputImage].
   InputImage? _inputImageFromCameraImage(CameraImage image) {
     if (_cameraController == null || image.planes.isEmpty) return null;
 
     final sensorOrientation = _cameraBack?.sensorOrientation ?? 0;
     InputImageRotation? rotation;
+
     if (Platform.isIOS) {
       rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
     } else if (Platform.isAndroid) {

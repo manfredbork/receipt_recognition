@@ -4,29 +4,47 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Parses OCR-detected [RecognizedText] into structured receipt data.
+///
+/// This parser detects store/company names, product lines, totals, and
+/// prices using patterns, positions, and bounding box geometry.
 final class ReceiptParser {
+  /// Keywords that indicate the logical end of a receipt (e.g. taxes).
   static final RegExp patternStopKeywords = RegExp(
     r'(Geg.|Rückgeld|Steuer|Brutto)',
     caseSensitive: false,
   );
+
+  /// Keywords or patterns to ignore during parsing.
   static final RegExp patternIgnoreKeywords = RegExp(
     r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk|EUR[^A-Za-z])',
     caseSensitive: false,
   );
+
+  /// Detects long numbers that are likely IDs or totals (not prices).
   static final RegExp patternIgnoreNumbers = RegExp(
     r'\d{1,3}(?:\s?[.,]\s?\d{3})+',
   );
+
+  /// Detects common German supermarket brands.
   static final RegExp patternCompany = RegExp(
     r'(Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)',
     caseSensitive: false,
   );
+
+  /// Detects sum labels like "SUMME" or "TOTAL".
   static final RegExp patternSumLabel = RegExp(
     r'(Zu zahlen|Summe|Total)',
     caseSensitive: false,
   );
+
+  /// Matches generic unknown text lines.
   static final RegExp patternUnknown = RegExp(r'[^\d]{6,}');
+
+  /// Matches currency-style amounts (e.g. 1,99 or 2.50).
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 
+  /// High-level method to convert OCR [RecognizedText] into a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
@@ -39,18 +57,17 @@ final class ReceiptParser {
       ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
+  /// Parses lines into [RecognizedEntity] types based on regex rules.
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
     final parsed = <RecognizedEntity>[];
-
     bool detectedCompany = false;
     bool detectedSumLabel = false;
 
     for (final line in lines) {
       if (patternStopKeywords.hasMatch(line.text)) break;
       if (patternIgnoreKeywords.hasMatch(line.text) ||
-          patternIgnoreNumbers.hasMatch(line.text)) {
+          patternIgnoreNumbers.hasMatch(line.text))
         continue;
-      }
 
       final company = patternCompany.stringMatch(line.text);
       if (company != null && !detectedCompany) {
@@ -90,6 +107,7 @@ final class ReceiptParser {
     return Intl.defaultLocale;
   }
 
+  /// Removes entities likely to be noise or outside receipt bounds.
   static List<RecognizedEntity> _shrinkEntities(
     List<RecognizedEntity> entities,
   ) {
@@ -118,6 +136,7 @@ final class ReceiptParser {
     }
 
     shrunken.removeWhere((a) => shrunken.every((b) => _isInvalid(a, b)));
+
     final xAmounts =
         shrunken.whereType<RecognizedAmount>().toList()..sort(
           (a, b) => a.line.boundingBox.left.compareTo(b.line.boundingBox.left),
@@ -161,6 +180,7 @@ final class ReceiptParser {
     return a.line.boundingBox.top > b.line.boundingBox.bottom;
   }
 
+  /// Tries to match a recognized sum label with its nearest amount.
   static RecognizedSum? _findSum(
     List<RecognizedEntity> entities,
     RecognizedSumLabel sumLabel,
@@ -186,6 +206,10 @@ final class ReceiptParser {
     return null;
   }
 
+  /// Builds the final [RecognizedReceipt] from the list of structured entities.
+  ///
+  /// Matches unknowns to amounts based on spatial proximity and constructs
+  /// positions from those pairs.
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
