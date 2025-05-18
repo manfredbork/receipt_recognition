@@ -19,9 +19,3 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   String formattedValue;
 }
 
-final class RecognizedPrice extends RecognizedEntity<num> {
-  RecognizedPrice({required super.line, required super.value});
-
-  @override
-  String format(num value) => ReceiptFormatter.format(value);
-}
