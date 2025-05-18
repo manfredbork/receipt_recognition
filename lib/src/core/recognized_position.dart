@@ -36,6 +36,18 @@ final class RecognizedPosition {
     );
   }
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RecognizedPosition &&
+          runtimeType == other.runtimeType &&
+          product.value == other.product.value &&
+          price.value == other.price.value &&
+          timestamp == other.timestamp;
+
+  @override
+  int get hashCode => Object.hash(product.value, price.value, timestamp);
+
   int ratioProduct(RecognizedPosition other) {
     return max(
       ratio(product.value, other.product.value),

@@ -1,3 +1,5 @@
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
+
 import 'position_group.dart';
 import 'receipt_models.dart';
 import 'recognized_position.dart';
@@ -122,7 +124,7 @@ final class CachedReceipt extends RecognizedReceipt {
   }
 
   void consolidatePositions() {
-    final List<RecognizedPosition> positions = [];
+    final List<RecognizedPosition> validPositions = [];
     final List<PositionGroup> groupsToRemove = [];
 
     positionGroups.sort(
@@ -133,21 +135,51 @@ final class CachedReceipt extends RecognizedReceipt {
       if (group.positions.length >= minScans) {
         final mostTrustworthy = group.mostTrustworthyPosition();
         if (mostTrustworthy.trustworthiness > trustworthyThreshold) {
-          positions.add(mostTrustworthy);
+          validPositions.add(mostTrustworthy);
         } else {
-          groupsToRemove.add(mostTrustworthy.group);
+          groupsToRemove.add(group);
         }
       }
-
       if (isValid) {
         break;
       }
     }
 
     positionGroups.removeWhere((g) => groupsToRemove.contains(g));
-    positions.sort((b, a) => a.timestamp.compareTo(b.timestamp));
 
-    this.positions.clear();
-    this.positions.addAll(positions);
+    removeOutliers();
+
+    validPositions.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    positions
+      ..clear()
+      ..addAll(validPositions);
+  }
+
+  void removeOutliers({double similarityThreshold = 75, int minNeighbors = 1}) {
+    final toRemove = <RecognizedPosition>{};
+
+    for (final pos in positions) {
+      int similarCount = 0;
+      for (final other in positions) {
+        if (pos == other) continue;
+        final sim = _positionSimilarity(pos, other);
+        if (sim >= similarityThreshold) {
+          similarCount++;
+        }
+      }
+      if (similarCount < minNeighbors) {
+        toRemove.add(pos);
+      }
+    }
+
+    positions.removeWhere((p) => toRemove.contains(p));
+  }
+
+  double _positionSimilarity(RecognizedPosition a, RecognizedPosition b) {
+    final nameSim = ratio(a.product.value, b.product.value);
+    final priceDiff = (a.price.value - b.price.value).abs();
+    final priceSim = priceDiff < 0.01 ? 100.0 : 0.0;
+    return (nameSim + priceSim) / 2;
   }
 }
