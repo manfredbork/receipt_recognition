@@ -9,6 +9,10 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// This parser detects store/company names, product lines, totals, and
 /// prices using patterns, positions, and bounding box geometry.
 final class ReceiptParser {
+  /// Vertical buffer (in pixels) used to exclude lines below the detected
+  /// sum or total line on a receipt.
+  static const int boundingBoxBuffer = 20;
+
   /// Keywords that indicate the logical end of a receipt (e.g. taxes).
   static final RegExp patternStopKeywords = RegExp(
     r'(Geg.|Rückgeld|Steuer|Brutto)',
@@ -122,16 +126,26 @@ final class ReceiptParser {
       shrunken.removeWhere((e) => _isGreaterThanBottomBound(e, yAmounts.last));
     }
 
-    final sumLabels = shrunken.whereType<RecognizedSumLabel>();
+    final sumLabels = shrunken.whereType<RecognizedSumLabel>().toList();
     if (sumLabels.isNotEmpty) {
       final sum = _findSum(shrunken, sumLabels.first);
       if (sum != null) {
+        final sumBottom = sum.line.boundingBox.bottom;
+        shrunken.removeWhere(
+          (e) => e.line.boundingBox.top > sumBottom + boundingBoxBuffer,
+        );
         final indexSum = shrunken.indexWhere((e) => e.value == sum.value);
         if (indexSum >= 0) {
           shrunken.removeAt(indexSum);
           shrunken.insert(indexSum, sum);
-          shrunken.removeWhere((e) => _isGreaterThanBottomBound(e, sum));
+        } else {
+          shrunken.add(sum);
         }
+      } else {
+        final labelBottom = sumLabels.first.line.boundingBox.bottom;
+        shrunken.removeWhere(
+          (e) => e.line.boundingBox.top > labelBottom + boundingBoxBuffer,
+        );
       }
     }
 
