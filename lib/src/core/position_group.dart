@@ -1,5 +1,4 @@
-import 'receipt_models.dart';
-import 'recognized_position.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class PositionGroup {
   final List<RecognizedPosition> positions;
@@ -11,6 +10,7 @@ final class PositionGroup {
   }
 
   factory PositionGroup.fromPosition(RecognizedPosition position) {
+    position.positionIndex = 0;
     return PositionGroup(positions: [position]);
   }
 

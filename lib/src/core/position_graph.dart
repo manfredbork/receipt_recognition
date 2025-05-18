@@ -1,78 +1,95 @@
-import 'recognized_position.dart';
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 class PositionGraph {
-  final List<RecognizedPosition> positions;
-  final Map<RecognizedPosition, Set<RecognizedPosition>> adj = {};
+  final List<PositionGroup> groups;
+  final Map<RecognizedPosition, Set<RecognizedPosition>> adjacency = {};
+  final Set<RecognizedPosition> allPositions = {};
+  final int fuzzyThreshold;
 
-  PositionGraph(this.positions) {
-    for (final pos in positions) {
-      adj[pos] = {};
+  PositionGraph(this.groups, {this.fuzzyThreshold = 90}) {
+    for (final group in groups) {
+      final pos = group.mostTrustworthyPosition();
+      allPositions.add(pos);
+      adjacency.putIfAbsent(pos, () => {});
     }
-    _buildEdges();
-  }
 
-  void _buildEdges() {
-    for (int i = 0; i < positions.length; i++) {
-      for (int j = i + 1; j < positions.length; j++) {
-        final posA = positions[i];
-        final posB = positions[j];
-        final similarity = _similarity(posA, posB);
-        if (similarity > 0.7) {
-          if (posA.timestamp.isBefore(posB.timestamp)) {
-            adj[posA]!.add(posB);
-          } else {
-            adj[posB]!.add(posA);
-          }
+    for (final a in allPositions) {
+      for (final b in allPositions) {
+        if (a == b) continue;
+        if (_shouldLink(a, b)) {
+          adjacency[a]!.add(b);
         }
       }
     }
   }
 
-  double _similarity(RecognizedPosition a, RecognizedPosition b) {
-    final nameSimilarity = _stringSimilarity(a.product.value, b.product.value);
-    final priceDiff = (a.price.value - b.price.value).abs();
-    final priceSimilarity = priceDiff < 0.01 ? 1.0 : 0.0;
-    return (nameSimilarity + priceSimilarity) / 2;
+  bool _shouldLink(RecognizedPosition a, RecognizedPosition b) {
+    if (a.timestamp.isAfter(b.timestamp)) return false;
+    if (a.product.value == b.product.value) return false;
+    if (b.price.value < 0 || a.price.value < 0) return false;
+    final score = ratio(a.product.value, b.product.value);
+    return score < fuzzyThreshold;
   }
 
-  double _stringSimilarity(String a, String b) {
-    if (a == b) return 1.0;
-    return 0.0; // Replace with better algorithm if needed
-  }
-
-  List<RecognizedPosition> sort() {
+  List<RecognizedPosition> resolveOrder() {
     final visited = <RecognizedPosition>{};
-    final onStack = <RecognizedPosition>{};
-    final stack = <RecognizedPosition>[];
-    bool hasCycle = false;
+    final visiting = <RecognizedPosition>{};
+    final sorted = <RecognizedPosition>[];
 
-    void dfs(RecognizedPosition node) {
-      if (hasCycle) return;
+    bool visit(RecognizedPosition node) {
+      if (visited.contains(node)) return true;
+      if (visiting.contains(node)) return false;
+      visiting.add(node);
+
+      for (final neighbor in adjacency[node]!) {
+        if (!visit(neighbor)) return false;
+      }
+
+      visiting.remove(node);
       visited.add(node);
-      onStack.add(node);
-      for (final neighbor in adj[node]!) {
-        if (!visited.contains(neighbor)) {
-          dfs(neighbor);
-        } else if (onStack.contains(neighbor)) {
-          hasCycle = true;
-          return;
+      sorted.add(node);
+      return true;
+    }
+
+    for (final node in allPositions) {
+      if (!visited.contains(node)) {
+        if (!visit(node)) {
+          return _fallbackSort();
         }
       }
-      onStack.remove(node);
-      stack.add(node);
     }
 
-    for (final node in positions) {
-      if (!visited.contains(node)) {
-        dfs(node);
-      }
-    }
+    return sorted.reversed.toList();
+  }
 
-    if (hasCycle) {
-      positions.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      return positions;
-    }
+  List<RecognizedPosition> _fallbackSort() {
+    final sorted = allPositions.toList();
 
-    return stack.reversed.toList();
+    sorted.sort((a, b) {
+      final tsCompare = a.timestamp.compareTo(b.timestamp);
+      if (tsCompare != 0) return tsCompare;
+
+      final indexCompare = a.positionIndex.compareTo(b.positionIndex);
+      if (indexCompare != 0) return indexCompare;
+
+      final trustDiff = b.trustworthiness.compareTo(a.trustworthiness);
+
+      if (trustDiff != 0) return trustDiff;
+
+      final fuzzyA = allPositions
+          .where((other) => other != a)
+          .map((other) => ratio(a.product.value, other.product.value))
+          .fold<int>(0, (sum, r) => sum + r);
+
+      final fuzzyB = allPositions
+          .where((other) => other != b)
+          .map((other) => ratio(b.product.value, other.product.value))
+          .fold<int>(0, (sum, r) => sum + r);
+
+      return fuzzyB.compareTo(fuzzyA);
+    });
+
+    return sorted;
   }
 }

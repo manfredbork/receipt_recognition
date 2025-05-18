@@ -1,7 +1,4 @@
-import 'cached_receipt.dart';
-import 'optimizer_interface.dart';
-import 'receipt_normalizer.dart';
-import 'recognized_receipt.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class DefaultOptimizer implements Optimizer {
   final CachedReceipt _cachedReceipt;

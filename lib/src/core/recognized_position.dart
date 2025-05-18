@@ -1,9 +1,7 @@
 import 'dart:math';
 
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
-
-import 'position_group.dart';
-import 'receipt_models.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class RecognizedPosition {
   final RecognizedProduct product;
@@ -11,6 +9,7 @@ final class RecognizedPosition {
   DateTime timestamp;
   PositionGroup group;
   Operation operation;
+  int positionIndex = 0;
 
   RecognizedPosition({
     required this.product,
@@ -18,6 +17,7 @@ final class RecognizedPosition {
     required this.timestamp,
     required this.group,
     required this.operation,
+    required this.positionIndex,
   });
 
   RecognizedPosition copyWith({
@@ -26,6 +26,7 @@ final class RecognizedPosition {
     DateTime? timestamp,
     PositionGroup? group,
     Operation? operation,
+    int? positionIndex,
   }) {
     return RecognizedPosition(
       product: product ?? this.product,
@@ -33,6 +34,7 @@ final class RecognizedPosition {
       timestamp: timestamp ?? this.timestamp,
       group: group ?? this.group,
       operation: operation ?? this.operation,
+      positionIndex: positionIndex ?? this.positionIndex,
     );
   }
 

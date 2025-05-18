@@ -1,5 +1,4 @@
-import 'recognized_position.dart';
-import 'recognized_receipt.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class ReceiptNormalizer {
   static RecognizedReceipt normalize(RecognizedReceipt receipt) {

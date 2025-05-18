@@ -1,5 +1,4 @@
-import 'receipt_models.dart';
-import 'recognized_position.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 class RecognizedReceipt {
   List<RecognizedPosition> positions;

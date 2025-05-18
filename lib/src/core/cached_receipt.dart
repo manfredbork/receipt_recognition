@@ -1,9 +1,4 @@
-import 'package:fuzzywuzzy/fuzzywuzzy.dart';
-
-import 'position_group.dart';
-import 'receipt_models.dart';
-import 'recognized_position.dart';
-import 'recognized_receipt.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class CachedReceipt extends RecognizedReceipt {
   List<PositionGroup> positionGroups;
@@ -72,26 +67,23 @@ final class CachedReceipt extends RecognizedReceipt {
 
   void _applyPosition(RecognizedPosition position) {
     final newGroup = PositionGroup.fromPosition(position);
-    final groups =
-        positionGroups
-            .where(
-              (g) => g.positions.every(
-                (p) => !p.timestamp.isAtSameMomentAs(position.timestamp),
-              ),
-            )
-            .toList();
+    final groups = positionGroups.where((g) {
+      return g.positions.every(
+            (p) => !p.timestamp.isAtSameMomentAs(position.timestamp),
+      );
+    }).toList();
 
     if (groups.isEmpty) {
       _addToNewGroup(position, newGroup);
       return;
     }
 
-    groups.sort(
-      (a, b) => a
+    groups.sort((a, b) {
+      return a
           .mostSimilarPosition(position)
           .ratioProduct(position)
-          .compareTo(b.mostSimilarPosition(position).ratioProduct(position)),
-    );
+          .compareTo(b.mostSimilarPosition(position).ratioProduct(position));
+    });
 
     final bestGroup = groups.last;
     final bestSim = bestGroup
@@ -123,63 +115,29 @@ final class CachedReceipt extends RecognizedReceipt {
     positionGroups.add(group);
   }
 
-  void consolidatePositions() {
-    final List<RecognizedPosition> validPositions = [];
+  Future<void> consolidatePositions() async {
     final List<PositionGroup> groupsToRemove = [];
 
     positionGroups.sort(
-      (b, a) => a.trustworthiness.compareTo(b.trustworthiness),
+          (b, a) => a.trustworthiness.compareTo(b.trustworthiness),
     );
 
     for (final group in positionGroups) {
       if (group.positions.length >= minScans) {
         final mostTrustworthy = group.mostTrustworthyPosition();
-        if (mostTrustworthy.trustworthiness > trustworthyThreshold) {
-          validPositions.add(mostTrustworthy);
-        } else {
-          groupsToRemove.add(group);
+        if (mostTrustworthy.trustworthiness <= trustworthyThreshold) {
+          groupsToRemove.add(mostTrustworthy.group);
         }
       }
-      if (isValid) {
-        break;
-      }
+      if (isValid) break;
     }
 
     positionGroups.removeWhere((g) => groupsToRemove.contains(g));
 
-    removeOutliers();
-
-    validPositions.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    final sorted = await resolveGraphInIsolate(positionGroups);
 
     positions
       ..clear()
-      ..addAll(validPositions);
-  }
-
-  void removeOutliers({double similarityThreshold = 75, int minNeighbors = 1}) {
-    final toRemove = <RecognizedPosition>{};
-
-    for (final pos in positions) {
-      int similarCount = 0;
-      for (final other in positions) {
-        if (pos == other) continue;
-        final sim = _positionSimilarity(pos, other);
-        if (sim >= similarityThreshold) {
-          similarCount++;
-        }
-      }
-      if (similarCount < minNeighbors) {
-        toRemove.add(pos);
-      }
-    }
-
-    positions.removeWhere((p) => toRemove.contains(p));
-  }
-
-  double _positionSimilarity(RecognizedPosition a, RecognizedPosition b) {
-    final nameSim = ratio(a.product.value, b.product.value);
-    final priceDiff = (a.price.value - b.price.value).abs();
-    final priceSim = priceDiff < 0.01 ? 100.0 : 0.0;
-    return (nameSim + priceSim) / 2;
+      ..addAll(sorted);
   }
 }

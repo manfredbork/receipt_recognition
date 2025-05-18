@@ -1,4 +1,4 @@
-import 'recognized_receipt.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 abstract class Optimizer {
   Optimizer({required bool videoFeed});

@@ -2,8 +2,7 @@ import 'dart:math';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
-
-import 'receipt_core.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class ReceiptParser {
   static final RegExp patternStopKeywords = RegExp(
@@ -226,6 +225,7 @@ final class ReceiptParser {
                 timestamp: receipt.timestamp,
                 group: PositionGroup.empty(),
                 operation: Operation.added,
+                positionIndex: 0,
               ),
             );
             forbidden.add(yUnknown);

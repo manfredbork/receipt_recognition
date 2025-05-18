@@ -50,6 +50,7 @@ void main() {
         timestamp: DateTime.now(),
         group: PositionGroup.empty(),
         operation: Operation.added,
+        positionIndex: 0,
       );
 
       final receipt = RecognizedReceipt(
@@ -74,6 +75,7 @@ void main() {
         timestamp: DateTime.now(),
         group: PositionGroup.empty(),
         operation: Operation.added,
+        positionIndex: 0,
       );
 
       final receipt = RecognizedReceipt(
