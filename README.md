@@ -1,6 +1,12 @@
 
 # 📷 receipt_recognition
 
+[![Pub Version](https://img.shields.io/pub/v/receipt_recognition)](https://pub.dev/packages/receipt_recognition)
+[![Pub Points](https://img.shields.io/pub/points/receipt_recognition)](https://pub.dev/packages/receipt_recognition/score)
+[![Likes](https://img.shields.io/pub/likes/receipt_recognition)](https://pub.dev/packages/receipt_recognition)
+[![License](https://img.shields.io/github/license/manfredbork/receipt_recognition)](LICENSE)
+[![Last Commit](https://img.shields.io/github/last-commit/manfredbork/receipt_recognition)](https://github.com/manfredbork/receipt_recognition/commits/main)
+
 A Flutter package for scanning and extracting structured data from supermarket receipts using **Google's ML Kit**. Ideal for building expense tracking apps, loyalty programs, or any system needing receipt parsing.
 
 ---
@@ -141,6 +147,12 @@ RecognizedReceipt
      │       └── value: 2.49
      └── ...
 ```
+
+---
+
+## 📦 Release Notes
+
+See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version history.
 
 ---
 
