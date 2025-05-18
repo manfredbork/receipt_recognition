@@ -75,7 +75,7 @@ final class ReceiptParser {
       final amount = patternAmount.stringMatch(line.text);
       if (amount != null) {
         final locale = _detectsLocale(amount);
-        final normalized = Formatter.normalizeCommas(amount);
+        final normalized = ReceiptFormatter.normalizeCommas(amount);
         final value = NumberFormat.decimalPattern(locale).parse(normalized);
         parsed.add(RecognizedAmount(line: line, value: value));
       }

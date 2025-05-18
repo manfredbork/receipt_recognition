@@ -1,10 +1,20 @@
 import 'package:receipt_recognition/receipt_recognition.dart';
 
-final class DefaultOptimizer implements Optimizer {
+abstract class Optimizer {
+  Optimizer({required bool videoFeed});
+
+  void init();
+
+  RecognizedReceipt optimize(RecognizedReceipt receipt);
+
+  void close();
+}
+
+final class ReceiptOptimizer implements Optimizer {
   final CachedReceipt _cachedReceipt;
   bool _isInitialized = false;
 
-  DefaultOptimizer({required bool videoFeed})
+  ReceiptOptimizer({required bool videoFeed})
     : _cachedReceipt = CachedReceipt(
         positions: [],
         timestamp: DateTime.now(),

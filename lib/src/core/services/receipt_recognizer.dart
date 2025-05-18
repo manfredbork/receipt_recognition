@@ -26,7 +26,7 @@ final class ReceiptRecognizer {
     Function(ScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
-       _optimizer = optimizer ?? DefaultOptimizer(videoFeed: videoFeed),
+       _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
        _videoFeed = videoFeed,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
