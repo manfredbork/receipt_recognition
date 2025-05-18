@@ -1,20 +1,21 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 PositionGroup groupFrom(List<String> values) {
-  final positions = values.map((v) {
-    return RecognizedPosition(
-      product: RecognizedProduct(value: v, line: dummyTextLine),
-      price: RecognizedPrice(value: 1.0, line: dummyTextLine),
-      timestamp: DateTime.now(),
-      group: PositionGroup.empty(),
-      operation: Operation.added,
-      positionIndex: 0,
-    );
-  }).toList();
+  final positions =
+      values.map((v) {
+        return RecognizedPosition(
+          product: RecognizedProduct(value: v, line: dummyTextLine),
+          price: RecognizedPrice(value: 1.0, line: dummyTextLine),
+          timestamp: DateTime.now(),
+          group: PositionGroup.empty(),
+          operation: Operation.added,
+          positionIndex: 0,
+        );
+      }).toList();
   return PositionGroup(positions: positions);
 }
 
@@ -42,21 +43,13 @@ void main() {
     });
 
     test('keeps proper internal spaces', () {
-      final group = groupFrom([
-        'Co ke Zero',
-        'Coke Zero',
-        'Coke Zero',
-      ]);
+      final group = groupFrom(['Co ke Zero', 'Coke Zero', 'Coke Zero']);
       final result = ReceiptNormalizer.normalizeFromGroup(group);
       expect(result, 'Coke Zero');
     });
 
     test('removes trailing OCR garbage', () {
-      final group = groupFrom([
-        'Apples',
-        'Apples +#*',
-        'Apples',
-      ]);
+      final group = groupFrom(['Apples', 'Apples +#*', 'Apples']);
       final result = ReceiptNormalizer.normalizeFromGroup(group);
       expect(result, 'Apples');
     });
