@@ -1,17 +1,30 @@
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// A mutable version of [RecognizedReceipt] that accumulates and merges
+/// multiple scanned fragments of the same receipt.
+///
+/// It uses fuzzy matching and trustworthiness scoring to group and
+/// consolidate similar positions across different scan frames.
 final class CachedReceipt extends RecognizedReceipt {
+  /// Groups of scanned positions, clustered by similarity.
   List<PositionGroup> positionGroups;
+
+  /// Threshold below which two positions are considered dissimilar.
   int similarityThreshold;
+
+  /// Minimum trustworthiness required for a position to be considered valid.
   int trustworthyThreshold;
+
+  /// Maximum number of positions retained in a group.
   int maxCacheSize;
 
+  /// Creates a new [CachedReceipt] instance for merging scan results.
   CachedReceipt({
     required super.positions,
     required super.timestamp,
     required super.videoFeed,
     required this.positionGroups,
-    this.similarityThreshold = 75,
+    this.similarityThreshold = 50,
     this.trustworthyThreshold = 40,
     this.maxCacheSize = 20,
     super.sumLabel,
@@ -20,6 +33,7 @@ final class CachedReceipt extends RecognizedReceipt {
   });
 
   @override
+  /// Returns a new [CachedReceipt] with updated values.
   CachedReceipt copyWith({
     List<RecognizedPosition>? positions,
     DateTime? timestamp,
@@ -46,6 +60,7 @@ final class CachedReceipt extends RecognizedReceipt {
     );
   }
 
+  /// Resets all scanned and consolidated data in this receipt.
   void clear() {
     positions.clear();
     positionGroups.clear();
@@ -54,6 +69,8 @@ final class CachedReceipt extends RecognizedReceipt {
     company = null;
   }
 
+  /// Applies a newly scanned [RecognizedReceipt] and merges its positions
+  /// into the current cached state.
   void apply(RecognizedReceipt receipt) {
     timestamp = receipt.timestamp;
     sumLabel = receipt.sumLabel ?? sumLabel;
@@ -67,11 +84,12 @@ final class CachedReceipt extends RecognizedReceipt {
 
   void _applyPosition(RecognizedPosition position) {
     final newGroup = PositionGroup.fromPosition(position);
-    final groups = positionGroups.where((g) {
-      return g.positions.every(
+    final groups =
+        positionGroups.where((g) {
+          return g.positions.every(
             (p) => !p.timestamp.isAtSameMomentAs(position.timestamp),
-      );
-    }).toList();
+          );
+        }).toList();
 
     if (groups.isEmpty) {
       _addToNewGroup(position, newGroup);
@@ -115,11 +133,15 @@ final class CachedReceipt extends RecognizedReceipt {
     positionGroups.add(group);
   }
 
+  /// Finalizes the receipt by consolidating all groups and retaining
+  /// only valid, trustworthy, and well-matched positions.
+  ///
+  /// Uses [resolveGraphInIsolate] to order items after filtering.
   Future<void> consolidatePositions() async {
     final List<PositionGroup> groupsToRemove = [];
 
     positionGroups.sort(
-          (b, a) => a.trustworthiness.compareTo(b.trustworthiness),
+      (b, a) => a.trustworthiness.compareTo(b.trustworthiness),
     );
 
     for (final group in positionGroups) {

@@ -8,7 +8,12 @@ void main() {
   test('resolveOrder reconstructs correct sequence from fragmented scans', () {
     final now = DateTime.now();
 
-    RecognizedPosition createPosition(String name, double price, int offset, int index) {
+    RecognizedPosition createPosition(
+      String name,
+      double price,
+      int offset,
+      int index,
+    ) {
       final timestamp = now.add(Duration(milliseconds: offset));
       final dummyLine = TextLine(
         text: name,

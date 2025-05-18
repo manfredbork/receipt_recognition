@@ -2,6 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// A high-level interface that manages receipt recognition from camera input.
+///
+/// Handles throttling of image streams, delegates OCR via ML Kit,
+/// processes recognition in isolates, and applies optimization.
+///
+/// Emits callbacks during scanning and on successful receipt completion.
 final class ReceiptRecognizer {
   final TextRecognizer _textRecognizer;
   final Optimizer _optimizer;
@@ -15,6 +21,10 @@ final class ReceiptRecognizer {
   DateTime? _initializedScan;
   DateTime? _lastScan;
 
+  /// Creates a [ReceiptRecognizer] with optional dependencies and behavior.
+  ///
+  /// You can provide a custom [Optimizer], control timeouts and scanning
+  /// intervals, and respond to scan updates or finalization via callbacks.
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
@@ -26,7 +36,7 @@ final class ReceiptRecognizer {
     Function(ScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
-       _optimizer = optimizer ?? DefaultOptimizer(videoFeed: videoFeed),
+       _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
        _videoFeed = videoFeed,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
@@ -34,6 +44,10 @@ final class ReceiptRecognizer {
        _onScanUpdate = onScanUpdate,
        _onScanComplete = onScanComplete;
 
+  /// Processes a single [InputImage] and returns a [RecognizedReceipt]
+  /// if valid and complete, otherwise returns `null`.
+  ///
+  /// Skips processing if called too frequently within [_scanInterval].
   Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
     final now = DateTime.now();
 
@@ -117,6 +131,7 @@ final class ReceiptRecognizer {
     return null;
   }
 
+  /// Releases underlying ML resources (e.g. text recognizer and optimizer).
   Future<void> close() async {
     _textRecognizer.close();
     _optimizer.close();

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// A UI widget that displays a parsed [RecognizedReceipt] visually.
+///
+/// Shows the store name, all scanned line items, and the total amount
+/// in a stylized receipt layout with a zigzag top/bottom border.
 class ReceiptWidget extends StatelessWidget {
+  /// The recognized receipt data to render.
   final RecognizedReceipt receipt;
 
   const ReceiptWidget({super.key, required this.receipt});
@@ -16,20 +21,20 @@ class ReceiptWidget extends StatelessWidget {
             delegate: SliverChildListDelegate(<Widget>[
               ZigzagEdgeWidget(isTop: true),
               Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.white),
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(color: Colors.white),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       receipt.company?.formattedValue ?? 'Unknown Store',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Colors.black,
                       ),
                     ),
-                    Divider(),
+                    const Divider(),
                     ...receipt.positions.map((position) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -38,14 +43,14 @@ class ReceiptWidget extends StatelessWidget {
                           children: [
                             Text(
                               position.product.formattedValue,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.black,
                               ),
                             ),
                             Text(
                               position.price.formattedValue,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.black,
                               ),
@@ -54,14 +59,14 @@ class ReceiptWidget extends StatelessWidget {
                         ),
                       );
                     }),
-                    Divider(),
+                    const Divider(),
                     if (receipt.sum != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
+                            const Text(
                               'Total',
                               style: TextStyle(
                                 fontSize: 18,
@@ -70,7 +75,7 @@ class ReceiptWidget extends StatelessWidget {
                             ),
                             Text(
                               receipt.sum!.formattedValue,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -90,6 +95,7 @@ class ReceiptWidget extends StatelessWidget {
   }
 }
 
+/// A decorative zigzag edge used at the top and bottom of the receipt display.
 class ZigzagEdgeWidget extends StatelessWidget {
   final bool isTop;
   final double zigzagWidth;
@@ -97,6 +103,7 @@ class ZigzagEdgeWidget extends StatelessWidget {
   final Color triangleColor;
   final double height;
 
+  /// Creates a zigzag border widget for use in [ReceiptWidget].
   const ZigzagEdgeWidget({
     super.key,
     this.isTop = false,
@@ -120,6 +127,7 @@ class ZigzagEdgeWidget extends StatelessWidget {
   }
 }
 
+/// Internal painter class that draws a row of zigzag triangles.
 class _ZigzagEdgePainter extends CustomPainter {
   final bool isTop;
   final double zigzagWidth;
