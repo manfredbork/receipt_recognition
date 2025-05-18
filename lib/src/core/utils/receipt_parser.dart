@@ -70,8 +70,9 @@ final class ReceiptParser {
     for (final line in lines) {
       if (patternStopKeywords.hasMatch(line.text)) break;
       if (patternIgnoreKeywords.hasMatch(line.text) ||
-          patternIgnoreNumbers.hasMatch(line.text))
+          patternIgnoreNumbers.hasMatch(line.text)) {
         continue;
+      }
 
       final company = patternCompany.stringMatch(line.text);
       if (company != null && !detectedCompany) {

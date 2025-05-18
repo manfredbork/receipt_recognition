@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.7] - 2024-05-19
+
+### 🐛 Fixed
+- **Pass static analysis**: Added curly braces to reach 50/50 points.
+
 ## [0.0.6] - 2024-05-18
 
 ### ✨ Added
