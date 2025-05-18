@@ -1,31 +1,7 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
-import 'receipt_core.dart';
-
 enum Operation { added, updated }
-
-final class Formatter {
-  static String format(num value) => NumberFormat.decimalPatternDigits(
-    locale: Intl.defaultLocale,
-    decimalDigits: 2,
-  ).format(value);
-
-  static num parse(String value) => NumberFormat.decimalPatternDigits(
-    locale: Intl.defaultLocale,
-    decimalDigits: 2,
-  ).parse(value);
-}
-
-abstract class Optimizer {
-  Optimizer({required videoFeed});
-
-  void init();
-
-  RecognizedReceipt optimize(RecognizedReceipt receipt);
-
-  void close();
-}
 
 abstract class Valuable<T> {
   final T value;
@@ -86,7 +62,8 @@ final class CalculatedSum extends Valuable<num> {
 }
 
 final class RecognizedProduct extends RecognizedEntity<String> {
-  RecognizedProduct({required super.line, required super.value});
+  RecognizedProduct({required super.line, required super.value})
+    : formattedValue = value;
 
   RecognizedProduct copyWith({String? value, TextLine? line}) {
     return RecognizedProduct(
@@ -97,6 +74,9 @@ final class RecognizedProduct extends RecognizedEntity<String> {
 
   @override
   String format(String value) => value;
+
+  @override
+  String formattedValue;
 }
 
 final class RecognizedPrice extends RecognizedEntity<num> {
@@ -106,14 +86,21 @@ final class RecognizedPrice extends RecognizedEntity<num> {
   String format(num value) => Formatter.format(value);
 }
 
-final class Progress {
-  final List<RecognizedPosition> addedPositions;
-  final List<RecognizedPosition> updatedPositions;
-  final int? estimatedPercentage;
+final class Formatter {
+  static String format(num value) => NumberFormat.decimalPatternDigits(
+    locale: Intl.defaultLocale,
+    decimalDigits: 2,
+  ).format(value);
 
-  Progress({
-    required this.addedPositions,
-    required this.updatedPositions,
-    this.estimatedPercentage,
-  });
+  static num parse(String value) => NumberFormat.decimalPatternDigits(
+    locale: Intl.defaultLocale,
+    decimalDigits: 2,
+  ).parse(value);
+
+  static String normalizeCommas(String value) {
+    return value.replaceAllMapped(
+      RegExp(r'(\d)\s*([,.])\s*(\d)'),
+      (match) => '${match[1]}${match[2]}${match[3]}',
+    );
+  }
 }

@@ -1,45 +1,32 @@
-import 'dart:ui';
-
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
-import 'receipt_core.dart';
-import 'receipt_models.dart';
-import 'receipt_optimizer.dart';
-import 'receipt_parser.dart';
-
-class ReceiptRecognizer {
+final class ReceiptRecognizer {
   final TextRecognizer _textRecognizer;
-
   final Optimizer _optimizer;
-
   final bool _videoFeed;
-
   final Duration _scanInterval;
-
   final Duration _scanTimeout;
-
   final VoidCallback? _onScanTimeout;
-
   final Function(RecognizedReceipt)? _onScanComplete;
-
-  final Function(Progress)? _onScanUpdate;
+  final Function(ScanProgress)? _onScanUpdate;
 
   DateTime? _initializedScan;
-
   DateTime? _lastScan;
 
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
-    script = TextRecognitionScript.latin,
-    videoFeed = true,
-    scanInterval = const Duration(milliseconds: 100),
-    scanTimeout = const Duration(seconds: 30),
-    onScanTimeout,
-    onScanUpdate,
-    onScanComplete,
+    TextRecognitionScript script = TextRecognitionScript.latin,
+    bool videoFeed = true,
+    Duration scanInterval = const Duration(milliseconds: 10),
+    Duration scanTimeout = const Duration(seconds: 30),
+    VoidCallback? onScanTimeout,
+    Function(ScanProgress)? onScanUpdate,
+    Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
-       _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
+       _optimizer = optimizer ?? DefaultOptimizer(videoFeed: videoFeed),
        _videoFeed = videoFeed,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
@@ -59,49 +46,50 @@ class ReceiptRecognizer {
     _lastScan = now;
 
     final text = await _textRecognizer.processImage(inputImage);
-    final receipt = ReceiptParser.processText(text);
+    final receipt = await processTextIsolate(text);
 
-    if (receipt == null) {
-      return null;
-    }
+    if (receipt == null) return null;
 
     final optimizedReceipt = _optimizer.optimize(receipt);
+
+    if (kDebugMode) {
+      if (optimizedReceipt.positions.isNotEmpty) {
+        print('-' * 50);
+        print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
+        for (final position in optimizedReceipt.positions) {
+          print(
+            '${position.product.value} ${position.price.formattedValue} ${position.trustworthiness}',
+          );
+        }
+        print('Recognized sum: ${optimizedReceipt.sum?.formattedValue}');
+        print(
+          'Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
+        );
+      }
+    }
 
     if (optimizedReceipt.isValid) {
       _initializedScan = null;
       _optimizer.init();
       _onScanComplete?.call(optimizedReceipt);
-
       return optimizedReceipt;
     } else {
-      final addedPositions = List<RecognizedPosition>.from(
-        optimizedReceipt.positions.where((p) => p.operation == Operation.added),
-      );
-
-      final updatedPositions = List<RecognizedPosition>.from(
-        optimizedReceipt.positions.where(
-          (p) => p.operation == Operation.updated,
-        ),
-      );
-
-      int? estimatedPercentage;
-
-      final numerator = optimizedReceipt.calculatedSum.value;
-      final denominator = optimizedReceipt.sum?.value;
-
-      if (denominator != null) {
-        estimatedPercentage =
-            numerator < denominator
-                ? (numerator / denominator * 100).toInt()
-                : (denominator / numerator * 100).toInt();
-      }
+      final addedPositions =
+          optimizedReceipt.positions
+              .where((p) => p.operation == Operation.added)
+              .toList();
+      final updatedPositions =
+          optimizedReceipt.positions
+              .where((p) => p.operation == Operation.updated)
+              .toList();
+      final estimatedPercentage = _calculatePercentage(optimizedReceipt);
 
       _initializedScan ??= now;
       _onScanUpdate?.call(
-        Progress(
+        ScanProgress(
           addedPositions: addedPositions,
           updatedPositions: updatedPositions,
-          estimatedPercentage: denominator != null ? estimatedPercentage : null,
+          estimatedPercentage: estimatedPercentage,
         ),
       );
 
@@ -114,6 +102,19 @@ class ReceiptRecognizer {
 
       return null;
     }
+  }
+
+  int? _calculatePercentage(RecognizedReceipt optimizedReceipt) {
+    final numerator = optimizedReceipt.calculatedSum.value;
+    final denominator = optimizedReceipt.sum?.value;
+
+    if (denominator != null) {
+      return (numerator < denominator
+              ? (numerator / denominator * 100)
+              : (denominator / numerator * 100))
+          .toInt();
+    }
+    return null;
   }
 
   Future<void> close() async {
