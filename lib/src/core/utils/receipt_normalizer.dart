@@ -27,7 +27,7 @@ final class ReceiptNormalizer {
 
   /// Returns the best representative product name from a group of
   /// [RecognizedPosition]s by cleaning all variants and selecting the
-  /// most frequent, longest cleaned version.
+  /// most frequent version.
   ///
   /// This helps resolve minor OCR discrepancies, spacing issues, and
   /// unwanted suffixes or symbols.
@@ -43,9 +43,7 @@ final class ReceiptNormalizer {
     final sorted =
         frequency.entries.toList()..sort((a, b) {
           final freqDiff = b.value.compareTo(a.value);
-          return freqDiff != 0
-              ? freqDiff
-              : b.key.length.compareTo(a.key.length); // Prefer longer
+          return freqDiff;
         });
 
     return sorted.first.key;

@@ -67,9 +67,10 @@ final class RecognizedPosition {
 
   /// Calculates the fuzzy string similarity between this product name
   /// and another [RecognizedPosition]'s name.
-  ///
-  /// Uses both full and partial match ratios and returns the max value.
   int ratioProduct(RecognizedPosition other) {
+    if (price.formattedValue != other.price.formattedValue) {
+      return ratio(product.value, other.product.value);
+    }
     return max(
       ratio(product.value, other.product.value),
       partialRatio(product.value, other.product.value),

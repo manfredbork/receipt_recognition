@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
@@ -5,8 +7,8 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// the most likely correct order of items using topological sorting.
 ///
 /// The graph is constructed from the most trustworthy position of each
-/// [PositionGroup]. Edges are added based on fuzzy text similarity,
-/// timestamps, and pricing heuristics.
+/// [PositionGroup]. Edges are added based on fuzzy text similarity and
+/// timestamps.
 class PositionGraph {
   /// The list of position groups to be resolved into a linear order.
   final List<PositionGroup> groups;
@@ -23,7 +25,7 @@ class PositionGraph {
 
   /// Constructs a [PositionGraph] using the most trustworthy position
   /// from each group as graph nodes.
-  PositionGraph(this.groups, {this.fuzzyThreshold = 90}) {
+  PositionGraph(this.groups, {this.fuzzyThreshold = 60}) {
     for (final group in groups) {
       final pos = group.mostTrustworthyPosition();
       allPositions.add(pos);
@@ -42,9 +44,10 @@ class PositionGraph {
 
   bool _shouldLink(RecognizedPosition a, RecognizedPosition b) {
     if (a.timestamp.isAfter(b.timestamp)) return false;
-    if (a.product.value == b.product.value) return false;
-    if (b.price.value < 0 || a.price.value < 0) return false;
-    final score = ratio(a.product.value, b.product.value);
+    final score = max(
+      partialRatio(a.product.value, b.product.value),
+      ratio(a.product.value, b.product.value),
+    );
     return score < fuzzyThreshold;
   }
 

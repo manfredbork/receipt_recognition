@@ -26,11 +26,7 @@ final class PositionGroup {
   }
 
   /// Returns a new [PositionGroup] with updated values.
-  PositionGroup copyWith({
-    List<RecognizedPosition>? positions,
-    RecognizedProduct? frozenProduct,
-    RecognizedPrice? frozenPrice,
-  }) {
+  PositionGroup copyWith({List<RecognizedPosition>? positions}) {
     return PositionGroup(positions: positions ?? this.positions);
   }
 

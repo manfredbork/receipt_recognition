@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
@@ -11,17 +12,17 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 final class ReceiptParser {
   /// Vertical buffer (in pixels) used to exclude lines below the detected
   /// sum or total line on a receipt.
-  static const int boundingBoxBuffer = 20;
+  static const int boundingBoxBuffer = 30;
 
   /// Keywords that indicate the logical end of a receipt (e.g. taxes).
   static final RegExp patternStopKeywords = RegExp(
-    r'(Geg.|Rückgeld|Steuer|Brutto)',
+    r'(Geg.|Rückgeld|Steuer|Brutto|Gesamtbetrag)',
     caseSensitive: false,
   );
 
   /// Keywords or patterns to ignore during parsing.
   static final RegExp patternIgnoreKeywords = RegExp(
-    r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk|EUR[^A-Za-z])',
+    r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk|EUR)',
     caseSensitive: false,
   );
 
@@ -43,7 +44,7 @@ final class ReceiptParser {
   );
 
   /// Matches generic unknown text lines.
-  static final RegExp patternUnknown = RegExp(r'[^\d]{6,}');
+  static final RegExp patternUnknown = RegExp(r'\D{6,}');
 
   /// Matches currency-style amounts (e.g. 1,99 or 2.50).
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
@@ -195,7 +196,7 @@ final class ReceiptParser {
     return a.line.boundingBox.top > b.line.boundingBox.bottom;
   }
 
-  /// Tries to match a recognized sum label with its nearest amount.
+  /// Tries to match a recognized sum label with its nearest amount, based on vertical proximity.
   static RecognizedSum? _findSum(
     List<RecognizedEntity> entities,
     RecognizedSumLabel sumLabel,
@@ -209,16 +210,30 @@ final class ReceiptParser {
         );
 
     if (yAmounts.isNotEmpty) {
-      final yAmount = yAmounts.first.line.boundingBox.top;
-      final hSumLabel = (ySumLabel - sumLabel.line.boundingBox.bottom).abs();
-      if ((yAmount - ySumLabel).abs() < hSumLabel) {
+      final closestAmount = yAmounts.first;
+
+      if (_isVerticallyAligned(
+        sumLabel.line.boundingBox,
+        closestAmount.line.boundingBox,
+        boundingBoxBuffer.toDouble(),
+      )) {
         return RecognizedSum(
-          line: yAmounts.first.line,
-          value: yAmounts.first.value,
+          line: closestAmount.line,
+          value: closestAmount.value,
         );
       }
     }
     return null;
+  }
+
+  /// Checks if two bounding boxes align vertically within a given distance.
+  static bool _isVerticallyAligned(
+    Rect labelBox,
+    Rect amountBox,
+    double maxVerticalDistance,
+  ) {
+    final verticalDistance = (amountBox.top - labelBox.top).abs();
+    return verticalDistance <= maxVerticalDistance;
   }
 
   /// Builds the final [RecognizedReceipt] from the list of structured entities.
@@ -244,16 +259,20 @@ final class ReceiptParser {
       } else if (entity is RecognizedAmount) {
         final yAmount = entity.line.boundingBox;
 
-        yUnknowns.sort(
-          (a, b) => (yAmount.top - a.line.boundingBox.top).abs().compareTo(
-            (yAmount.top - b.line.boundingBox.top).abs(),
-          ),
-        );
+        yUnknowns.sort((a, b) {
+          final aTop = (yAmount.top - a.line.boundingBox.top).abs();
+          final bTop = (yAmount.top - b.line.boundingBox.top).abs();
+          final aBottom = (yAmount.bottom - a.line.boundingBox.bottom).abs();
+          final bBottom = (yAmount.bottom - b.line.boundingBox.bottom).abs();
+          final aCompare = min(aTop, aBottom);
+          final bCompare = min(bTop, bBottom);
+          return aCompare.compareTo(bCompare);
+        });
 
         for (final yUnknown in yUnknowns) {
           if (!forbidden.contains(yUnknown) &&
               (yAmount.top - yUnknown.line.boundingBox.top).abs() <
-                  yAmount.height * pi) {
+                  boundingBoxBuffer) {
             receipt.positions.add(
               RecognizedPosition(
                 product: RecognizedProduct(

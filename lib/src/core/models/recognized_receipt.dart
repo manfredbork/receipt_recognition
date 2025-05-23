@@ -13,7 +13,7 @@ class RecognizedReceipt {
 
   /// Minimum number of observations required to consider a group valid.
   ///
-  /// This is typically higher when using video feeds (e.g., 3) and lower (1) otherwise.
+  /// This is typically higher when using video feeds (e.g., 5) and lower (1) otherwise.
   int minScans;
 
   /// Whether the scan came from a live camera feed.
@@ -36,7 +36,7 @@ class RecognizedReceipt {
     this.sumLabel,
     this.sum,
     this.company,
-  }) : minScans = videoFeed == true ? 3 : 1;
+  }) : minScans = videoFeed == true ? 5 : 1;
 
   /// Returns an empty receipt with current timestamp and no data.
   factory RecognizedReceipt.empty() =>
