@@ -51,9 +51,7 @@ final class ReceiptRecognizer {
   Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
     final now = DateTime.now();
 
-    if (_videoFeed &&
-        _lastScan != null &&
-        now.difference(_lastScan!) < _scanInterval) {
+    if (_shouldThrottle(now)) {
       return null;
     }
 
@@ -67,52 +65,13 @@ final class ReceiptRecognizer {
     final optimizedReceipt = _optimizer.optimize(receipt);
 
     if (kDebugMode) {
-      if (optimizedReceipt.positions.isNotEmpty) {
-        print('-' * 50);
-        print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
-        for (final position in optimizedReceipt.positions) {
-          print('${position.product.value} ${position.price.formattedValue}');
-        }
-        print('Recognized sum: ${optimizedReceipt.sum?.formattedValue}');
-        print(
-          'Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
-        );
-      }
+      _printDebugInfo(optimizedReceipt);
     }
 
     if (optimizedReceipt.isValid) {
-      _initializedScan = null;
-      _optimizer.init();
-      _onScanComplete?.call(optimizedReceipt);
-      return optimizedReceipt;
+      return _handleValidReceipt(optimizedReceipt);
     } else {
-      final addedPositions =
-          optimizedReceipt.positions
-              .where((p) => p.operation == Operation.added)
-              .toList();
-      final updatedPositions =
-          optimizedReceipt.positions
-              .where((p) => p.operation == Operation.updated)
-              .toList();
-      final estimatedPercentage = _calculatePercentage(optimizedReceipt);
-
-      _initializedScan ??= now;
-      _onScanUpdate?.call(
-        ScanProgress(
-          addedPositions: addedPositions,
-          updatedPositions: updatedPositions,
-          estimatedPercentage: estimatedPercentage,
-        ),
-      );
-
-      if (_initializedScan != null &&
-          now.difference(_initializedScan!) >= _scanTimeout) {
-        _initializedScan = null;
-        _optimizer.init();
-        _onScanTimeout?.call();
-      }
-
-      return null;
+      return _handleIncompleteReceipt(now, optimizedReceipt);
     }
   }
 
@@ -133,5 +92,70 @@ final class ReceiptRecognizer {
   Future<void> close() async {
     _textRecognizer.close();
     _optimizer.close();
+  }
+
+  bool _shouldThrottle(DateTime now) {
+    if (_videoFeed &&
+        _lastScan != null &&
+        now.difference(_lastScan!) < _scanInterval) {
+      return true;
+    }
+    return false;
+  }
+
+  void _printDebugInfo(RecognizedReceipt optimizedReceipt) {
+    if (kDebugMode) {
+      if (optimizedReceipt.positions.isNotEmpty) {
+        print('-' * 50);
+        print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
+        for (final position in optimizedReceipt.positions) {
+          print('${position.product.value} ${position.price.formattedValue}');
+        }
+        print('Recognized sum: ${optimizedReceipt.sum?.formattedValue}');
+        print(
+          'Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
+        );
+      }
+    }
+  }
+
+  RecognizedReceipt _handleValidReceipt(RecognizedReceipt optimizedReceipt) {
+    _initializedScan = null;
+    _optimizer.init();
+    _onScanComplete?.call(optimizedReceipt);
+    return optimizedReceipt;
+  }
+
+  RecognizedReceipt? _handleIncompleteReceipt(
+    DateTime now,
+    RecognizedReceipt optimizedReceipt,
+  ) {
+    final addedPositions =
+        optimizedReceipt.positions
+            .where((p) => p.operation == Operation.added)
+            .toList();
+    final updatedPositions =
+        optimizedReceipt.positions
+            .where((p) => p.operation == Operation.updated)
+            .toList();
+    final estimatedPercentage = _calculatePercentage(optimizedReceipt);
+
+    _initializedScan ??= now;
+    _onScanUpdate?.call(
+      ScanProgress(
+        addedPositions: addedPositions,
+        updatedPositions: updatedPositions,
+        estimatedPercentage: estimatedPercentage,
+      ),
+    );
+
+    if (_initializedScan != null &&
+        now.difference(_initializedScan!) >= _scanTimeout) {
+      _initializedScan = null;
+      _optimizer.init();
+      _onScanTimeout?.call();
+    }
+
+    return null;
   }
 }

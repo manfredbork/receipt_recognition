@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
@@ -11,23 +12,12 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 final class ReceiptParser {
   /// Vertical buffer (in pixels) used to exclude lines below the detected
   /// sum or total line on a receipt.
-  static const int boundingBoxBuffer = 30;
-
-  /// Keywords that indicate the logical end of a receipt (e.g. taxes).
-  static final RegExp patternStopKeywords = RegExp(
-    r'(Geg.|Rückgeld|Steuer|Brutto|Gesamtbetrag)',
-    caseSensitive: false,
-  );
+  static const int boundingBoxBuffer = 40;
 
   /// Keywords or patterns to ignore during parsing.
   static final RegExp patternIgnoreKeywords = RegExp(
     r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk)',
     caseSensitive: false,
-  );
-
-  /// Detects long numbers that are likely IDs or totals (not prices).
-  static final RegExp patternIgnoreNumbers = RegExp(
-    r'\d{1,3}(?:\s?[.,]\s?\d{3})+',
   );
 
   /// Detects common German supermarket brands.
@@ -52,11 +42,17 @@ final class ReceiptParser {
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
+    if (kDebugMode) {
+      for (final entity in parsedEntities) {
+        print('$entity detected with value ${entity.value}');
+      }
+    }
     return _buildReceipt(parsedEntities);
   }
 
   static List<TextLine> _convertText(RecognizedText text) {
-    return text.blocks.expand((block) => block.lines).toList();
+    return text.blocks.expand((block) => block.lines).toList()
+      ..sort((a, b) => a.boundingBox.bottom.compareTo(b.boundingBox.bottom));
   }
 
   /// Parses lines into [RecognizedEntity] types based on regex rules.
@@ -68,15 +64,7 @@ final class ReceiptParser {
     bool detectedSumLabel = false;
 
     for (final line in lines) {
-      if (patternStopKeywords.hasMatch(line.text)) {
-        break;
-      }
-
       if (patternIgnoreKeywords.hasMatch(line.text)) {
-        continue;
-      }
-
-      if (patternIgnoreNumbers.hasMatch(line.text)) {
         continue;
       }
 
@@ -85,6 +73,18 @@ final class ReceiptParser {
         parsed.add(RecognizedCompany(line: line, value: company));
         detectedCompany = true;
         continue;
+      }
+
+      final amount = patternAmount.stringMatch(line.text);
+      if (amount != null && line.boundingBox.left > receiptHalfWidth) {
+        final locale = _detectsLocale(amount);
+        final normalized = ReceiptFormatter.normalizeCommas(amount);
+        final value = NumberFormat.decimalPattern(locale).parse(normalized);
+        parsed.add(RecognizedAmount(line: line, value: value));
+      }
+
+      if (detectedSumLabel) {
+        break;
       }
 
       final sumLabel = patternSumLabel.stringMatch(line.text);
@@ -96,20 +96,15 @@ final class ReceiptParser {
 
       final unknown = patternUnknown.stringMatch(line.text);
       if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
-        parsed.add(RecognizedUnknown(line: line, value: line.text));
+        final value = ReceiptFormatter.normalizeCommas(line.text);
+        parsed.add(RecognizedUnknown(line: line, value: value));
         continue;
-      }
-
-      final amount = patternAmount.stringMatch(line.text);
-      if (amount != null && line.boundingBox.left > receiptHalfWidth) {
-        final locale = _detectsLocale(amount);
-        final normalized = ReceiptFormatter.normalizeCommas(amount);
-        final value = NumberFormat.decimalPattern(locale).parse(normalized);
-        parsed.add(RecognizedAmount(line: line, value: value));
       }
     }
 
-    return parsed;
+    return parsed..sort(
+      (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
+    );
   }
 
   static String? _detectsLocale(String text) {
@@ -134,8 +129,6 @@ final class ReceiptParser {
     for (final entity in entities) {
       if (entity is RecognizedSumLabel) {
         sumLabel = entity;
-      } else if (entity is RecognizedSum) {
-        sum = entity;
       } else if (entity is RecognizedCompany) {
         company = entity;
       } else if (entity is RecognizedAmount) {
@@ -170,13 +163,18 @@ final class ReceiptParser {
             );
             forbidden.add(yUnknown);
             break;
+          } else {
+            sum = RecognizedSum(line: entity.line, value: entity.value);
           }
         }
       }
     }
 
+    if (sum != null && receipt.calculatedSum.value >= sum.value) {
+      receipt.sum = sum;
+    }
+
     receipt.sumLabel = sumLabel;
-    receipt.sum = sum;
     receipt.company = company;
 
     return receipt;
