@@ -109,7 +109,7 @@ final class ReceiptRecognizer {
         print('-' * 50);
         print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
         for (final position in optimizedReceipt.positions) {
-          print('${position.product.value} ${position.price.formattedValue}');
+          print('${position.product.formattedValue} ${position.price.formattedValue}');
         }
         print('Recognized sum: ${optimizedReceipt.sum?.formattedValue}');
         print(

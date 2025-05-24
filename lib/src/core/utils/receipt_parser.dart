@@ -14,6 +14,12 @@ final class ReceiptParser {
   /// sum or total line on a receipt.
   static const int boundingBoxBuffer = 40;
 
+  /// Keywords that indicate the logical end of a receipt (e.g. taxes).
+  static final RegExp patternStopKeywords = RegExp(
+    r'(Geg.|Rückgeld)',
+    caseSensitive: false,
+  );
+
   /// Keywords or patterns to ignore during parsing.
   static final RegExp patternIgnoreKeywords = RegExp(
     r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk)',
@@ -64,6 +70,10 @@ final class ReceiptParser {
     bool detectedSumLabel = false;
 
     for (final line in lines) {
+      if (patternStopKeywords.hasMatch(line.text)) {
+        break;
+      }
+
       if (patternIgnoreKeywords.hasMatch(line.text)) {
         continue;
       }
@@ -96,8 +106,7 @@ final class ReceiptParser {
 
       final unknown = patternUnknown.stringMatch(line.text);
       if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
-        final value = ReceiptFormatter.normalizeCommas(line.text);
-        parsed.add(RecognizedUnknown(line: line, value: value));
+        parsed.add(RecognizedUnknown(line: line, value: line.text));
         continue;
       }
     }
