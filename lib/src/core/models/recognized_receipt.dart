@@ -3,21 +3,13 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Represents a fully or partially recognized receipt from OCR analysis.
 ///
 /// Includes a list of scanned line items, optional metadata such as total sum,
-/// company name, and whether the data comes from a live video feed.
+/// and company name.
 class RecognizedReceipt {
   /// All recognized product/price positions on the receipt.
   List<RecognizedPosition> positions;
 
   /// The time at which this scan was captured.
   DateTime timestamp;
-
-  /// Minimum number of observations required to consider a group valid.
-  ///
-  /// This is typically higher when using video feeds (e.g., 5) and lower (1) otherwise.
-  int minScans;
-
-  /// Whether the scan came from a live camera feed.
-  bool? videoFeed;
 
   /// The label associated with the total sum (e.g. "TOTAL", "SUMME").
   RecognizedSumLabel? sumLabel;
@@ -32,11 +24,10 @@ class RecognizedReceipt {
   RecognizedReceipt({
     required this.positions,
     required this.timestamp,
-    this.videoFeed,
     this.sumLabel,
     this.sum,
     this.company,
-  }) : minScans = videoFeed == true ? 5 : 1;
+  });
 
   /// Returns an empty receipt with current timestamp and no data.
   factory RecognizedReceipt.empty() =>
@@ -46,7 +37,6 @@ class RecognizedReceipt {
   RecognizedReceipt copyWith({
     List<RecognizedPosition>? positions,
     DateTime? timestamp,
-    bool? videoFeed,
     RecognizedSumLabel? sumLabel,
     RecognizedSum? sum,
     RecognizedCompany? company,
@@ -54,17 +44,10 @@ class RecognizedReceipt {
     return RecognizedReceipt(
       positions: positions ?? this.positions,
       timestamp: timestamp ?? this.timestamp,
-      videoFeed: videoFeed ?? this.videoFeed,
       sumLabel: sumLabel ?? this.sumLabel,
       sum: sum ?? this.sum,
       company: company ?? this.company,
     );
-  }
-
-  /// Marks this receipt as coming from a video feed and updates [minScans] accordingly.
-  RecognizedReceipt fromVideoFeed(bool videoFeed) {
-    this.videoFeed = videoFeed;
-    return this;
   }
 
   /// Returns the sum of all recognized line item prices.

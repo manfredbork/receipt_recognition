@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
@@ -22,7 +21,7 @@ final class ReceiptParser {
 
   /// Keywords or patterns to ignore during parsing.
   static final RegExp patternIgnoreKeywords = RegExp(
-    r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk|EUR)',
+    r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk)',
     caseSensitive: false,
   );
 
@@ -53,25 +52,31 @@ final class ReceiptParser {
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
-    final shrunkEntities = _shrinkEntities(parsedEntities);
-    return _buildReceipt(shrunkEntities);
+    return _buildReceipt(parsedEntities);
   }
 
   static List<TextLine> _convertText(RecognizedText text) {
-    return text.blocks.expand((block) => block.lines).toList()
-      ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
+    return text.blocks.expand((block) => block.lines).toList();
   }
 
   /// Parses lines into [RecognizedEntity] types based on regex rules.
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
     final parsed = <RecognizedEntity>[];
+    final bounds = RecognizedBounds.fromLines(lines);
+    final receiptHalfWidth = (bounds.minLeft + bounds.maxRight) / 2;
     bool detectedCompany = false;
     bool detectedSumLabel = false;
 
     for (final line in lines) {
-      if (patternStopKeywords.hasMatch(line.text)) break;
-      if (patternIgnoreKeywords.hasMatch(line.text) ||
-          patternIgnoreNumbers.hasMatch(line.text)) {
+      if (patternStopKeywords.hasMatch(line.text)) {
+        break;
+      }
+
+      if (patternIgnoreKeywords.hasMatch(line.text)) {
+        continue;
+      }
+
+      if (patternIgnoreNumbers.hasMatch(line.text)) {
         continue;
       }
 
@@ -90,13 +95,13 @@ final class ReceiptParser {
       }
 
       final unknown = patternUnknown.stringMatch(line.text);
-      if (unknown != null) {
+      if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
         parsed.add(RecognizedUnknown(line: line, value: line.text));
         continue;
       }
 
       final amount = patternAmount.stringMatch(line.text);
-      if (amount != null) {
+      if (amount != null && line.boundingBox.left > receiptHalfWidth) {
         final locale = _detectsLocale(amount);
         final normalized = ReceiptFormatter.normalizeCommas(amount);
         final value = NumberFormat.decimalPattern(locale).parse(normalized);
@@ -111,129 +116,6 @@ final class ReceiptParser {
     if (text.contains('.')) return 'en_US';
     if (text.contains(',')) return 'eu';
     return Intl.defaultLocale;
-  }
-
-  /// Removes entities likely to be noise or outside receipt bounds.
-  static List<RecognizedEntity> _shrinkEntities(
-    List<RecognizedEntity> entities,
-  ) {
-    final shrunken = List<RecognizedEntity>.from(entities);
-    final yAmounts =
-        shrunken.whereType<RecognizedAmount>().toList()..sort(
-          (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
-        );
-
-    if (yAmounts.isNotEmpty) {
-      shrunken.removeWhere((e) => _isSmallerThanTopBound(e, yAmounts.first));
-      shrunken.removeWhere((e) => _isGreaterThanBottomBound(e, yAmounts.last));
-    }
-
-    final sumLabels = shrunken.whereType<RecognizedSumLabel>().toList();
-    if (sumLabels.isNotEmpty) {
-      final sum = _findSum(shrunken, sumLabels.first);
-      if (sum != null) {
-        final sumBottom = sum.line.boundingBox.bottom;
-        shrunken.removeWhere(
-          (e) => e.line.boundingBox.top > sumBottom + boundingBoxBuffer,
-        );
-        final indexSum = shrunken.indexWhere((e) => e.value == sum.value);
-        if (indexSum >= 0) {
-          shrunken.removeAt(indexSum);
-          shrunken.insert(indexSum, sum);
-        } else {
-          shrunken.add(sum);
-        }
-      } else {
-        final labelBottom = sumLabels.first.line.boundingBox.bottom;
-        shrunken.removeWhere(
-          (e) => e.line.boundingBox.top > labelBottom + boundingBoxBuffer,
-        );
-      }
-    }
-
-    shrunken.removeWhere((a) => shrunken.every((b) => _isInvalid(a, b)));
-
-    final xAmounts =
-        shrunken.whereType<RecognizedAmount>().toList()..sort(
-          (a, b) => a.line.boundingBox.left.compareTo(b.line.boundingBox.left),
-        );
-
-    if (xAmounts.isNotEmpty) {
-      shrunken.removeWhere((e) => _isSmallerThanLeftBound(e, xAmounts.last));
-    }
-
-    return shrunken;
-  }
-
-  static bool _isInvalid(RecognizedEntity a, RecognizedEntity b) {
-    return a is! RecognizedCompany &&
-        a is! RecognizedSumLabel &&
-        a is! RecognizedSum &&
-        !_isOpposite(a, b);
-  }
-
-  static bool _isOpposite(RecognizedEntity a, RecognizedEntity b) {
-    final aBox = a.line.boundingBox;
-    final bBox = b.line.boundingBox;
-    return !aBox.overlaps(bBox) &&
-        (aBox.bottom > bBox.top && aBox.top < bBox.bottom);
-  }
-
-  static bool _isSmallerThanLeftBound(RecognizedEntity a, RecognizedEntity b) {
-    return a is RecognizedAmount &&
-        a.line.boundingBox.right < b.line.boundingBox.left;
-  }
-
-  static bool _isSmallerThanTopBound(RecognizedEntity a, RecognizedEntity b) {
-    return a is! RecognizedCompany &&
-        a.line.boundingBox.bottom < b.line.boundingBox.top;
-  }
-
-  static bool _isGreaterThanBottomBound(
-    RecognizedEntity a,
-    RecognizedEntity b,
-  ) {
-    return a.line.boundingBox.top > b.line.boundingBox.bottom;
-  }
-
-  /// Tries to match a recognized sum label with its nearest amount, based on vertical proximity.
-  static RecognizedSum? _findSum(
-    List<RecognizedEntity> entities,
-    RecognizedSumLabel sumLabel,
-  ) {
-    final ySumLabel = sumLabel.line.boundingBox.top;
-    final yAmounts =
-        entities.whereType<RecognizedAmount>().toList()..sort(
-          (a, b) => (a.line.boundingBox.top - ySumLabel).abs().compareTo(
-            (b.line.boundingBox.top - ySumLabel).abs(),
-          ),
-        );
-
-    if (yAmounts.isNotEmpty) {
-      final closestAmount = yAmounts.first;
-
-      if (_isVerticallyAligned(
-        sumLabel.line.boundingBox,
-        closestAmount.line.boundingBox,
-        boundingBoxBuffer.toDouble(),
-      )) {
-        return RecognizedSum(
-          line: closestAmount.line,
-          value: closestAmount.value,
-        );
-      }
-    }
-    return null;
-  }
-
-  /// Checks if two bounding boxes align vertically within a given distance.
-  static bool _isVerticallyAligned(
-    Rect labelBox,
-    Rect amountBox,
-    double maxVerticalDistance,
-  ) {
-    final verticalDistance = (amountBox.top - labelBox.top).abs();
-    return verticalDistance <= maxVerticalDistance;
   }
 
   /// Builds the final [RecognizedReceipt] from the list of structured entities.
@@ -260,19 +142,20 @@ final class ReceiptParser {
         final yAmount = entity.line.boundingBox;
 
         yUnknowns.sort((a, b) {
-          final aTop = (yAmount.top - a.line.boundingBox.top).abs();
-          final bTop = (yAmount.top - b.line.boundingBox.top).abs();
-          final aBottom = (yAmount.bottom - a.line.boundingBox.bottom).abs();
-          final bBottom = (yAmount.bottom - b.line.boundingBox.bottom).abs();
-          final aCompare = min(aTop, aBottom);
-          final bCompare = min(bTop, bBottom);
+          final aT = (yAmount.top - a.line.boundingBox.top).abs();
+          final bT = (yAmount.top - b.line.boundingBox.top).abs();
+          final aB = (yAmount.bottom - a.line.boundingBox.bottom).abs();
+          final bB = (yAmount.bottom - b.line.boundingBox.bottom).abs();
+          final aCompare = min(aT, aB);
+          final bCompare = min(bT, bB);
           return aCompare.compareTo(bCompare);
         });
 
         for (final yUnknown in yUnknowns) {
-          if (!forbidden.contains(yUnknown) &&
-              (yAmount.top - yUnknown.line.boundingBox.top).abs() <
-                  boundingBoxBuffer) {
+          final yT = (yAmount.top - yUnknown.line.boundingBox.top).abs();
+          final yB = (yAmount.bottom - yUnknown.line.boundingBox.bottom).abs();
+          final yCompare = min(yT, yB);
+          if (!forbidden.contains(yUnknown) && yCompare < boundingBoxBuffer) {
             receipt.positions.add(
               RecognizedPosition(
                 product: RecognizedProduct(
@@ -281,9 +164,8 @@ final class ReceiptParser {
                 ),
                 price: RecognizedPrice(line: entity.line, value: entity.value),
                 timestamp: receipt.timestamp,
-                group: PositionGroup.empty(),
                 operation: Operation.added,
-                positionIndex: 0,
+                scanIndex: 0,
               ),
             );
             forbidden.add(yUnknown);

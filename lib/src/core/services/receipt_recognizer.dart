@@ -36,7 +36,7 @@ final class ReceiptRecognizer {
     Function(ScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
-       _optimizer = optimizer ?? ReceiptOptimizer(videoFeed: videoFeed),
+       _optimizer = optimizer ?? ReceiptOptimizer(),
        _videoFeed = videoFeed,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
@@ -60,7 +60,7 @@ final class ReceiptRecognizer {
     _lastScan = now;
 
     final text = await _textRecognizer.processImage(inputImage);
-    final receipt = await processTextIsolate(text);
+    final receipt = await ReceiptTextProcessor.processText(text);
 
     if (receipt == null) return null;
 
@@ -71,9 +71,7 @@ final class ReceiptRecognizer {
         print('-' * 50);
         print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
         for (final position in optimizedReceipt.positions) {
-          print(
-            '${position.product.value} ${position.price.formattedValue} ${position.trustworthiness}',
-          );
+          print('${position.product.value} ${position.price.formattedValue}');
         }
         print('Recognized sum: ${optimizedReceipt.sum?.formattedValue}');
         print(
