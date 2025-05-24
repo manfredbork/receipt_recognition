@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
@@ -48,11 +47,6 @@ final class ReceiptParser {
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
-    if (kDebugMode) {
-      for (final entity in parsedEntities) {
-        print('$entity detected with value ${entity.value}');
-      }
-    }
     return _buildReceipt(parsedEntities);
   }
 
