@@ -9,25 +9,21 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// This parser detects store/company names, product lines, totals, and
 /// prices using patterns, positions, and bounding box geometry.
 final class ReceiptParser {
-  /// Vertical buffer (in pixels) used to exclude lines below the detected
-  /// sum or total line on a receipt.
-  static const int boundingBoxBuffer = 40;
+  /// Detects common German supermarket brands.
+  static final RegExp patternCompany = RegExp(
+    r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
+    caseSensitive: false,
+  );
 
   /// Keywords that indicate the logical end of a receipt (e.g. taxes).
   static final RegExp patternStopKeywords = RegExp(
-    r'(Geg.|Rückgeld)',
+    r'(^Bar|^Geg.|^Rückgeld)',
     caseSensitive: false,
   );
 
   /// Keywords or patterns to ignore during parsing.
   static final RegExp patternIgnoreKeywords = RegExp(
-    r'(E-Bon|Coupon|Hand|Eingabe|Posten|Stk)',
-    caseSensitive: false,
-  );
-
-  /// Detects common German supermarket brands.
-  static final RegExp patternCompany = RegExp(
-    r'(Aldi|Rewe|Edeka|Penny|Kaufland|Netto|Akzenta)',
+    r'(E-Bon|Coupon|Eingabe|Posten|Stk)',
     caseSensitive: false,
   );
 
@@ -42,6 +38,10 @@ final class ReceiptParser {
 
   /// Matches currency-style amounts (e.g. 1,99 or 2.50).
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
+
+  /// Vertical buffer (in pixels) used to exclude lines below the detected
+  /// sum or total line on a receipt.
+  static const int boundingBoxBuffer = 50;
 
   /// High-level method to convert OCR [RecognizedText] into a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
@@ -60,22 +60,34 @@ final class ReceiptParser {
     final parsed = <RecognizedEntity>[];
     final bounds = RecognizedBounds.fromLines(lines);
     final receiptHalfWidth = (bounds.minLeft + bounds.maxRight) / 2;
+
     bool detectedCompany = false;
     bool detectedSumLabel = false;
 
     for (final line in lines) {
+      if (!detectedCompany) {
+        final company = patternCompany.stringMatch(line.text);
+        if (company != null) {
+          parsed.add(RecognizedCompany(line: line, value: company));
+          detectedCompany = true;
+          continue;
+        }
+      }
+
+      if (!detectedSumLabel) {
+        final sumLabel = patternSumLabel.stringMatch(line.text);
+        if (sumLabel != null) {
+          parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+          detectedSumLabel = true;
+          continue;
+        }
+      }
+
       if (patternStopKeywords.hasMatch(line.text)) {
         break;
       }
 
       if (patternIgnoreKeywords.hasMatch(line.text)) {
-        continue;
-      }
-
-      final company = patternCompany.stringMatch(line.text);
-      if (company != null && !detectedCompany) {
-        parsed.add(RecognizedCompany(line: line, value: company));
-        detectedCompany = true;
         continue;
       }
 
@@ -89,13 +101,6 @@ final class ReceiptParser {
 
       if (detectedSumLabel) {
         break;
-      }
-
-      final sumLabel = patternSumLabel.stringMatch(line.text);
-      if (sumLabel != null && !detectedSumLabel) {
-        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-        detectedSumLabel = true;
-        continue;
       }
 
       final unknown = patternUnknown.stringMatch(line.text);
@@ -161,7 +166,6 @@ final class ReceiptParser {
                 price: RecognizedPrice(line: entity.line, value: entity.value),
                 timestamp: receipt.timestamp,
                 operation: Operation.added,
-                scanIndex: 0,
               ),
             );
             forbidden.add(yUnknown);
@@ -173,11 +177,8 @@ final class ReceiptParser {
       }
     }
 
-    if (sum != null && receipt.calculatedSum.value >= sum.value) {
-      receipt.sum = sum;
-    }
-
     receipt.sumLabel = sumLabel;
+    receipt.sum = sum;
     receipt.company = company;
 
     return receipt;

@@ -15,16 +15,12 @@ final class RecognizedPosition {
   /// Indicates whether the position was added, updated, or unchanged.
   Operation operation;
 
-  /// Index representing the scanned frame index.
-  int scanIndex = 0;
-
   /// Creates a [RecognizedPosition] with all required attributes.
   RecognizedPosition({
     required this.product,
     required this.price,
     required this.timestamp,
     required this.operation,
-    required this.scanIndex,
   });
 
   /// Creates a modified copy of this position.
@@ -40,7 +36,6 @@ final class RecognizedPosition {
       price: price ?? this.price,
       timestamp: timestamp ?? this.timestamp,
       operation: operation ?? this.operation,
-      scanIndex: scanIndex ?? this.scanIndex,
     );
   }
 }

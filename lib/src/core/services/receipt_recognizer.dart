@@ -18,6 +18,7 @@ final class ReceiptRecognizer {
   final Function(RecognizedReceipt)? _onScanComplete;
   final Function(ScanProgress)? _onScanUpdate;
 
+  int _validScans;
   DateTime? _initializedScan;
   DateTime? _lastScan;
 
@@ -42,7 +43,8 @@ final class ReceiptRecognizer {
        _scanTimeout = scanTimeout,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
-       _onScanComplete = onScanComplete;
+       _onScanComplete = onScanComplete,
+       _validScans = 0;
 
   /// Processes a single [InputImage] and returns a [RecognizedReceipt]
   /// if valid and complete, otherwise returns `null`.
@@ -69,6 +71,10 @@ final class ReceiptRecognizer {
     }
 
     if (optimizedReceipt.isValid) {
+      _validScans++;
+      if (_videoFeed && _validScans < 3) {
+        return _handleIncompleteReceipt(now, optimizedReceipt);
+      }
       return _handleValidReceipt(optimizedReceipt);
     } else {
       return _handleIncompleteReceipt(now, optimizedReceipt);
@@ -109,7 +115,9 @@ final class ReceiptRecognizer {
         print('-' * 50);
         print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
         for (final position in optimizedReceipt.positions) {
-          print('${position.product.formattedValue} ${position.price.formattedValue}');
+          print(
+            '${position.product.formattedValue} ${position.price.formattedValue}',
+          );
         }
         print('Recognized sum: ${optimizedReceipt.sum?.formattedValue}');
         print(
@@ -123,6 +131,7 @@ final class ReceiptRecognizer {
     _initializedScan = null;
     _optimizer.init();
     _onScanComplete?.call(optimizedReceipt);
+    _validScans = 0;
     return optimizedReceipt;
   }
 
@@ -154,6 +163,7 @@ final class ReceiptRecognizer {
       _initializedScan = null;
       _optimizer.init();
       _onScanTimeout?.call();
+      _validScans = 0;
     }
 
     return null;
