@@ -1,3 +1,4 @@
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// An interface for post-processing scanned receipts to improve accuracy.
@@ -12,30 +13,66 @@ abstract class Optimizer {
   /// deduplication, ordering, or validation logic.
   RecognizedReceipt optimize(RecognizedReceipt receipt);
 
+  List<String> possibleValues(RecognizedProduct product);
+
   /// Frees any cached memory or intermediate data.
   void close();
 }
 
 /// Default implementation of [Optimizer] using [CachedReceipt].
 final class ReceiptOptimizer implements Optimizer {
-  bool _isInitialized = false;
+  final _cachedReceipts = [];
+  final int _maxCacheSize;
+  final int _similarityThreshold;
+
+  bool _shouldInitialize;
+
+  ReceiptOptimizer({int maxCacheSize = 10, int similarityThreshold = 75})
+    : _maxCacheSize = maxCacheSize,
+      _similarityThreshold = similarityThreshold,
+      _shouldInitialize = false;
 
   @override
   void init() {
-    _isInitialized = true;
+    _shouldInitialize = true;
   }
 
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
-    if (_isInitialized) {
-      _isInitialized = false;
+    if (_shouldInitialize) {
+      _cachedReceipts.clear();
+      _shouldInitialize = false;
     }
+
+    if (_cachedReceipts.length >= _maxCacheSize) {
+      _cachedReceipts.removeAt(0);
+    }
+
+    _cachedReceipts.add(receipt);
 
     return receipt;
   }
 
   @override
+  List<String> possibleValues(RecognizedProduct product) {
+    final List<String> candidates = [];
+    for (final receipt in _cachedReceipts) {
+      for (final position in receipt.positions) {
+        final similarity = ratio(
+          product.formattedValue,
+          position.product.formattedValue,
+        );
+        if (similarity > _similarityThreshold) {
+          candidates.add(position.product.formattedValue);
+        }
+      }
+    }
+    return candidates;
+  }
+
+  @override
   void close() {
-    _isInitialized = false;
+    _cachedReceipts.clear();
+    _shouldInitialize = false;
   }
 }

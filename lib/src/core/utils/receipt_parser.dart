@@ -90,8 +90,8 @@ final class ReceiptParser {
       final amount = patternAmount.stringMatch(line.text);
       if (amount != null && line.boundingBox.left > receiptHalfWidth) {
         final locale = _detectsLocale(amount);
-        final normalized = ReceiptNormalizer.normalizeCommas(amount);
-        final value = NumberFormat.decimalPattern(locale).parse(normalized);
+        final trimmedAmount = ReceiptNormalizer.trim(amount);
+        final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
         parsed.add(RecognizedAmount(line: line, value: value));
       }
 

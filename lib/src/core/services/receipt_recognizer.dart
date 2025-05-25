@@ -12,6 +12,7 @@ final class ReceiptRecognizer {
   final TextRecognizer _textRecognizer;
   final Optimizer _optimizer;
   final bool _videoFeed;
+  final int _minValidScans;
   final Duration _scanInterval;
   final Duration _scanTimeout;
   final VoidCallback? _onScanTimeout;
@@ -31,6 +32,7 @@ final class ReceiptRecognizer {
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
     bool videoFeed = true,
+    int minValidScans = 5,
     Duration scanInterval = const Duration(milliseconds: 10),
     Duration scanTimeout = const Duration(seconds: 30),
     VoidCallback? onScanTimeout,
@@ -44,6 +46,7 @@ final class ReceiptRecognizer {
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
        _onScanComplete = onScanComplete,
+       _minValidScans = minValidScans,
        _validScans = 0;
 
   /// Processes a single [InputImage] and returns a [RecognizedReceipt]
@@ -72,7 +75,7 @@ final class ReceiptRecognizer {
 
     if (optimizedReceipt.isValid) {
       _validScans++;
-      if (_videoFeed && _validScans < 3) {
+      if (_videoFeed && _validScans < _minValidScans) {
         return _handleIncompleteReceipt(now, optimizedReceipt);
       }
       return _handleValidReceipt(optimizedReceipt);
@@ -127,27 +130,25 @@ final class ReceiptRecognizer {
     }
   }
 
-  RecognizedReceipt _handleValidReceipt(RecognizedReceipt optimizedReceipt) {
+  RecognizedReceipt _handleValidReceipt(RecognizedReceipt receipt) {
     _initializedScan = null;
     _optimizer.init();
-    _onScanComplete?.call(optimizedReceipt);
+    _onScanComplete?.call(receipt);
     _validScans = 0;
-    return optimizedReceipt;
+    return _normalizeReceipt(receipt);
   }
 
   RecognizedReceipt? _handleIncompleteReceipt(
     DateTime now,
-    RecognizedReceipt optimizedReceipt,
+    RecognizedReceipt receipt,
   ) {
     final addedPositions =
-        optimizedReceipt.positions
-            .where((p) => p.operation == Operation.added)
-            .toList();
+        receipt.positions.where((p) => p.operation == Operation.added).toList();
     final updatedPositions =
-        optimizedReceipt.positions
+        receipt.positions
             .where((p) => p.operation == Operation.updated)
             .toList();
-    final estimatedPercentage = _calculatePercentage(optimizedReceipt);
+    final estimatedPercentage = _calculatePercentage(receipt);
 
     _initializedScan ??= now;
     _onScanUpdate?.call(
@@ -167,5 +168,18 @@ final class ReceiptRecognizer {
     }
 
     return null;
+  }
+
+  RecognizedReceipt _normalizeReceipt(RecognizedReceipt receipt) {
+    final List<RecognizedPosition> normalizedPositions = [];
+    for (final position in receipt.positions) {
+      final bestMatch = ReceiptNormalizer.normalizeByAllValues(
+        _optimizer.possibleValues(position.product),
+      );
+      normalizedPositions.add(
+        position.copyWith(product: position.product.copyWith(value: bestMatch)),
+      );
+    }
+    return receipt.copyWith(positions: normalizedPositions);
   }
 }
