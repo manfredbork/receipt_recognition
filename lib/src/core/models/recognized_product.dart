@@ -19,5 +19,5 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   }
 
   @override
-  String format(String value) => ReceiptFormatter.normalize(value);
+  String format(String value) => ReceiptNormalizer.normalize(value);
 }

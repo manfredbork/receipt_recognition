@@ -62,7 +62,6 @@ final class ReceiptParser {
     final receiptHalfWidth = (bounds.minLeft + bounds.maxRight) / 2;
 
     bool detectedCompany = false;
-    bool detectedSumLabel = false;
 
     for (final line in lines) {
       if (!detectedCompany) {
@@ -70,15 +69,6 @@ final class ReceiptParser {
         if (company != null) {
           parsed.add(RecognizedCompany(line: line, value: company));
           detectedCompany = true;
-          continue;
-        }
-      }
-
-      if (!detectedSumLabel) {
-        final sumLabel = patternSumLabel.stringMatch(line.text);
-        if (sumLabel != null) {
-          parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-          detectedSumLabel = true;
           continue;
         }
       }
@@ -91,16 +81,18 @@ final class ReceiptParser {
         continue;
       }
 
+      final sumLabel = patternSumLabel.stringMatch(line.text);
+      if (sumLabel != null) {
+        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+        break;
+      }
+
       final amount = patternAmount.stringMatch(line.text);
       if (amount != null && line.boundingBox.left > receiptHalfWidth) {
         final locale = _detectsLocale(amount);
-        final normalized = ReceiptFormatter.normalizeCommas(amount);
+        final normalized = ReceiptNormalizer.normalizeCommas(amount);
         final value = NumberFormat.decimalPattern(locale).parse(normalized);
         parsed.add(RecognizedAmount(line: line, value: value));
-      }
-
-      if (detectedSumLabel) {
-        break;
       }
 
       final unknown = patternUnknown.stringMatch(line.text);
