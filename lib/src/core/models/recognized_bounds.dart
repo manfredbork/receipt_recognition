@@ -8,17 +8,13 @@ class RecognizedBounds {
   final double minLeft;
   final double maxRight;
 
-  // Constructor
   RecognizedBounds({required this.minLeft, required this.maxRight});
 
-  // Null-safe implementation of fromLines
   static RecognizedBounds fromLines(List<TextLine> lines) {
     if (lines.isEmpty) {
-      // Return a default ReceiptBounds object if no lines are found
       return RecognizedBounds(minLeft: 0.0, maxRight: 0.0);
     }
 
-    // Calculate minLeft and maxRight based on boundingBox of lines
     final minLeft = lines
         .map((line) {
           return line.boundingBox.left;
