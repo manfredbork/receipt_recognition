@@ -1,9 +1,5 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
-/// A model class representing the horizontal bounds of a receipt.
-///
-/// Encapsulates the leftmost and rightmost boundaries (`minLeft` and `maxRight`)
-/// for text lines in a receipt.
 class RecognizedBounds {
   final double minLeft;
   final double maxRight;

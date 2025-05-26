@@ -4,46 +4,33 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
-/// Parses OCR-detected [RecognizedText] into structured receipt data.
-///
-/// This parser detects store/company names, product lines, totals, and
-/// prices using patterns, positions, and bounding box geometry.
 final class ReceiptParser {
-  /// Detects common German supermarket brands.
   static final RegExp patternCompany = RegExp(
     r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
     caseSensitive: false,
   );
 
-  /// Keywords that indicate the logical end of a receipt (e.g. taxes).
   static final RegExp patternStopKeywords = RegExp(
     r'(^Bar|^Geg.|^Rückgeld)',
     caseSensitive: false,
   );
 
-  /// Keywords or patterns to ignore during parsing.
   static final RegExp patternIgnoreKeywords = RegExp(
     r'(E-Bon|Coupon|Eingabe|Posten|Stk)',
     caseSensitive: false,
   );
 
-  /// Detects sum labels like "SUMME" or "TOTAL".
   static final RegExp patternSumLabel = RegExp(
     r'(Zu zahlen|Summe|Total)',
     caseSensitive: false,
   );
 
-  /// Matches generic unknown text lines.
   static final RegExp patternUnknown = RegExp(r'\D{6,}');
 
-  /// Matches currency-style amounts (e.g. 1,99 or 2.50).
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 
-  /// Vertical buffer (in pixels) used to exclude lines below the detected
-  /// sum or total line on a receipt.
   static const int boundingBoxBuffer = 50;
 
-  /// High-level method to convert OCR [RecognizedText] into a [RecognizedReceipt].
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
@@ -55,7 +42,6 @@ final class ReceiptParser {
       ..sort((a, b) => a.boundingBox.bottom.compareTo(b.boundingBox.bottom));
   }
 
-  /// Parses lines into [RecognizedEntity] types based on regex rules.
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
     final parsed = <RecognizedEntity>[];
     final bounds = RecognizedBounds.fromLines(lines);
@@ -113,10 +99,6 @@ final class ReceiptParser {
     return Intl.defaultLocale;
   }
 
-  /// Builds the final [RecognizedReceipt] from the list of structured entities.
-  ///
-  /// Matches unknowns to amounts based on spatial proximity and constructs
-  /// positions from those pairs.
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
