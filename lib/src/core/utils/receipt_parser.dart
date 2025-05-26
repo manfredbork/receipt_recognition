@@ -31,7 +31,7 @@ final class ReceiptParser {
 
   static final RegExp patternUnknown = RegExp(r'\D{6,}');
 
-  static const int boundingBoxBuffer = 50;
+  static const int boundingBoxBuffer = 100;
 
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
@@ -61,7 +61,9 @@ final class ReceiptParser {
         }
       }
 
-      if (patternSumLabel.hasMatch(line.text)) {
+      final sumLabel = patternSumLabel.stringMatch(line.text);
+      if (sumLabel != null) {
+        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
         break;
       }
 
@@ -70,10 +72,6 @@ final class ReceiptParser {
       }
 
       if (patternIgnoreKeywords.hasMatch(line.text)) {
-        continue;
-      }
-
-      if (patternInvalidAmount.hasMatch(line.text)) {
         continue;
       }
 
@@ -112,7 +110,9 @@ final class ReceiptParser {
     RecognizedCompany? company;
 
     for (final entity in entities) {
-      if (entity is RecognizedCompany) {
+      if (entity is RecognizedSumLabel) {
+        continue;
+      } else if (entity is RecognizedCompany) {
         company = entity;
       } else if (entity is RecognizedAmount) {
         final yAmount = entity.line.boundingBox;

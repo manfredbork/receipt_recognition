@@ -34,9 +34,15 @@ final class ReceiptOptimizer implements Optimizer {
       _shouldInitialize = false;
     }
 
+    if (_cachedReceipts.isNotEmpty) {
+      receipt.company ??= _cachedReceipts.last.company;
+      receipt.sum ??= _cachedReceipts.last.sum;
+    }
+
     if (_cachedReceipts.length >= _maxCacheSize) {
       _cachedReceipts.removeAt(0);
     }
+
     _cachedReceipts.add(receipt);
 
     return receipt;
@@ -47,12 +53,14 @@ final class ReceiptOptimizer implements Optimizer {
     final List<String> candidates = [];
     for (final receipt in _cachedReceipts) {
       for (final position in receipt.positions) {
-        final similarity = ratio(
-          product.formattedValue,
-          position.product.formattedValue,
-        );
-        if (similarity >= _similarityThreshold) {
-          candidates.add(position.product.formattedValue);
+        if (position.product.formattedValue == product.formattedValue) {
+          final similarity = ratio(
+            product.formattedValue,
+            position.product.formattedValue,
+          );
+          if (similarity >= _similarityThreshold) {
+            candidates.add(position.product.formattedValue);
+          }
         }
       }
     }
