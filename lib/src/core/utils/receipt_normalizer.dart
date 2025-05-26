@@ -11,15 +11,15 @@ final class ReceiptNormalizer {
 
   static String _removeNoisySpaces(String value) {
     return value.replaceAllMapped(
-      RegExp(r'(.)\s*([,.])\s*(.)'),
+      RegExp(r'([0-9])\s*([,.])\s*([0-9])'),
       (match) => '${match[1]}${match[2]}${match[3]}',
     );
   }
 
   static String _removeNoisyTail(String value) {
     return value.replaceAllMapped(
-      RegExp(r'(.*)(-?\s*\d+\s*[.,]\s*\d{2})(.*)'),
-      (match) => '${match[1]}',
+      RegExp(r'(\S*)(-?\s*\d+\s*[.,]\s*\d{2})(\s[^EURO])(.*)'),
+      (match) => '${match[1]}${match[3]}',
     );
   }
 

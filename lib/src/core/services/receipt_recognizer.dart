@@ -26,7 +26,7 @@ final class ReceiptRecognizer {
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 10),
-    Duration scanTimeout = const Duration(seconds: 60),
+    Duration scanTimeout = const Duration(seconds: 30),
     VoidCallback? onScanTimeout,
     Function(ScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
@@ -78,6 +78,13 @@ final class ReceiptRecognizer {
       case ReceiptCompleteness.invalid:
         return _handleIncompleteReceipt(now, optimizedReceipt, validation);
     }
+  }
+
+  RecognizedReceipt acceptReceipt(RecognizedReceipt receipt) {
+    _initializedScan = null;
+    _optimizer.init();
+    _validScans = 0;
+    return _normalizeReceipt(receipt);
   }
 
   Future<void> close() async {
@@ -158,7 +165,7 @@ final class ReceiptRecognizer {
     final List<RecognizedPosition> normalizedPositions = [];
     for (final position in receipt.positions) {
       final bestMatch = ReceiptNormalizer.normalizeByAllValues(
-        _optimizer.possibleValues(position.product),
+        _optimizer.possibleProductValues(position.product),
       );
       normalizedPositions.add(
         position.copyWith(product: position.product.copyWith(value: bestMatch)),
@@ -168,12 +175,23 @@ final class ReceiptRecognizer {
   }
 
   ValidationResult validateReceipt(RecognizedReceipt receipt) {
+    if (receipt.company == null ||
+        receipt.positions.isEmpty ||
+        receipt.sum == null) {
+      return ValidationResult(
+        status: ReceiptCompleteness.invalid,
+        matchPercentage: 0,
+        message: 'Receipt missing critical information',
+      );
+    }
+
     final calculatedSum = receipt.calculatedSum.value;
     final declaredSum = receipt.sum!.value;
     final percentage =
         (calculatedSum < declaredSum)
             ? (calculatedSum / declaredSum * 100)
             : (declaredSum / calculatedSum * 100);
+
     if (receipt.isValid) {
       return ValidationResult(
         status: ReceiptCompleteness.complete,
@@ -193,12 +211,5 @@ final class ReceiptRecognizer {
         message: 'Receipt incomplete (${percentage.toInt()}%)',
       );
     }
-  }
-
-  RecognizedReceipt acceptReceipt(RecognizedReceipt receipt) {
-    _initializedScan = null;
-    _optimizer.init();
-    _validScans = 0;
-    return _normalizeReceipt(receipt);
   }
 }

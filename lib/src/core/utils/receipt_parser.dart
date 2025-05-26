@@ -10,8 +10,13 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
+  static final RegExp patternSumLabel = RegExp(
+    r'(Zu zahlen|Summe|Total|Sum)',
+    caseSensitive: false,
+  );
+
   static final RegExp patternStopKeywords = RegExp(
-    r'(^Bar|^Geg.|^Rückgeld)',
+    r'(Geg.|Rückgeld)',
     caseSensitive: false,
   );
 
@@ -20,14 +25,11 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  static final RegExp patternSumLabel = RegExp(
-    r'(Zu zahlen|Summe|Total|Sum)',
-    caseSensitive: false,
-  );
-
-  static final RegExp patternUnknown = RegExp(r'\D{6,}');
+  static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
 
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
+
+  static final RegExp patternUnknown = RegExp(r'\D{6,}');
 
   static const int boundingBoxBuffer = 50;
 
@@ -59,6 +61,10 @@ final class ReceiptParser {
         }
       }
 
+      if (patternSumLabel.hasMatch(line.text)) {
+        break;
+      }
+
       if (patternStopKeywords.hasMatch(line.text)) {
         break;
       }
@@ -67,10 +73,8 @@ final class ReceiptParser {
         continue;
       }
 
-      final sumLabel = patternSumLabel.stringMatch(line.text);
-      if (sumLabel != null) {
-        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-        break;
+      if (patternInvalidAmount.hasMatch(line.text)) {
+        continue;
       }
 
       final amount = patternAmount.stringMatch(line.text);
@@ -104,14 +108,11 @@ final class ReceiptParser {
     final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
 
-    RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
     RecognizedCompany? company;
 
     for (final entity in entities) {
-      if (entity is RecognizedSumLabel) {
-        sumLabel = entity;
-      } else if (entity is RecognizedCompany) {
+      if (entity is RecognizedCompany) {
         company = entity;
       } else if (entity is RecognizedAmount) {
         final yAmount = entity.line.boundingBox;
@@ -151,7 +152,6 @@ final class ReceiptParser {
       }
     }
 
-    receipt.sumLabel = sumLabel;
     receipt.sum = sum;
     receipt.company = company;
 

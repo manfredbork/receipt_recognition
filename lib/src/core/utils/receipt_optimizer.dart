@@ -6,14 +6,13 @@ abstract class Optimizer {
 
   RecognizedReceipt optimize(RecognizedReceipt receipt);
 
-  List<String> possibleValues(RecognizedProduct product);
+  List<String> possibleProductValues(RecognizedProduct product);
 
   void close();
 }
 
 final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedReceipt> _cachedReceipts = [];
-  RecognizedReceipt? _currentMergedReceipt;
   final int _maxCacheSize;
   final int _similarityThreshold;
   bool _shouldInitialize;
@@ -32,7 +31,6 @@ final class ReceiptOptimizer implements Optimizer {
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
     if (_shouldInitialize) {
       _cachedReceipts.clear();
-      _currentMergedReceipt = null;
       _shouldInitialize = false;
     }
 
@@ -41,86 +39,11 @@ final class ReceiptOptimizer implements Optimizer {
     }
     _cachedReceipts.add(receipt);
 
-    if (_currentMergedReceipt == null || receipt.isValid) {
-      _currentMergedReceipt = receipt;
-      return receipt;
-    }
-
-    _currentMergedReceipt = _mergeReceipts(_currentMergedReceipt!, receipt);
-
-    _markNewPositions(_currentMergedReceipt!, receipt);
-
-    return _currentMergedReceipt!;
-  }
-
-  RecognizedReceipt _mergeReceipts(
-    RecognizedReceipt existing,
-    RecognizedReceipt newPart,
-  ) {
-    final allPositions = <RecognizedPosition>[];
-
-    for (final position in existing.positions) {
-      if (!_hasNearDuplicate(position, newPart.positions)) {
-        allPositions.add(position);
-      }
-    }
-
-    allPositions.addAll(newPart.positions);
-
-    final company = newPart.company ?? existing.company;
-    final sum = _determineBestSum(existing.sum, newPart.sum);
-
-    return RecognizedReceipt(
-      positions: allPositions,
-      company: company,
-      sum: sum,
-      timestamp: DateTime.now(),
-    );
-  }
-
-  void _markNewPositions(
-    RecognizedReceipt mergedReceipt,
-    RecognizedReceipt newPart,
-  ) {
-    for (final position in mergedReceipt.positions) {
-      for (final newPosition in newPart.positions) {
-        final similarity = ratio(
-          position.product.formattedValue,
-          newPosition.product.formattedValue,
-        );
-
-        if (similarity >= _similarityThreshold) {
-          position.operation = Operation.added;
-          break;
-        }
-      }
-    }
-  }
-
-  bool _hasNearDuplicate(
-    RecognizedPosition position,
-    List<RecognizedPosition> positions,
-  ) {
-    for (final other in positions) {
-      final similarity = ratio(
-        position.product.formattedValue,
-        other.product.formattedValue,
-      );
-      if (similarity >= _similarityThreshold) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  RecognizedSum? _determineBestSum(RecognizedSum? sum1, RecognizedSum? sum2) {
-    if (sum1 == null) return sum2;
-    if (sum2 == null) return sum1;
-    return sum1;
+    return receipt;
   }
 
   @override
-  List<String> possibleValues(RecognizedProduct product) {
+  List<String> possibleProductValues(RecognizedProduct product) {
     final List<String> candidates = [];
     for (final receipt in _cachedReceipts) {
       for (final position in receipt.positions) {
@@ -139,7 +62,6 @@ final class ReceiptOptimizer implements Optimizer {
   @override
   void close() {
     _cachedReceipts.clear();
-    _currentMergedReceipt = null;
     _shouldInitialize = false;
   }
 }
