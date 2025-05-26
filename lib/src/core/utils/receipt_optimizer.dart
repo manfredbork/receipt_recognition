@@ -53,7 +53,7 @@ final class ReceiptOptimizer implements Optimizer {
           product.formattedValue,
           position.product.formattedValue,
         );
-        if (similarity > _similarityThreshold) {
+        if (similarity >= _similarityThreshold) {
           candidates.add(position.product.formattedValue);
         }
       }
