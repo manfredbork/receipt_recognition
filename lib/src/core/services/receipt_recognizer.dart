@@ -167,11 +167,7 @@ final class ReceiptRecognizer {
     return receipt.copyWith(positions: normalizedPositions);
   }
 
-  // Method to validate a receipt using the configurable threshold
   ValidationResult validateReceipt(RecognizedReceipt receipt) {
-    // Basic validation checks...
-
-    // Calculate match percentage
     final calculatedSum = receipt.calculatedSum.value;
     final declaredSum = receipt.sum!.value;
     final percentage =

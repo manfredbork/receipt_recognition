@@ -36,22 +36,18 @@ final class ReceiptOptimizer implements Optimizer {
       _shouldInitialize = false;
     }
 
-    // Add to cache
     if (_cachedReceipts.length >= _maxCacheSize) {
       _cachedReceipts.removeAt(0);
     }
     _cachedReceipts.add(receipt);
 
-    // If this is our first scan or we're starting over
     if (_currentMergedReceipt == null) {
       _currentMergedReceipt = receipt;
       return receipt;
     }
 
-    // Merge with existing scan
     _currentMergedReceipt = _mergeReceipts(_currentMergedReceipt!, receipt);
 
-    // Set operation flag on new positions to indicate they were just added
     _markNewPositions(_currentMergedReceipt!, receipt);
 
     return _currentMergedReceipt!;
