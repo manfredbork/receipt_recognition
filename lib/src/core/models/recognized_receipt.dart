@@ -44,10 +44,24 @@ final class ScanProgress {
   final List<RecognizedPosition> addedPositions;
   final List<RecognizedPosition> updatedPositions;
   final int? estimatedPercentage;
+  final RecognizedReceipt? mergedReceipt;
+  final bool nearlyComplete;
 
   ScanProgress({
     required this.addedPositions,
     required this.updatedPositions,
     this.estimatedPercentage,
+    this.mergedReceipt,
+    this.nearlyComplete = false,
   });
+}
+
+enum ReceiptCompleteness { complete, nearlyComplete, incomplete, invalid }
+
+class ValidationResult {
+  final ReceiptCompleteness status;
+  final int? matchPercentage;
+  final String? message;
+
+  ValidationResult({required this.status, this.matchPercentage, this.message});
 }
