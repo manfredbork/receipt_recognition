@@ -1,68 +1,69 @@
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
-/// An interface for post-processing scanned receipts to improve accuracy.
-///
-/// Implementations can handle multi-frame consolidation, filtering,
-/// ranking, and ordering of recognized items.
 abstract class Optimizer {
-  /// Creates an [Optimizer] instance, optionally configured for video feeds.
-  Optimizer({required bool videoFeed});
-
-  /// Initializes the optimizer before use.
   void init();
 
-  /// Optimizes the given [RecognizedReceipt] by applying grouping,
-  /// deduplication, ordering, or validation logic.
   RecognizedReceipt optimize(RecognizedReceipt receipt);
 
-  /// Frees any cached memory or intermediate data.
+  List<String> possibleValues(RecognizedProduct product);
+
   void close();
 }
 
-/// Default implementation of [Optimizer] using [CachedReceipt].
-///
-/// Aggregates multiple scan frames and consolidates the receipt by applying
-/// position grouping, graph-based ordering, and sum validation.
 final class ReceiptOptimizer implements Optimizer {
-  final CachedReceipt _cachedReceipt;
-  bool _isInitialized = false;
+  final _cachedReceipts = [];
+  final int _maxCacheSize;
+  final int _similarityThreshold;
 
-  /// Creates a [ReceiptOptimizer] with an internal [CachedReceipt] state.
-  ///
-  /// Set [videoFeed] to `true` to require more confirmations for validity.
-  ReceiptOptimizer({required bool videoFeed})
-    : _cachedReceipt = CachedReceipt(
-        positions: [],
-        timestamp: DateTime.now(),
-        videoFeed: videoFeed,
-        positionGroups: [],
-      );
+  bool _shouldInitialize;
+
+  ReceiptOptimizer({int maxCacheSize = 10, int similarityThreshold = 75})
+    : _maxCacheSize = maxCacheSize,
+      _similarityThreshold = similarityThreshold,
+      _shouldInitialize = false;
 
   @override
   void init() {
-    _isInitialized = true;
+    _shouldInitialize = true;
   }
 
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
-    if (_isInitialized) {
-      _cachedReceipt.clear();
-      _isInitialized = false;
+    if (_shouldInitialize) {
+      _cachedReceipts.clear();
+      _shouldInitialize = false;
     }
 
-    _cachedReceipt.apply(receipt);
-    _cachedReceipt.consolidatePositions();
-
-    if (receipt.isValid) {
-      return ReceiptNormalizer.normalize(receipt);
+    if (_cachedReceipts.length >= _maxCacheSize) {
+      _cachedReceipts.removeAt(0);
     }
 
-    return ReceiptNormalizer.normalize(_cachedReceipt);
+    _cachedReceipts.add(receipt);
+
+    return receipt;
+  }
+
+  @override
+  List<String> possibleValues(RecognizedProduct product) {
+    final List<String> candidates = [];
+    for (final receipt in _cachedReceipts) {
+      for (final position in receipt.positions) {
+        final similarity = ratio(
+          product.formattedValue,
+          position.product.formattedValue,
+        );
+        if (similarity > _similarityThreshold) {
+          candidates.add(position.product.formattedValue);
+        }
+      }
+    }
+    return candidates;
   }
 
   @override
   void close() {
-    _cachedReceipt.clear();
-    _isInitialized = false;
+    _cachedReceipts.clear();
+    _shouldInitialize = false;
   }
 }
