@@ -174,8 +174,7 @@ final class ReceiptRecognizer {
         (calculatedSum < declaredSum)
             ? (calculatedSum / declaredSum * 100)
             : (declaredSum / calculatedSum * 100);
-
-    if (percentage == 100) {
+    if (receipt.isValid) {
       return ValidationResult(
         status: ReceiptCompleteness.complete,
         matchPercentage: 100,

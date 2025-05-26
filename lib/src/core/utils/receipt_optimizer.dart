@@ -41,7 +41,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
     _cachedReceipts.add(receipt);
 
-    if (_currentMergedReceipt == null) {
+    if (_currentMergedReceipt == null || receipt.isValid) {
       _currentMergedReceipt = receipt;
       return receipt;
     }
