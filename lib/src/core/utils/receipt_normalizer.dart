@@ -15,7 +15,7 @@ final class ReceiptNormalizer {
 
   static String normalizeTail(String value) {
     return value.replaceAllMapped(
-      RegExp(r'(\S*)(-?\s*\d+\s*[.,]\s*\d{2}.*)'),
+      RegExp(r'([^-\s]*)(-?\s*\d+\s*[.,]\s*\d{2}.*)'),
       (match) => '${match[1]}',
     );
   }
@@ -60,24 +60,23 @@ final class ReceiptNormalizer {
     List<String> otherTexts,
   ) {
     const separator = ' ';
+    final bestTokens = bestText.split(separator);
     for (int i = 0; i < otherTexts.length; i++) {
-      final bestTokens = bestText.split(separator);
       final otherTokens = otherTexts[i].split(separator);
       if (bestTokens.length > otherTokens.length) {
-        for (int j = 0; j < bestTokens.length; j++) {
-          if (j + 1 < otherTokens.length) {
-            final mergedToken = bestTokens[j] + bestTokens[j + 1];
-            if (mergedToken == otherTokens[j]) {
-              bestTokens[j] = mergedToken;
-              bestTokens.removeAt(j + 1);
+        for (int j = 1; j < bestTokens.length; j++) {
+          if (j <= otherTokens.length) {
+            final mergedToken = bestTokens[j - 1] + bestTokens[j];
+            if (mergedToken == otherTokens[j - 1]) {
+              bestTokens[j - 1] = mergedToken;
+              bestTokens.removeAt(j);
               j--;
             }
           }
         }
       }
-      bestText = bestTokens.join(separator);
     }
-    return bestText;
+    return bestTokens.join(separator);
   }
 
   static List<String> sortByFrequency(List<String> values) {
