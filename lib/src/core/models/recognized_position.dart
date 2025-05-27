@@ -2,11 +2,9 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class RecognizedPosition {
   final RecognizedProduct product;
-
   final RecognizedPrice price;
 
   DateTime timestamp;
-
   Operation operation;
 
   RecognizedPosition({
@@ -21,7 +19,6 @@ final class RecognizedPosition {
     RecognizedPrice? price,
     DateTime? timestamp,
     Operation? operation,
-    int? scanIndex,
   }) {
     return RecognizedPosition(
       product: product ?? this.product,

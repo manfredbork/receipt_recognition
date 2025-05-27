@@ -42,7 +42,7 @@ class ReceiptWidget extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              position.product.formattedValue,
+                              position.product.normalizedText,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.black,

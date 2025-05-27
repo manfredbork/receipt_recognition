@@ -6,7 +6,7 @@ class ReceiptTextProcessor {
   static Future<RecognizedReceipt?> processText(RecognizedText text) async {
     return compute(_parseTextInBackground, text);
   }
-  
+
   static RecognizedReceipt? _parseTextInBackground(RecognizedText text) {
     return ReceiptParser.processText(text);
   }

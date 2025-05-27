@@ -10,24 +10,26 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
+  static final RegExp patternSumLabel = RegExp(
+    r'(Zu zahlen|Summe|Total|Sum)',
+    caseSensitive: false,
+  );
+
   static final RegExp patternStopKeywords = RegExp(
-    r'(^Bar|^Geg.|^Rückgeld)',
+    r'(Geg.|Rückgeld)',
     caseSensitive: false,
   );
 
   static final RegExp patternIgnoreKeywords = RegExp(
-    r'(E-Bon|Coupon|Eingabe|Posten|Stk)',
+    r'(E-Bon|Coupon|Eingabe|Posten|Stk|kg)',
     caseSensitive: false,
   );
 
-  static final RegExp patternSumLabel = RegExp(
-    r'(Zu zahlen|Summe|Total)',
-    caseSensitive: false,
-  );
-
-  static final RegExp patternUnknown = RegExp(r'\D{6,}');
+  static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
 
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
+
+  static final RegExp patternUnknown = RegExp(r'\D{6,}');
 
   static const int boundingBoxBuffer = 50;
 
@@ -39,7 +41,7 @@ final class ReceiptParser {
 
   static List<TextLine> _convertText(RecognizedText text) {
     return text.blocks.expand((block) => block.lines).toList()
-      ..sort((a, b) => a.boundingBox.bottom.compareTo(b.boundingBox.bottom));
+      ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
@@ -48,6 +50,7 @@ final class ReceiptParser {
     final receiptHalfWidth = (bounds.minLeft + bounds.maxRight) / 2;
 
     bool detectedCompany = false;
+    bool detectedSumLabel = false;
 
     for (final line in lines) {
       if (!detectedCompany) {
@@ -59,6 +62,14 @@ final class ReceiptParser {
         }
       }
 
+      if (!detectedSumLabel) {
+        final sumLabel = patternSumLabel.stringMatch(line.text);
+        if (sumLabel != null) {
+          parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+          detectedSumLabel = true;
+        }
+      }
+
       if (patternStopKeywords.hasMatch(line.text)) {
         break;
       }
@@ -67,16 +78,10 @@ final class ReceiptParser {
         continue;
       }
 
-      final sumLabel = patternSumLabel.stringMatch(line.text);
-      if (sumLabel != null) {
-        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-        break;
-      }
-
       final amount = patternAmount.stringMatch(line.text);
       if (amount != null && line.boundingBox.left > receiptHalfWidth) {
         final locale = _detectsLocale(amount);
-        final trimmedAmount = ReceiptNormalizer.trim(amount);
+        final trimmedAmount = ReceiptFormatter.trim(amount);
         final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
         parsed.add(RecognizedAmount(line: line, value: value));
       }
@@ -88,9 +93,7 @@ final class ReceiptParser {
       }
     }
 
-    return parsed..sort(
-      (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
-    );
+    return parsed.toList();
   }
 
   static String? _detectsLocale(String text) {
@@ -104,13 +107,12 @@ final class ReceiptParser {
     final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
 
-    RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
     RecognizedCompany? company;
 
     for (final entity in entities) {
       if (entity is RecognizedSumLabel) {
-        sumLabel = entity;
+        continue;
       } else if (entity is RecognizedCompany) {
         company = entity;
       } else if (entity is RecognizedAmount) {
@@ -146,12 +148,12 @@ final class ReceiptParser {
             break;
           } else {
             sum = RecognizedSum(line: entity.line, value: entity.value);
+            break;
           }
         }
       }
     }
 
-    receipt.sumLabel = sumLabel;
     receipt.sum = sum;
     receipt.company = company;
 

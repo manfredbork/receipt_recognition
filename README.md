@@ -1,4 +1,3 @@
-
 # 📷 receipt_recognition
 
 [![Pub Version](https://img.shields.io/pub/v/receipt_recognition)](https://pub.dev/packages/receipt_recognition)
@@ -66,38 +65,42 @@ Update `Info.plist`:
 ### 📦 Basic Usage
 
 ```dart
+import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+// Create a receipt recognizer
 final receiptRecognizer = ReceiptRecognizer(
-  videoFeed: false,
-  scanTimeout: Duration(seconds: 10),
-  onScanTimeout: () {
-    print('Scan timed out.');
-  },
+  singleScan: true,
   onScanComplete: (receipt) {
-    print('Scan complete! Store: ${receipt.company?.formattedValue}');
+    // Handle the recognized receipt
+    print('Company: ${receipt.company?.value}');
     print('Total: ${receipt.sum?.formattedValue}');
-  },
-  onScanUpdate: (scanProgress) {
-    if (scanProgress.estimatedPercentage != null) {
-      print('In-progress scan: ${scanProgress.estimatedPercentage}% detected so far.');
+    
+    for (final position in receipt.positions) {
+      print('${position.product.formattedValue}: ${position.price.formattedValue}');
     }
+  },
+  onScanUpdate: (progress) {
+    // Track scanning progress
+    print('Scan progress: ${progress.estimatedPercentage}%');
+    print('Added positions: ${progress.addedPositions.length}');
   },
 );
 
-// Load an image (from file, camera, etc.)
-final inputImage = InputImage.fromFilePath('path/to/receipt.jpg');
-
-// Process the image
-final receipt = await receiptRecognizer.processImage(inputImage);
-
-if (receipt != null) {
-  print('Store: ${receipt.company?.formattedValue}');
-  for (final item in receipt.positions) {
-    print('Product: ${item.product.formattedValue}, Price: ${item.price.formattedValue}');
+// Process an image
+Future<void> processReceiptImage(InputImage inputImage) async {
+  final receipt = await recognizer.processImage(inputImage);
+  if (receipt != null) {
+    // Receipt was successfully recognized
   }
-  print('Total: ${receipt.sum?.formattedValue}');
+}
+
+// Don't forget to close the receipt recognizer when done
+@override
+void dispose() {
+  recognizer.close();
+  super.dispose();
 }
 ```
 
@@ -106,14 +109,6 @@ if (receipt != null) {
 For an advanced use case, we provide an example of using this package with a video feed. You can integrate it with a camera feed (via a package like `camera`), and continuously scan receipts in real time.
 
 Refer to the **[example app](example/lib/main.dart)** for an implementation that uses live camera data to recognize and process receipts as they appear in the frame.
-
----
-
-### 🧹 Clean Up
-
-```dart
-await receiptRecognizer.close();
-```
 
 ---
 
@@ -126,7 +121,6 @@ await receiptRecognizer.close();
 | `RecognizedProduct`  | Alphanumeric value for product.                                   |
 | `RecognizedPrice`    | Numerical value for price.                                        |
 | `RecognizedSum`      | Numerical value for sum.                                          |
-| `RecognizedSumLabel` | Represents the detected label for the sum.                        |
 | `RecognizedCompany`  | Specialized entity for the store name.                            |
 
 ---

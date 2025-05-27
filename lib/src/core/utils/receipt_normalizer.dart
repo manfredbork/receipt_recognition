@@ -1,66 +1,96 @@
 final class ReceiptNormalizer {
-  static String normalize(String value) {
-    final removedNoisySpaces = _removeNoisySpaces(value);
-    final removedNoisyTail = _removeNoisyTail(removedNoisySpaces);
-    return removedNoisyTail;
-  }
-
-  static String trim(String value) {
-    return _removeNoisySpaces(value);
-  }
-
-  static String _removeNoisySpaces(String value) {
-    return value.replaceAllMapped(
-      RegExp(r'(.)\s*([,.])\s*(.)'),
-      (match) => '${match[1]}${match[2]}${match[3]}',
+  static String? normalizeByAlternativeTexts(List<String> alternativeTexts) {
+    if (alternativeTexts.isEmpty) return null;
+    final frequencyTexts = sortByFrequency(alternativeTexts);
+    final List<String> normalizedTexts = [];
+    for (final frequencyText in frequencyTexts) {
+      normalizedTexts.add(
+        normalizeTail(normalizeSpecialSpaces(frequencyText, frequencyTexts)),
+      );
+    }
+    final normalizedText = normalizeSpecialChars(
+      normalizedTexts.last,
+      normalizedTexts,
     );
+    return normalizedText;
   }
 
-  static String _removeNoisyTail(String value) {
+  static String normalizeTail(String value) {
     return value.replaceAllMapped(
-      RegExp(r'(.*)(-?\s*\d+\s*[.,]\s*\d{2})(.*)'),
+      RegExp(r'(.*\S)(\s*\d+[.,]?\d{2,3}.*)'),
       (match) => '${match[1]}',
     );
   }
 
-  static String normalizeByAllValues(List<String> values) {
-    final sortedByFrequency = _sortByFrequency(values);
-    String merged = '';
-    for (int i = 1; i < sortedByFrequency.length; i++) {
-      final differentValue = sortedByFrequency.first != sortedByFrequency[i];
-      final sameLength =
-          sortedByFrequency.first.length == sortedByFrequency[i].length;
+  static String normalizeSpecialChars(
+    String bestText,
+    List<String> otherTexts,
+  ) {
+    String normalizedText = '';
+    for (int i = 0; i < otherTexts.length; i++) {
+      final differentValue = bestText != otherTexts[i];
+      final sameLength = bestText.length == otherTexts[i].length;
       if (differentValue && sameLength) {
-        merged = '';
-        for (int j = 0; j < sortedByFrequency.first.length; j++) {
-          final char = sortedByFrequency.first[j];
-          final compareChar = sortedByFrequency[i][j];
-          if (RegExp(r'[^A-Za-zäöüß]').hasMatch(char) &&
-              RegExp(r'[A-Za-zäöüß]').hasMatch(compareChar)) {
-            merged += compareChar;
-          } else if (RegExp(r'[^äöüß]').hasMatch(char) &&
-              RegExp(r'[äöüß]').hasMatch(compareChar)) {
-            merged += compareChar;
+        normalizedText = '';
+        for (int j = 0; j < bestText.length; j++) {
+          final char = bestText[j];
+          final compareChar = otherTexts[i][j];
+          if (RegExp(r'[!@#^*()?":{}|<>]').hasMatch(char) &&
+              RegExp(r'[A-Za-z0-9]').hasMatch(compareChar)) {
+            normalizedText += compareChar;
+          } else if (RegExp(r'[^A-Za-z]').hasMatch(char) &&
+              RegExp(r'[A-Za-zÄÖÜäöüß]').hasMatch(compareChar)) {
+            normalizedText += compareChar;
           } else {
-            merged += char;
+            normalizedText += char;
+          }
+        }
+        bestText = normalizedText;
+      }
+    }
+    if (normalizedText.isEmpty) {
+      return bestText;
+    }
+    return normalizedText;
+  }
+
+  static String normalizeSpecialSpaces(
+    String bestText,
+    List<String> otherTexts,
+  ) {
+    const separator = ' ';
+    final bestTokens = bestText.split(separator);
+    for (int i = 0; i < otherTexts.length; i++) {
+      final otherTokens = otherTexts[i].split(separator);
+      if (bestTokens.length > otherTokens.length) {
+        for (int j = 1; j < bestTokens.length; j++) {
+          if (j <= otherTokens.length) {
+            final firstToken = bestTokens[j - 1];
+            final secondToken =
+                bestTokens[j] == bestTokens[j].toUpperCase()
+                    ? bestTokens[j].toUpperCase()
+                    : bestTokens[j].toLowerCase();
+            final mergedToken = firstToken + secondToken;
+            if (mergedToken == otherTokens[j - 1]) {
+              bestTokens[j - 1] = mergedToken;
+              bestTokens.removeAt(j);
+              j--;
+            }
           }
         }
       }
     }
-    if (sortedByFrequency.isNotEmpty && merged.isEmpty) {
-      return sortedByFrequency.first;
-    }
-    return merged;
+    return bestTokens.join(separator);
   }
 
-  static List<String> _sortByFrequency(List<String> values) {
+  static List<String> sortByFrequency(List<String> values) {
     final Map<String, int> frequencyMap = {};
     for (final value in values) {
       frequencyMap[value] = (frequencyMap[value] ?? 0) + 1;
     }
     final entries =
         frequencyMap.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
+          ..sort((a, b) => a.value.compareTo(b.value));
     return entries.map((e) => e.key).toList();
   }
 }

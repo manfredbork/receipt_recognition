@@ -6,19 +6,18 @@ abstract class Optimizer {
 
   RecognizedReceipt optimize(RecognizedReceipt receipt);
 
-  List<String> possibleValues(RecognizedProduct product);
+  void assignAlternativeTexts(RecognizedReceipt receipt);
 
   void close();
 }
 
 final class ReceiptOptimizer implements Optimizer {
-  final _cachedReceipts = [];
+  final List<RecognizedReceipt> _cachedReceipts = [];
   final int _maxCacheSize;
   final int _similarityThreshold;
-
   bool _shouldInitialize;
 
-  ReceiptOptimizer({int maxCacheSize = 10, int similarityThreshold = 75})
+  ReceiptOptimizer({int maxCacheSize = 20, int similarityThreshold = 50})
     : _maxCacheSize = maxCacheSize,
       _similarityThreshold = similarityThreshold,
       _shouldInitialize = false;
@@ -35,6 +34,11 @@ final class ReceiptOptimizer implements Optimizer {
       _shouldInitialize = false;
     }
 
+    if (_cachedReceipts.isNotEmpty) {
+      receipt.company ??= _cachedReceipts.last.company;
+      receipt.sum ??= _cachedReceipts.last.sum;
+    }
+
     if (_cachedReceipts.length >= _maxCacheSize) {
       _cachedReceipts.removeAt(0);
     }
@@ -45,20 +49,27 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   @override
-  List<String> possibleValues(RecognizedProduct product) {
-    final List<String> candidates = [];
-    for (final receipt in _cachedReceipts) {
-      for (final position in receipt.positions) {
-        final similarity = ratio(
-          product.formattedValue,
-          position.product.formattedValue,
-        );
-        if (similarity > _similarityThreshold) {
-          candidates.add(position.product.formattedValue);
-        }
+  void assignAlternativeTexts(RecognizedReceipt receipt) {
+    for (final position in receipt.positions) {
+      final List<String> alternativeTexts = [];
+      for (final cachedReceipt in _cachedReceipts) {
+        final texts = cachedReceipt.positions
+            .where((p) {
+              if (p.price.formattedValue == position.price.formattedValue) {
+                final similarity = ratio(
+                  p.product.formattedValue,
+                  position.product.formattedValue,
+                );
+                return similarity >= _similarityThreshold;
+              }
+              return false;
+            })
+            .map((p) => p.product.text);
+        alternativeTexts.addAll(texts);
       }
+      position.product.alternativeTexts.clear();
+      position.product.alternativeTexts.addAll(alternativeTexts);
     }
-    return candidates;
   }
 
   @override

@@ -1,7 +1,7 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
-enum Operation { added, updated }
+enum Operation { none, added, updated }
 
 abstract class Valuable<T> {
   final T value;
@@ -15,40 +15,41 @@ abstract class Valuable<T> {
 
 abstract class RecognizedEntity<T> extends Valuable<T> {
   final TextLine line;
+  final double? confidence;
 
-  RecognizedEntity({required this.line, required super.value});
+  RecognizedEntity({required super.value, required this.line, this.confidence});
 }
 
 final class RecognizedCompany extends RecognizedEntity<String> {
-  RecognizedCompany({required super.line, required super.value});
+  RecognizedCompany({required super.value, required super.line});
 
   @override
   String format(String value) => value.toUpperCase();
 }
 
 final class RecognizedUnknown extends RecognizedEntity<String> {
-  RecognizedUnknown({required super.line, required super.value});
+  RecognizedUnknown({required super.value, required super.line});
 
   @override
   String format(String value) => value;
 }
 
 final class RecognizedSumLabel extends RecognizedEntity<String> {
-  RecognizedSumLabel({required super.line, required super.value});
+  RecognizedSumLabel({required super.value, required super.line});
 
   @override
   String format(String value) => value;
 }
 
 final class RecognizedAmount extends RecognizedEntity<num> {
-  RecognizedAmount({required super.line, required super.value});
+  RecognizedAmount({required super.value, required super.line});
 
   @override
   String format(num value) => ReceiptFormatter.format(value);
 }
 
 final class RecognizedSum extends RecognizedEntity<num> {
-  RecognizedSum({required super.line, required super.value});
+  RecognizedSum({required super.value, required super.line});
 
   @override
   String format(num value) => ReceiptFormatter.format(value);
