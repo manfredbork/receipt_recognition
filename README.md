@@ -90,7 +90,7 @@ final receiptRecognizer = ReceiptRecognizer(
 
 // Process an image
 Future<void> processReceiptImage(InputImage inputImage) async {
-  final receipt = await recognizer.processImage(inputImage);
+  final receipt = await receiptRecognizer.processImage(inputImage);
   if (receipt != null) {
     // Receipt was successfully recognized
   }
@@ -99,7 +99,7 @@ Future<void> processReceiptImage(InputImage inputImage) async {
 // Don't forget to close the receipt recognizer when done
 @override
 void dispose() {
-  recognizer.close();
+  receiptRecognizer.close();
   super.dispose();
 }
 ```
