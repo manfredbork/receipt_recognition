@@ -31,7 +31,7 @@ final class ReceiptParser {
 
   static final RegExp patternUnknown = RegExp(r'\D{6,}');
 
-  static const int boundingBoxBuffer = 100;
+  static const int boundingBoxBuffer = 50;
 
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
@@ -41,7 +41,7 @@ final class ReceiptParser {
 
   static List<TextLine> _convertText(RecognizedText text) {
     return text.blocks.expand((block) => block.lines).toList()
-      ..sort((a, b) => a.boundingBox.bottom.compareTo(b.boundingBox.bottom));
+      ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
@@ -50,6 +50,7 @@ final class ReceiptParser {
     final receiptHalfWidth = (bounds.minLeft + bounds.maxRight) / 2;
 
     bool detectedCompany = false;
+    bool detectedSumLabel = false;
 
     for (final line in lines) {
       if (!detectedCompany) {
@@ -61,10 +62,12 @@ final class ReceiptParser {
         }
       }
 
-      final sumLabel = patternSumLabel.stringMatch(line.text);
-      if (sumLabel != null) {
-        parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-        break;
+      if (!detectedSumLabel) {
+        final sumLabel = patternSumLabel.stringMatch(line.text);
+        if (sumLabel != null) {
+          parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+          detectedSumLabel = true;
+        }
       }
 
       if (patternStopKeywords.hasMatch(line.text)) {
@@ -90,9 +93,7 @@ final class ReceiptParser {
       }
     }
 
-    return parsed..sort(
-      (a, b) => a.line.boundingBox.top.compareTo(b.line.boundingBox.top),
-    );
+    return parsed.toList();
   }
 
   static String? _detectsLocale(String text) {

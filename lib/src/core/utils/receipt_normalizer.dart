@@ -65,7 +65,12 @@ final class ReceiptNormalizer {
       if (bestTokens.length > otherTokens.length) {
         for (int j = 1; j < bestTokens.length; j++) {
           if (j <= otherTokens.length) {
-            final mergedToken = bestTokens[j - 1] + bestTokens[j].toLowerCase();
+            final firstToken = bestTokens[j - 1];
+            final secondToken =
+                bestTokens[j] == bestTokens[j].toUpperCase()
+                    ? bestTokens[j].toUpperCase()
+                    : bestTokens[j].toLowerCase();
+            final mergedToken = firstToken + secondToken;
             if (mergedToken == otherTokens[j - 1]) {
               bestTokens[j - 1] = mergedToken;
               bestTokens.removeAt(j);
