@@ -1,80 +1,86 @@
 final class ReceiptNormalizer {
-  static String normalize(String value) {
-    final removedNoisySpaces = _removeNoisySpaces(value);
-    final removedNoisyTail = _removeNoisyTail(removedNoisySpaces);
-    return removedNoisyTail;
-  }
-
-  static String trim(String value) {
-    return _removeNoisySpaces(value);
-  }
-
-  static String _removeNoisySpaces(String value) {
-    return value.replaceAllMapped(
-      RegExp(r'(\S*)\s*([,.])\s*(\S*)'),
-      (match) => '${match[1]}${match[2]}${match[3]}',
+  static String normalizeByAlternativeTexts(
+    String bestText,
+    List<String> otherTexts,
+  ) {
+    final frequencyTexts = sortByFrequency(otherTexts);
+    final firstStageText = normalizeSpecialChars(bestText, frequencyTexts);
+    final secondStageText = normalizeSpecialSpaces(
+      firstStageText,
+      frequencyTexts,
     );
+    final normalizedText = normalizeTail(secondStageText);
+    return normalizedText;
   }
 
-  static String _removeNoisyTail(String value) {
+  static String normalizeTail(String value) {
     return value.replaceAllMapped(
       RegExp(r'(\S*)(-?\s*\d+\s*[.,]\s*\d{2}.*)'),
       (match) => '${match[1]}',
     );
   }
 
-  static String normalizeByAllValues(List<String> values) {
-    final sorted = _sortByFrequency(values);
-    final normalized = _normalizeSpecialChars(sorted);
-    if (sorted.isNotEmpty && normalized.isEmpty) {
-      return sorted.first;
-    }
-    return normalized;
-  }
-
-  static String _normalizeSpecialChars(List<String> values) {
-    String normalized = '';
-    for (int i = 1; i < values.length; i++) {
-      final differentValue = values.first != values[i];
-      final sameLength = values.first.length == values[i].length;
+  static String normalizeSpecialChars(
+    String bestText,
+    List<String> otherTexts,
+  ) {
+    String normalizedText = '';
+    for (int i = 0; i < otherTexts.length; i++) {
+      final differentValue = bestText != otherTexts[i];
+      final sameLength = bestText.length == otherTexts[i].length;
       if (differentValue && sameLength) {
-        normalized = '';
-        for (int j = 0; j < values.first.length; j++) {
-          final char = values.first[j];
-          final compareChar = values[i][j];
-          if (RegExp(r'[#0-9]').hasMatch(char) &&
-              RegExp(r'[A-Za-z]').hasMatch(compareChar)) {
-            normalized += compareChar;
-          } else if (RegExp(r'[A-Za-z0-9]').hasMatch(char) &&
+        normalizedText = '';
+        for (int j = 0; j < bestText.length; j++) {
+          final char = bestText[j];
+          final compareChar = otherTexts[i][j];
+          if (RegExp(r'[!@#^*()?":{}|<>]').hasMatch(char) &&
+              RegExp(r'[A-Za-z0-9]').hasMatch(compareChar)) {
+            normalizedText += compareChar;
+          } else if (RegExp(r'[^ÄÖÜäöüß]').hasMatch(char) &&
               RegExp(r'[ÄÖÜäöüß]').hasMatch(compareChar)) {
-            normalized += compareChar;
+            normalizedText += compareChar;
+          } else if (RegExp(r'[0-9]').hasMatch(char) &&
+              RegExp(r'[A-Za-z]').hasMatch(compareChar)) {
+            normalizedText += compareChar;
           } else {
-            normalized += char;
+            normalizedText += char;
           }
         }
-        values.first = normalized;
+        bestText = normalizedText;
       }
     }
-    final normalizedToken = normalized.split(' ');
-    for (int i = 1; i < values.length; i++) {
-      final token = values[i].split(' ');
-      if (normalizedToken.length > token.length) {
-        for (int j = 0; j < normalizedToken.length; j++) {
-          if (j + 1 < token.length) {
-            final merged = normalizedToken[j] + normalizedToken[j + 1];
-            if (merged == token[j]) {
-              normalizedToken[j] = merged;
-              normalizedToken.removeAt(j + 1);
+    if (normalizedText.isEmpty) {
+      return bestText;
+    }
+    return normalizedText;
+  }
+
+  static String normalizeSpecialSpaces(
+    String bestText,
+    List<String> otherTexts,
+  ) {
+    const separator = ' ';
+    for (int i = 0; i < otherTexts.length; i++) {
+      final bestTokens = bestText.split(separator);
+      final otherTokens = otherTexts[i].split(separator);
+      if (bestTokens.length > otherTokens.length) {
+        for (int j = 0; j < bestTokens.length; j++) {
+          if (j + 1 < otherTokens.length) {
+            final mergedToken = bestTokens[j] + bestTokens[j + 1];
+            if (mergedToken == otherTokens[j]) {
+              bestTokens[j] = mergedToken;
+              bestTokens.removeAt(j + 1);
               j--;
             }
           }
         }
       }
+      bestText = bestTokens.join(separator);
     }
-    return normalizedToken.join(' ');
+    return bestText;
   }
 
-  static List<String> _sortByFrequency(List<String> values) {
+  static List<String> sortByFrequency(List<String> values) {
     final Map<String, int> frequencyMap = {};
     for (final value in values) {
       frequencyMap[value] = (frequencyMap[value] ?? 0) + 1;

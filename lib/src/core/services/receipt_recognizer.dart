@@ -165,7 +165,8 @@ final class ReceiptRecognizer {
   RecognizedReceipt _normalizeReceipt(RecognizedReceipt receipt) {
     final List<RecognizedPosition> normalizedPositions = [];
     for (final position in receipt.positions) {
-      final bestMatch = ReceiptNormalizer.normalizeByAllValues(
+      final bestMatch = ReceiptNormalizer.normalizeByAlternativeTexts(
+        position.product.value,
         _optimizer.possibleProductValues(position.product),
       );
       normalizedPositions.add(

@@ -78,7 +78,7 @@ final class ReceiptParser {
       final amount = patternAmount.stringMatch(line.text);
       if (amount != null && line.boundingBox.left > receiptHalfWidth) {
         final locale = _detectsLocale(amount);
-        final trimmedAmount = ReceiptNormalizer.trim(amount);
+        final trimmedAmount = ReceiptFormatter.trim(amount);
         final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
         parsed.add(RecognizedAmount(line: line, value: value));
       }
@@ -147,6 +147,7 @@ final class ReceiptParser {
             break;
           } else {
             sum = RecognizedSum(line: entity.line, value: entity.value);
+            break;
           }
         }
       }
