@@ -102,7 +102,11 @@ void main() {
 
       test('should handle complex cases with multiple separators', () {
         // Arrange
-        final inputs = ['Milk, Honey ,Butter', 'cost: 56 , 78 EUR', '12 . 34 . 56'];
+        final inputs = [
+          'Milk, Honey ,Butter',
+          'cost: 56 , 78 EUR',
+          '12 . 34 . 56',
+        ];
         final expected = ['Milk,Honey,Butter', 'cost: 56,78 EUR', '12.34.56'];
 
         // Act & Assert

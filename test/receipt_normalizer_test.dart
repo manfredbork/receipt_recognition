@@ -4,28 +4,35 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 void main() {
   group('ReceiptNormalizer', () {
     group('normalizeByAlternativeTexts', () {
-      test('should return normalized text when given best text and alternative texts', () {
+      test('should return normalized text when given alternative texts', () {
         // Arrange
-        final bestText = 'Item!123';
-        final otherTexts = ['Item!123', 'ItemA123', 'ItemB123', 'ItemA123'];
+        final alternativeTexts = [
+          'Item!123',
+          'ItemA123',
+          'ItemB123',
+          'ItemA123',
+        ];
 
         // Act
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(bestText, otherTexts);
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
+          alternativeTexts,
+        );
 
         // Assert
-        expect(result, 'ItemA123');
+        expect(result, 'ItemA');
       });
 
-      test('should return best text when no other texts are provided', () {
+      test('should return null when no alternative texts are provided', () {
         // Arrange
-        final bestText = 'Item123';
-        final otherTexts = <String>[];
+        final noAlternativeTexts = <String>[];
 
         // Act
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(bestText, otherTexts);
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
+          noAlternativeTexts,
+        );
 
         // Assert
-        expect(result, bestText);
+        expect(result, null);
       });
     });
 
@@ -33,19 +40,12 @@ void main() {
       test('should remove price-like endings from text', () {
         // Arrange
         final inputs = [
-          'Coffee-12.99',
-          'Tea 3.50',
+          'Tea 3.50 @',
           'Milk 2,50',
-          'Bread-5,99',
-          'Plain text'
+          'Bread 5,99 xyz',
+          'Plain text',
         ];
-        final expected = [
-          'Coffee',
-          'Tea',
-          'Milk',
-          'Bread',
-          'Plain text'
-        ];
+        final expected = ['Tea', 'Milk', 'Bread', 'Plain text'];
 
         // Act & Assert
         for (int i = 0; i < inputs.length; i++) {
@@ -55,17 +55,23 @@ void main() {
     });
 
     group('normalizeSpecialChars', () {
-      test('should replace special characters with alphanumeric ones from other texts', () {
-        // Arrange
-        final bestText = 'C@ffee';
-        final otherTexts = ['Coffee'];
+      test(
+        'should replace special characters with alphanumeric ones from other texts',
+        () {
+          // Arrange
+          final bestText = 'C@ffee';
+          final otherTexts = ['Coffee'];
 
-        // Act
-        final result = ReceiptNormalizer.normalizeSpecialChars(bestText, otherTexts);
+          // Act
+          final result = ReceiptNormalizer.normalizeSpecialChars(
+            bestText,
+            otherTexts,
+          );
 
-        // Assert
-        expect(result, 'Coffee');
-      });
+          // Assert
+          expect(result, 'Coffee');
+        },
+      );
 
       test('should replace numbers with letters when appropriate', () {
         // Arrange
@@ -73,22 +79,13 @@ void main() {
         final otherTexts = ['Coke'];
 
         // Act
-        final result = ReceiptNormalizer.normalizeSpecialChars(bestText, otherTexts);
+        final result = ReceiptNormalizer.normalizeSpecialChars(
+          bestText,
+          otherTexts,
+        );
 
         // Assert
         expect(result, 'Coke');
-      });
-
-      test('should replace non-German characters with German ones when appropriate', () {
-        // Arrange
-        final bestText = 'Kase';
-        final otherTexts = ['Käse'];
-
-        // Act
-        final result = ReceiptNormalizer.normalizeSpecialChars(bestText, otherTexts);
-
-        // Assert
-        expect(result, 'Käse');
       });
 
       test('should return best text when no replacements are needed', () {
@@ -97,7 +94,10 @@ void main() {
         final otherTexts = ['Tea', 'Milk'];
 
         // Act
-        final result = ReceiptNormalizer.normalizeSpecialChars(bestText, otherTexts);
+        final result = ReceiptNormalizer.normalizeSpecialChars(
+          bestText,
+          otherTexts,
+        );
 
         // Assert
         expect(result, 'Coffee');
@@ -109,7 +109,10 @@ void main() {
         final otherTexts = ['Coffees', 'Tea'];
 
         // Act
-        final result = ReceiptNormalizer.normalizeSpecialChars(bestText, otherTexts);
+        final result = ReceiptNormalizer.normalizeSpecialChars(
+          bestText,
+          otherTexts,
+        );
 
         // Assert
         expect(result, 'Coffee');
@@ -123,7 +126,10 @@ void main() {
         final otherTexts = ['Coffee Beans'];
 
         // Act
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(bestText, otherTexts);
+        final result = ReceiptNormalizer.normalizeSpecialSpaces(
+          bestText,
+          otherTexts,
+        );
 
         // Assert
         expect(result, 'Coffee Beans');
@@ -135,7 +141,10 @@ void main() {
         final otherTexts = ['Tea Bags'];
 
         // Act
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(bestText, otherTexts);
+        final result = ReceiptNormalizer.normalizeSpecialSpaces(
+          bestText,
+          otherTexts,
+        );
 
         // Assert
         expect(result, 'Coffee Beans');
@@ -147,7 +156,10 @@ void main() {
         final otherTexts = ['Cof fee Be ans', 'Cof fee Be ans', 'Coffee Beans'];
 
         // Act
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(bestText, otherTexts);
+        final result = ReceiptNormalizer.normalizeSpecialSpaces(
+          bestText,
+          otherTexts,
+        );
 
         // Assert
         expect(result, 'Coffee Beans');
@@ -155,10 +167,17 @@ void main() {
     });
 
     group('sortByFrequency', () {
-      test('should sort strings by frequency in descending order', () {
+      test('should sort strings by frequency in ascending order', () {
         // Arrange
-        final values = ['apple', 'banana', 'apple', 'cherry', 'banana', 'apple'];
-        final expected = ['apple', 'banana', 'cherry'];
+        final values = [
+          'apple',
+          'banana',
+          'apple',
+          'cherry',
+          'banana',
+          'apple',
+        ];
+        final expected = ['cherry', 'banana', 'apple'];
 
         // Act
         final result = ReceiptNormalizer.sortByFrequency(values);

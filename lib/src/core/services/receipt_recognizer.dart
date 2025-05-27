@@ -163,17 +163,8 @@ final class ReceiptRecognizer {
   }
 
   RecognizedReceipt _normalizeReceipt(RecognizedReceipt receipt) {
-    final List<RecognizedPosition> normalizedPositions = [];
-    for (final position in receipt.positions) {
-      final bestMatch = ReceiptNormalizer.normalizeByAlternativeTexts(
-        position.product.value,
-        _optimizer.possibleProductValues(position.product),
-      );
-      normalizedPositions.add(
-        position.copyWith(product: position.product.copyWith(value: bestMatch)),
-      );
-    }
-    return receipt.copyWith(positions: normalizedPositions);
+    _optimizer.assignAlternativeTexts(receipt);
+    return receipt;
   }
 
   ValidationResult validateReceipt(RecognizedReceipt receipt) {

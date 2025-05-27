@@ -1,21 +1,23 @@
 final class ReceiptNormalizer {
-  static String normalizeByAlternativeTexts(
-    String bestText,
-    List<String> otherTexts,
-  ) {
-    final frequencyTexts = sortByFrequency(otherTexts);
-    final firstStageText = normalizeSpecialChars(bestText, frequencyTexts);
-    final secondStageText = normalizeSpecialSpaces(
-      firstStageText,
-      frequencyTexts,
+  static String? normalizeByAlternativeTexts(List<String> alternativeTexts) {
+    if (alternativeTexts.isEmpty) return null;
+    final frequencyTexts = sortByFrequency(alternativeTexts);
+    final List<String> normalizedTexts = [];
+    for (final frequencyText in frequencyTexts) {
+      normalizedTexts.add(
+        normalizeTail(normalizeSpecialSpaces(frequencyText, frequencyTexts)),
+      );
+    }
+    final normalizedText = normalizeSpecialChars(
+      normalizedTexts.last,
+      normalizedTexts,
     );
-    final normalizedText = normalizeTail(secondStageText);
     return normalizedText;
   }
 
   static String normalizeTail(String value) {
     return value.replaceAllMapped(
-      RegExp(r'([^-\s]*)(-?\s*\d+\s*[.,]\s*\d{2}.*)'),
+      RegExp(r'(.*\S)(\s*\d+[.,]?\d{2,3}.*)'),
       (match) => '${match[1]}',
     );
   }
@@ -36,11 +38,8 @@ final class ReceiptNormalizer {
           if (RegExp(r'[!@#^*()?":{}|<>]').hasMatch(char) &&
               RegExp(r'[A-Za-z0-9]').hasMatch(compareChar)) {
             normalizedText += compareChar;
-          } else if (RegExp(r'[^ÄÖÜäöüß]').hasMatch(char) &&
-              RegExp(r'[ÄÖÜäöüß]').hasMatch(compareChar)) {
-            normalizedText += compareChar;
-          } else if (RegExp(r'[0-9]').hasMatch(char) &&
-              RegExp(r'[A-Za-z]').hasMatch(compareChar)) {
+          } else if (RegExp(r'[^A-Za-z]').hasMatch(char) &&
+              RegExp(r'[A-Za-zÄÖÜäöüß]').hasMatch(compareChar)) {
             normalizedText += compareChar;
           } else {
             normalizedText += char;
@@ -66,7 +65,7 @@ final class ReceiptNormalizer {
       if (bestTokens.length > otherTokens.length) {
         for (int j = 1; j < bestTokens.length; j++) {
           if (j <= otherTokens.length) {
-            final mergedToken = bestTokens[j - 1] + bestTokens[j];
+            final mergedToken = bestTokens[j - 1] + bestTokens[j].toLowerCase();
             if (mergedToken == otherTokens[j - 1]) {
               bestTokens[j - 1] = mergedToken;
               bestTokens.removeAt(j);
@@ -86,7 +85,7 @@ final class ReceiptNormalizer {
     }
     final entries =
         frequencyMap.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
+          ..sort((a, b) => a.value.compareTo(b.value));
     return entries.map((e) => e.key).toList();
   }
 }
