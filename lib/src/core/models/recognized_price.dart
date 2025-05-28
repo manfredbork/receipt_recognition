@@ -1,14 +1,13 @@
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class RecognizedPrice extends RecognizedEntity<num> {
-  final int confidence;
-
+  int confidence;
   RecognizedPosition? position;
 
   RecognizedPrice({
     required super.line,
     required super.value,
-    this.confidence = 100,
+    this.confidence = 0,
     this.position,
   });
 

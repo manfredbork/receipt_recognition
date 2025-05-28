@@ -12,7 +12,7 @@ final class ReceiptParser {
   );
 
   static final RegExp patternSumLabel = RegExp(
-    r'(Zu zahlen|Summe|Total|Sum)',
+    r'(Zu zahlen|Summe|Total)',
     caseSensitive: false,
   );
 
@@ -68,6 +68,7 @@ final class ReceiptParser {
         if (sumLabel != null) {
           parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
           detectedSumLabel = true;
+          continue;
         }
       }
 
@@ -94,7 +95,9 @@ final class ReceiptParser {
       }
     }
 
-    return parsed.toList();
+    return parsed.toList()..sort(
+      (a, b) => a.line.boundingBox.right.compareTo(b.line.boundingBox.right),
+    );
   }
 
   static String? _detectsLocale(String text) {
@@ -109,7 +112,6 @@ final class ReceiptParser {
     final List<RecognizedUnknown> forbidden = [];
 
     RecognizedSumLabel? sumLabel;
-    RecognizedSum? sum;
     RecognizedCompany? company;
 
     for (final entity in entities) {
@@ -126,7 +128,7 @@ final class ReceiptParser {
           final yT = (yAmount.top - yUnknown.line.boundingBox.top).abs();
           final yB = (yAmount.bottom - yUnknown.line.boundingBox.bottom).abs();
           final yCompare = min(yT, yB);
-          if (!forbidden.contains(yUnknown) && yCompare < boundingBoxBuffer) {
+          if (!forbidden.contains(yUnknown) && yCompare <= boundingBoxBuffer) {
             final product = RecognizedProduct(
               value: yUnknown.value,
               line: yUnknown.line,
@@ -146,25 +148,30 @@ final class ReceiptParser {
             price.position = position;
             forbidden.add(yUnknown);
             break;
-          } else if (sumLabel != null) {
-            final ySumLabel = sumLabel.line.boundingBox;
-            final yT = (ySumLabel.top - entity.line.boundingBox.top).abs();
-            final yB =
-                (ySumLabel.bottom - entity.line.boundingBox.bottom).abs();
-            final yCompare = min(yT, yB);
-            if (yCompare < boundingBoxBuffer) {
-              sum = RecognizedSum(line: entity.line, value: entity.value);
-              break;
-            }
-          } else if (sum == null) {
-            sum = RecognizedSum(line: entity.line, value: entity.value);
-            break;
           }
         }
       }
     }
 
-    receipt.sum = sum;
+    final yAmounts = entities.whereType<RecognizedAmount>().toList();
+    if (sumLabel != null) {
+      final ySumLabel = sumLabel.line.boundingBox;
+
+      _sortByDistance(ySumLabel, yAmounts);
+
+      final yT = (ySumLabel.top - yAmounts.first.line.boundingBox.top).abs();
+      final yB =
+          (ySumLabel.bottom - yAmounts.first.line.boundingBox.bottom).abs();
+      final yCompare = min(yT, yB);
+
+      if (yCompare <= boundingBoxBuffer) {
+        receipt.sum = RecognizedSum(
+          value: yAmounts.first.value,
+          line: yAmounts.first.line,
+        );
+      }
+    }
+    
     receipt.company = company;
 
     return receipt;

@@ -9,7 +9,7 @@ final class ReceiptNormalizer {
       );
     }
     final normalizedText = normalizeSpecialChars(
-      normalizedTexts.first,
+      normalizedTexts.last,
       normalizedTexts,
     );
     return normalizedText;
@@ -90,7 +90,7 @@ final class ReceiptNormalizer {
     }
     final entries =
         frequencyMap.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
+          ..sort((a, b) => a.value.compareTo(b.value));
     return entries.map((e) => e.key).toList();
   }
 }

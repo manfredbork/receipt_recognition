@@ -2,14 +2,13 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class RecognizedProduct extends RecognizedEntity<String> {
-  final int confidence;
-
+  int confidence;
   RecognizedPosition? position;
 
   RecognizedProduct({
     required super.line,
     required super.value,
-    this.confidence = 100,
+    this.confidence = 0,
     this.position,
   });
 

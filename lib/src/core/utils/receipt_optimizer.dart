@@ -13,12 +13,19 @@ final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedCompany> _companies = [];
   final List<RecognizedSum> _sums = [];
   final int _maxCacheSize;
+  final int _confidenceThreshold;
+  final int _stabilityThreshold;
 
   bool _shouldInitialize;
 
-  ReceiptOptimizer({int maxCacheSize = 20})
-    : _maxCacheSize = maxCacheSize,
-      _shouldInitialize = false;
+  ReceiptOptimizer({
+    int maxCacheSize = 20,
+    int confidenceThreshold = 80,
+    int stabilityThreshold = 60,
+  }) : _maxCacheSize = maxCacheSize,
+       _confidenceThreshold = confidenceThreshold,
+       _stabilityThreshold = stabilityThreshold,
+       _shouldInitialize = false;
 
   @override
   void init() {
@@ -38,7 +45,7 @@ final class ReceiptOptimizer implements Optimizer {
       _companies.add(receipt.company!);
     }
 
-    if (_companies.length >= _maxCacheSize) {
+    if (_companies.length > _maxCacheSize) {
       _companies.removeAt(0);
     }
 
@@ -46,7 +53,7 @@ final class ReceiptOptimizer implements Optimizer {
       _sums.add(receipt.sum!);
     }
 
-    if (_sums.length >= _maxCacheSize) {
+    if (_sums.length > _maxCacheSize) {
       _sums.removeAt(0);
     }
 
@@ -54,21 +61,79 @@ final class ReceiptOptimizer implements Optimizer {
       final company = ReceiptNormalizer.sortByFrequency(
         _companies.map((c) => c.value).toList(),
       );
-      receipt.company = _companies.last.copyWith(value: company.first);
+      receipt.company = _companies.last.copyWith(value: company.last);
     }
 
-    if (receipt.sum == null && _companies.isNotEmpty) {
+    if (receipt.sum == null && _sums.isNotEmpty) {
       final sum = ReceiptNormalizer.sortByFrequency(
         _sums.map((c) => c.formattedValue).toList(),
       );
       receipt.sum = _sums.last.copyWith(
-        value: ReceiptFormatter.parse(sum.first),
+        value: ReceiptFormatter.parse(sum.last),
       );
     }
 
-    // TODO: Group logic
+    if (receipt.sum != null) {
+      receipt.positions.removeWhere(
+        (p) =>
+            p.price.value > receipt.sum!.value ||
+            p.price.formattedValue == receipt.sum!.formattedValue,
+      );
+    }
 
-    return receipt;
+    for (final position in receipt.positions) {
+      int bestConfidence = 0;
+      RecognizedGroup? bestGroup;
+      for (final group in _groups) {
+        final int productConfidence = group.calculateProductConfidence(
+          position.product,
+        );
+        final int priceConfidence = group.calculatePriceConfidence(
+          position.price,
+        );
+        final bool sameTimestamp = group.members.any(
+          (p) => position.timestamp == p.timestamp,
+        );
+        final int confidence =
+            ((productConfidence + priceConfidence) / 2).toInt();
+        if (!sameTimestamp &&
+            confidence >= _confidenceThreshold &&
+            confidence > bestConfidence) {
+          bestConfidence = confidence;
+          bestGroup = group;
+          position.product.confidence = productConfidence;
+          position.price.confidence = priceConfidence;
+        }
+      }
+      if (bestGroup == null) {
+        final newGroup = RecognizedGroup(maxGroupSize: _maxCacheSize);
+        position.group = newGroup;
+        newGroup.addMember(position);
+        _groups.add(newGroup);
+      } else {
+        position.group = bestGroup;
+        bestGroup.addMember(position);
+      }
+    }
+
+    final stableGroups = _groups.where(
+      (g) => g.stability >= _stabilityThreshold,
+    );
+
+    if (stableGroups.isEmpty || receipt.isValid) {
+      return receipt;
+    }
+
+    final RecognizedReceipt mergedReceipt = RecognizedReceipt.empty();
+    for (final group in stableGroups) {
+      final position = group.members.reduce(
+        (a, b) => a.confidence > b.confidence ? a : b,
+      );
+      mergedReceipt.positions.add(position);
+      if (mergedReceipt.isValid) break;
+    }
+
+    return receipt.copyWith(positions: mergedReceipt.positions);
   }
 
   @override

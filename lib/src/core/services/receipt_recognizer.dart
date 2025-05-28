@@ -60,10 +60,7 @@ final class ReceiptRecognizer {
     final validation = validateReceipt(optimizedReceipt);
 
     if (kDebugMode) {
-      print('-' * 50);
-      print('Validation status: ${validation.status}');
-      print('Message: ${validation.message}');
-      _printDebugInfo(optimizedReceipt);
+      _printDebugInfo(optimizedReceipt, validation);
     }
 
     switch (validation.status) {
@@ -102,14 +99,20 @@ final class ReceiptRecognizer {
     return false;
   }
 
-  void _printDebugInfo(RecognizedReceipt optimizedReceipt) {
+  void _printDebugInfo(
+    RecognizedReceipt optimizedReceipt,
+    ValidationResult validation,
+  ) {
     if (kDebugMode) {
       if (optimizedReceipt.positions.isNotEmpty) {
+        print('-' * 50);
+        print('Validation status: ${validation.status}');
+        print('Message: ${validation.message}');
         print('-' * 50);
         print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
         for (final position in optimizedReceipt.positions) {
           print(
-            '${position.product.formattedValue} ${position.price.formattedValue}',
+            '${position.product.normalizedText} ${position.price.formattedValue} ${position.confidence}%',
           );
         }
         print(
