@@ -85,7 +85,7 @@ final class ReceiptRecognizer {
     _initializedScan = null;
     _optimizer.init();
     _validScans = 0;
-    return _normalizeReceipt(receipt);
+    return receipt;
   }
 
   Future<void> close() async {
@@ -125,7 +125,7 @@ final class ReceiptRecognizer {
     _optimizer.init();
     _onScanComplete?.call(receipt);
     _validScans = 0;
-    return _normalizeReceipt(receipt);
+    return receipt;
   }
 
   RecognizedReceipt? _handleIncompleteReceipt(
@@ -160,11 +160,6 @@ final class ReceiptRecognizer {
     }
 
     return null;
-  }
-
-  RecognizedReceipt _normalizeReceipt(RecognizedReceipt receipt) {
-    _optimizer.assignAlternativeTexts(receipt);
-    return receipt;
   }
 
   ValidationResult validateReceipt(RecognizedReceipt receipt) {

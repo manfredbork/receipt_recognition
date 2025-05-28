@@ -15,13 +15,19 @@ abstract class Valuable<T> {
 
 abstract class RecognizedEntity<T> extends Valuable<T> {
   final TextLine line;
-  final double? confidence;
 
-  RecognizedEntity({required super.value, required this.line, this.confidence});
+  RecognizedEntity({required super.value, required this.line});
 }
 
 final class RecognizedCompany extends RecognizedEntity<String> {
   RecognizedCompany({required super.value, required super.line});
+
+  RecognizedCompany copyWith({String? value, TextLine? line}) {
+    return RecognizedCompany(
+      value: value ?? this.value,
+      line: line ?? this.line,
+    );
+  }
 
   @override
   String format(String value) => value.toUpperCase();
@@ -50,6 +56,10 @@ final class RecognizedAmount extends RecognizedEntity<num> {
 
 final class RecognizedSum extends RecognizedEntity<num> {
   RecognizedSum({required super.value, required super.line});
+
+  RecognizedSum copyWith({num? value, TextLine? line}) {
+    return RecognizedSum(value: value ?? this.value, line: line ?? this.line);
+  }
 
   @override
   String format(num value) => ReceiptFormatter.format(value);

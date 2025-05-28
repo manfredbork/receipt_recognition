@@ -1,4 +1,3 @@
-import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 abstract class Optimizer {
@@ -6,20 +5,19 @@ abstract class Optimizer {
 
   RecognizedReceipt optimize(RecognizedReceipt receipt);
 
-  void assignAlternativeTexts(RecognizedReceipt receipt);
-
   void close();
 }
 
 final class ReceiptOptimizer implements Optimizer {
-  final List<RecognizedReceipt> _cachedReceipts = [];
+  final List<RecognizedGroup> _groups = [];
+  final List<RecognizedCompany> _companies = [];
+  final List<RecognizedSum> _sums = [];
   final int _maxCacheSize;
-  final int _similarityThreshold;
+
   bool _shouldInitialize;
 
-  ReceiptOptimizer({int maxCacheSize = 20, int similarityThreshold = 50})
+  ReceiptOptimizer({int maxCacheSize = 20})
     : _maxCacheSize = maxCacheSize,
-      _similarityThreshold = similarityThreshold,
       _shouldInitialize = false;
 
   @override
@@ -30,51 +28,54 @@ final class ReceiptOptimizer implements Optimizer {
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
     if (_shouldInitialize) {
-      _cachedReceipts.clear();
+      _groups.clear();
+      _companies.clear();
+      _sums.clear();
       _shouldInitialize = false;
     }
 
-    if (_cachedReceipts.isNotEmpty) {
-      receipt.company ??= _cachedReceipts.last.company;
-      receipt.sum ??= _cachedReceipts.last.sum;
+    if (receipt.company != null) {
+      _companies.add(receipt.company!);
     }
 
-    if (_cachedReceipts.length >= _maxCacheSize) {
-      _cachedReceipts.removeAt(0);
+    if (_companies.length >= _maxCacheSize) {
+      _companies.removeAt(0);
     }
 
-    _cachedReceipts.add(receipt);
+    if (receipt.sum != null) {
+      _sums.add(receipt.sum!);
+    }
+
+    if (_sums.length >= _maxCacheSize) {
+      _sums.removeAt(0);
+    }
+
+    if (receipt.company == null && _companies.isNotEmpty) {
+      final company = ReceiptNormalizer.sortByFrequency(
+        _companies.map((c) => c.value).toList(),
+      );
+      receipt.company = _companies.last.copyWith(value: company.first);
+    }
+
+    if (receipt.sum == null && _companies.isNotEmpty) {
+      final sum = ReceiptNormalizer.sortByFrequency(
+        _sums.map((c) => c.formattedValue).toList(),
+      );
+      receipt.sum = _sums.last.copyWith(
+        value: ReceiptFormatter.parse(sum.first),
+      );
+    }
+
+    // TODO: Group logic
 
     return receipt;
   }
 
   @override
-  void assignAlternativeTexts(RecognizedReceipt receipt) {
-    for (final position in receipt.positions) {
-      final List<String> alternativeTexts = [];
-      for (final cachedReceipt in _cachedReceipts) {
-        final texts = cachedReceipt.positions
-            .where((p) {
-              if (p.price.formattedValue == position.price.formattedValue) {
-                final similarity = ratio(
-                  p.product.formattedValue,
-                  position.product.formattedValue,
-                );
-                return similarity >= _similarityThreshold;
-              }
-              return false;
-            })
-            .map((p) => p.product.text);
-        alternativeTexts.addAll(texts);
-      }
-      position.product.alternativeTexts.clear();
-      position.product.alternativeTexts.addAll(alternativeTexts);
-    }
-  }
-
-  @override
   void close() {
-    _cachedReceipts.clear();
+    _groups.clear();
+    _companies.clear();
+    _sums.clear();
     _shouldInitialize = false;
   }
 }

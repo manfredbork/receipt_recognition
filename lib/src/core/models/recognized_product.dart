@@ -2,14 +2,28 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class RecognizedProduct extends RecognizedEntity<String> {
-  final List<String> alternativeTexts = [];
+  final int confidence;
 
-  RecognizedProduct({required super.line, required super.value});
+  RecognizedPosition? position;
 
-  RecognizedProduct copyWith({String? value, TextLine? line}) {
+  RecognizedProduct({
+    required super.line,
+    required super.value,
+    this.confidence = 100,
+    this.position,
+  });
+
+  RecognizedProduct copyWith({
+    String? value,
+    TextLine? line,
+    int? confidence,
+    RecognizedPosition? position,
+  }) {
     return RecognizedProduct(
       value: value ?? this.value,
       line: line ?? this.line,
+      confidence: confidence ?? this.confidence,
+      position: position ?? this.position,
     );
   }
 
@@ -20,4 +34,6 @@ final class RecognizedProduct extends RecognizedEntity<String> {
 
   String get normalizedText =>
       ReceiptNormalizer.normalizeByAlternativeTexts(alternativeTexts) ?? text;
+
+  List<String> get alternativeTexts => position?.group?.alternativeTexts ?? [];
 }

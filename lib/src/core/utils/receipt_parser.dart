@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
@@ -107,46 +108,55 @@ final class ReceiptParser {
     final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
 
+    RecognizedSumLabel? sumLabel;
     RecognizedSum? sum;
     RecognizedCompany? company;
 
     for (final entity in entities) {
       if (entity is RecognizedSumLabel) {
-        continue;
+        sumLabel = entity;
       } else if (entity is RecognizedCompany) {
         company = entity;
       } else if (entity is RecognizedAmount) {
         final yAmount = entity.line.boundingBox;
 
-        yUnknowns.sort((a, b) {
-          final aT = (yAmount.top - a.line.boundingBox.top).abs();
-          final bT = (yAmount.top - b.line.boundingBox.top).abs();
-          final aB = (yAmount.bottom - a.line.boundingBox.bottom).abs();
-          final bB = (yAmount.bottom - b.line.boundingBox.bottom).abs();
-          final aCompare = min(aT, aB);
-          final bCompare = min(bT, bB);
-          return aCompare.compareTo(bCompare);
-        });
+        _sortByDistance(yAmount, yUnknowns);
 
         for (final yUnknown in yUnknowns) {
           final yT = (yAmount.top - yUnknown.line.boundingBox.top).abs();
           final yB = (yAmount.bottom - yUnknown.line.boundingBox.bottom).abs();
           final yCompare = min(yT, yB);
           if (!forbidden.contains(yUnknown) && yCompare < boundingBoxBuffer) {
-            receipt.positions.add(
-              RecognizedPosition(
-                product: RecognizedProduct(
-                  value: yUnknown.value,
-                  line: yUnknown.line,
-                ),
-                price: RecognizedPrice(line: entity.line, value: entity.value),
-                timestamp: receipt.timestamp,
-                operation: Operation.added,
-              ),
+            final product = RecognizedProduct(
+              value: yUnknown.value,
+              line: yUnknown.line,
             );
+            final price = RecognizedPrice(
+              line: entity.line,
+              value: entity.value,
+            );
+            final position = RecognizedPosition(
+              product: product,
+              price: price,
+              timestamp: receipt.timestamp,
+              operation: Operation.added,
+            );
+            receipt.positions.add(position);
+            product.position = position;
+            price.position = position;
             forbidden.add(yUnknown);
             break;
-          } else {
+          } else if (sumLabel != null) {
+            final ySumLabel = sumLabel.line.boundingBox;
+            final yT = (ySumLabel.top - entity.line.boundingBox.top).abs();
+            final yB =
+                (ySumLabel.bottom - entity.line.boundingBox.bottom).abs();
+            final yCompare = min(yT, yB);
+            if (yCompare < boundingBoxBuffer) {
+              sum = RecognizedSum(line: entity.line, value: entity.value);
+              break;
+            }
+          } else if (sum == null) {
             sum = RecognizedSum(line: entity.line, value: entity.value);
             break;
           }
@@ -158,5 +168,20 @@ final class ReceiptParser {
     receipt.company = company;
 
     return receipt;
+  }
+
+  static void _sortByDistance(
+    Rect boundingBox,
+    List<RecognizedEntity> entities,
+  ) {
+    entities.sort((a, b) {
+      final aT = (boundingBox.top - a.line.boundingBox.top).abs();
+      final bT = (boundingBox.top - b.line.boundingBox.top).abs();
+      final aB = (boundingBox.bottom - a.line.boundingBox.bottom).abs();
+      final bB = (boundingBox.bottom - b.line.boundingBox.bottom).abs();
+      final aCompare = min(aT, aB);
+      final bCompare = min(bT, bB);
+      return aCompare.compareTo(bCompare);
+    });
   }
 }
