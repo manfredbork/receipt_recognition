@@ -55,60 +55,99 @@ final class ReceiptParser {
     RecognizedAmount? detectedAmount;
 
     for (final line in lines) {
-      if (detectedSumLabel != null &&
-          line.boundingBox.top > detectedSumLabel.line.boundingBox.top) {
+      if (_shouldSkipLine(line, detectedSumLabel)) {
         continue;
       }
 
-      if (detectedCompany == null && detectedAmount == null) {
-        final company = patternCompany.stringMatch(line.text);
-        if (company != null) {
-          detectedCompany = RecognizedCompany(line: line, value: company);
-          parsed.add(detectedCompany);
-          continue;
-        }
+      if (_tryParseCompany(line, parsed, detectedCompany, detectedAmount)) {
+        detectedCompany = parsed.last as RecognizedCompany;
+        continue;
       }
 
-      if (detectedSumLabel == null) {
-        final sumLabel = patternSumLabel.stringMatch(line.text);
-        if (sumLabel != null) {
-          detectedSumLabel = RecognizedSumLabel(line: line, value: sumLabel);
-          parsed.add(detectedSumLabel);
-          continue;
-        }
+      if (_tryParseSumLabel(line, parsed)) {
+        detectedSumLabel = parsed.last as RecognizedSumLabel;
+        continue;
       }
 
-      if (patternStopKeywords.hasMatch(line.text)) {
+      if (_shouldStopParsing(line)) {
         break;
       }
 
-      if (patternIgnoreKeywords.hasMatch(line.text)) {
+      if (_shouldIgnoreLine(line)) {
         continue;
       }
 
-      final amount = patternAmount.stringMatch(line.text);
-      if (amount != null && line.boundingBox.left > receiptHalfWidth) {
-        final locale = _detectsLocale(amount);
-        final trimmedAmount = ReceiptFormatter.trim(amount);
-        final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
-        detectedAmount = RecognizedAmount(line: line, value: value);
-        parsed.add(detectedAmount);
-      }
-
-      final unknown = patternUnknown.stringMatch(line.text);
-      if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
-        parsed.add(RecognizedUnknown(line: line, value: line.text));
-        continue;
-      }
+      _tryParseAmount(line, parsed, receiptHalfWidth);
+      _tryParseUnknown(line, parsed, receiptHalfWidth);
     }
 
     return parsed.toList();
   }
 
-  static String? _detectsLocale(String text) {
-    if (text.contains('.')) return 'en_US';
-    if (text.contains(',')) return 'eu';
-    return Intl.defaultLocale;
+  static bool _shouldSkipLine(
+    TextLine line,
+    RecognizedSumLabel? detectedSumLabel,
+  ) {
+    return detectedSumLabel != null &&
+        line.boundingBox.top > detectedSumLabel.line.boundingBox.top;
+  }
+
+  static bool _tryParseCompany(
+    TextLine line,
+    List<RecognizedEntity> parsed,
+    RecognizedCompany? detectedCompany,
+    RecognizedAmount? detectedAmount,
+  ) {
+    if (detectedCompany == null && detectedAmount == null) {
+      final company = patternCompany.stringMatch(line.text);
+      if (company != null) {
+        parsed.add(RecognizedCompany(line: line, value: company));
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _tryParseSumLabel(TextLine line, List<RecognizedEntity> parsed) {
+    final sumLabel = patternSumLabel.stringMatch(line.text);
+    if (sumLabel != null) {
+      parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+      return true;
+    }
+    return false;
+  }
+
+  static bool _shouldStopParsing(TextLine line) {
+    return patternStopKeywords.hasMatch(line.text);
+  }
+
+  static bool _shouldIgnoreLine(TextLine line) {
+    return patternIgnoreKeywords.hasMatch(line.text);
+  }
+
+  static void _tryParseAmount(
+    TextLine line,
+    List<RecognizedEntity> parsed,
+    double receiptHalfWidth,
+  ) {
+    final amount = patternAmount.stringMatch(line.text);
+    if (amount != null && line.boundingBox.left > receiptHalfWidth) {
+      final locale = _detectsLocale(amount);
+      final trimmedAmount = ReceiptFormatter.trim(amount);
+      final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
+      parsed.add(RecognizedAmount(line: line, value: value));
+    }
+  }
+
+  static void _tryParseUnknown(
+    TextLine line,
+    List<RecognizedEntity> parsed,
+    double receiptHalfWidth,
+  ) {
+    final unknown = patternUnknown.stringMatch(line.text);
+    if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
+      parsed.add(RecognizedUnknown(line: line, value: line.text));
+    }
   }
 
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
@@ -116,70 +155,128 @@ final class ReceiptParser {
     final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
 
-    RecognizedSumLabel? sumLabel;
-    RecognizedCompany? company;
+    final company = _findCompany(entities);
+    final sumLabel = _findSumLabel(entities);
 
-    for (final entity in entities) {
-      if (entity is RecognizedSumLabel) {
-        sumLabel = entity;
-      } else if (entity is RecognizedCompany) {
-        company = entity;
-      } else if (entity is RecognizedAmount) {
-        final yAmount = entity.line.boundingBox;
-
-        _sortByDistance(yAmount, yUnknowns);
-
-        for (final yUnknown in yUnknowns) {
-          final yT = (yAmount.top - yUnknown.line.boundingBox.top).abs();
-          final yB = (yAmount.bottom - yUnknown.line.boundingBox.bottom).abs();
-          final yCompare = min(yT, yB);
-          if (!forbidden.contains(yUnknown) && yCompare <= boundingBoxBuffer) {
-            final product = RecognizedProduct(
-              value: yUnknown.value,
-              line: yUnknown.line,
-            );
-            final price = RecognizedPrice(
-              line: entity.line,
-              value: entity.value,
-            );
-            final position = RecognizedPosition(
-              product: product,
-              price: price,
-              timestamp: receipt.timestamp,
-              operation: Operation.added,
-            );
-            receipt.positions.add(position);
-            product.position = position;
-            price.position = position;
-            forbidden.add(yUnknown);
-            break;
-          }
-        }
-      }
-    }
-
-    final yAmounts = entities.whereType<RecognizedAmount>().toList();
-    if (sumLabel != null && yAmounts.isNotEmpty) {
-      final ySumLabel = sumLabel.line.boundingBox;
-
-      _sortByDistance(ySumLabel, yAmounts);
-
-      final yT = (ySumLabel.top - yAmounts.first.line.boundingBox.top).abs();
-      final yB =
-          (ySumLabel.bottom - yAmounts.first.line.boundingBox.bottom).abs();
-      final yCompare = min(yT, yB);
-
-      if (yCompare <= boundingBoxBuffer) {
-        receipt.sum = RecognizedSum(
-          value: yAmounts.first.value,
-          line: yAmounts.first.line,
-        );
-      }
-    }
+    _processAmounts(entities, yUnknowns, receipt, forbidden);
+    _setReceiptSum(entities, sumLabel, receipt);
 
     receipt.company = company;
 
     return receipt;
+  }
+
+  static RecognizedCompany? _findCompany(List<RecognizedEntity> entities) {
+    for (final entity in entities) {
+      if (entity is RecognizedCompany) {
+        return entity;
+      }
+    }
+    return null;
+  }
+
+  static RecognizedSumLabel? _findSumLabel(List<RecognizedEntity> entities) {
+    for (final entity in entities) {
+      if (entity is RecognizedSumLabel) {
+        return entity;
+      }
+    }
+    return null;
+  }
+
+  static void _processAmounts(
+    List<RecognizedEntity> entities,
+    List<RecognizedUnknown> yUnknowns,
+    RecognizedReceipt receipt,
+    List<RecognizedUnknown> forbidden,
+  ) {
+    for (final entity in entities) {
+      if (entity is RecognizedAmount) {
+        _createPositionForAmount(entity, yUnknowns, receipt, forbidden);
+      }
+    }
+  }
+
+  static void _createPositionForAmount(
+    RecognizedAmount entity,
+    List<RecognizedUnknown> yUnknowns,
+    RecognizedReceipt receipt,
+    List<RecognizedUnknown> forbidden,
+  ) {
+    final yAmount = entity.line.boundingBox;
+    _sortByDistance(yAmount, yUnknowns);
+
+    for (final yUnknown in yUnknowns) {
+      if (_isMatchingUnknown(yAmount, yUnknown, forbidden)) {
+        final position = _createPosition(yUnknown, entity, receipt.timestamp);
+        receipt.positions.add(position);
+        forbidden.add(yUnknown);
+        break;
+      }
+    }
+  }
+
+  static bool _isMatchingUnknown(
+    Rect amountBounds,
+    RecognizedUnknown unknown,
+    List<RecognizedUnknown> forbidden,
+  ) {
+    final yT = (amountBounds.top - unknown.line.boundingBox.top).abs();
+    final yB = (amountBounds.bottom - unknown.line.boundingBox.bottom).abs();
+    final yCompare = min(yT, yB);
+    return !forbidden.contains(unknown) && yCompare <= boundingBoxBuffer;
+  }
+
+  static RecognizedPosition _createPosition(
+    RecognizedUnknown unknown,
+    RecognizedAmount amount,
+    DateTime timestamp,
+  ) {
+    final product = RecognizedProduct(value: unknown.value, line: unknown.line);
+    final price = RecognizedPrice(line: amount.line, value: amount.value);
+    final position = RecognizedPosition(
+      product: product,
+      price: price,
+      timestamp: timestamp,
+      operation: Operation.added,
+    );
+    product.position = position;
+    price.position = position;
+    return position;
+  }
+
+  static void _setReceiptSum(
+    List<RecognizedEntity> entities,
+    RecognizedSumLabel? sumLabel,
+    RecognizedReceipt receipt,
+  ) {
+    if (sumLabel == null) return;
+
+    final yAmounts = entities.whereType<RecognizedAmount>().toList();
+    if (yAmounts.isEmpty) return;
+
+    final ySumLabel = sumLabel.line.boundingBox;
+    _sortByDistance(ySumLabel, yAmounts);
+
+    if (_isNearbyAmount(ySumLabel, yAmounts.first)) {
+      receipt.sum = RecognizedSum(
+        value: yAmounts.first.value,
+        line: yAmounts.first.line,
+      );
+    }
+  }
+
+  static bool _isNearbyAmount(Rect sumLabelBounds, RecognizedAmount amount) {
+    final yT = (sumLabelBounds.top - amount.line.boundingBox.top).abs();
+    final yB = (sumLabelBounds.bottom - amount.line.boundingBox.bottom).abs();
+    final yCompare = min(yT, yB);
+    return yCompare <= boundingBoxBuffer;
+  }
+
+  static String? _detectsLocale(String text) {
+    if (text.contains('.')) return 'en_US';
+    if (text.contains(',')) return 'eu';
+    return Intl.defaultLocale;
   }
 
   static void _sortByDistance(

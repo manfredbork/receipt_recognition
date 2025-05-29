@@ -74,35 +74,54 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     if (mounted) setState(() {});
   }
 
-  /// Sends the image to [ReceiptRecognizer] and handles result or failure.
   Future<void> _processImage(InputImage inputImage) async {
-    if (_receiptRecognizer == null || !_canProcess || !_isReady || _isBusy) {
+    if (_cannotProcess()) {
       return;
     }
 
     _isBusy = true;
     try {
       final receipt = await _receiptRecognizer?.processImage(inputImage);
-      if (receipt != null && receipt.positions.isNotEmpty) {
-        _receipt = receipt;
-        _canProcess = false;
-        if (mounted) {
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Scan succeed', textAlign: TextAlign.center),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
+      if (_isValidReceipt(receipt)) {
+        _handleSuccessfulScan(receipt!);
       }
     } catch (e, st) {
-      debugPrint('Image processing error: $e\n$st');
+      _handleProcessingError(e, st);
     } finally {
       _isBusy = false;
       if (mounted) setState(() {});
     }
+  }
+
+  bool _cannotProcess() {
+    return _receiptRecognizer == null || !_canProcess || !_isReady || _isBusy;
+  }
+
+  bool _isValidReceipt(RecognizedReceipt? receipt) {
+    return receipt != null && receipt.positions.isNotEmpty;
+  }
+
+  void _handleSuccessfulScan(RecognizedReceipt receipt) {
+    _receipt = receipt;
+    _canProcess = false;
+    if (mounted) {
+      _showSuccessNotification();
+    }
+  }
+
+  void _showSuccessNotification() {
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Scan succeed', textAlign: TextAlign.center),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _handleProcessingError(Object error, StackTrace stackTrace) {
+    debugPrint('Image processing error: $error\n$stackTrace');
   }
 
   @override
@@ -198,38 +217,16 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     }
   }
 
-  /// Converts platform-specific camera image format to ML Kit-compatible [InputImage].
   InputImage? _inputImageFromCameraImage(CameraImage image) {
     if (_cameraController == null || image.planes.isEmpty) return null;
 
-    final sensorOrientation = _cameraBack?.sensorOrientation ?? 0;
-    InputImageRotation? rotation;
-
-    if (Platform.isIOS) {
-      rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
-    } else if (Platform.isAndroid) {
-      var rotationCompensation =
-          _orientations[_cameraController!.value.deviceOrientation];
-      if (rotationCompensation == null) return null;
-      rotation = InputImageRotationValue.fromRawValue(
-        (sensorOrientation - rotationCompensation + 360) % 360,
-      );
-    }
-
+    final rotation = _getInputImageRotation(image);
     if (rotation == null) return null;
 
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null ||
-        (Platform.isAndroid && format != InputImageFormat.nv21) ||
-        (Platform.isIOS && format != InputImageFormat.bgra8888)) {
-      return null;
-    }
+    final format = _getInputImageFormat(image);
+    if (format == null) return null;
 
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
-    }
-    final bytes = allBytes.done().buffer.asUint8List();
+    final bytes = _combineImagePlanes(image);
 
     return InputImage.fromBytes(
       bytes: bytes,
@@ -240,5 +237,42 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
         bytesPerRow: image.planes.first.bytesPerRow,
       ),
     );
+  }
+
+  InputImageRotation? _getInputImageRotation(CameraImage image) {
+    final sensorOrientation = _cameraBack?.sensorOrientation ?? 0;
+
+    if (Platform.isIOS) {
+      return InputImageRotationValue.fromRawValue(sensorOrientation);
+    } else if (Platform.isAndroid) {
+      var rotationCompensation =
+          _orientations[_cameraController!.value.deviceOrientation];
+      if (rotationCompensation == null) return null;
+      return InputImageRotationValue.fromRawValue(
+        (sensorOrientation - rotationCompensation + 360) % 360,
+      );
+    }
+
+    return null;
+  }
+
+  InputImageFormat? _getInputImageFormat(CameraImage image) {
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null) return null;
+
+    if ((Platform.isAndroid && format != InputImageFormat.nv21) ||
+        (Platform.isIOS && format != InputImageFormat.bgra8888)) {
+      return null;
+    }
+
+    return format;
+  }
+
+  Uint8List _combineImagePlanes(CameraImage image) {
+    final WriteBuffer allBytes = WriteBuffer();
+    for (final Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
+    }
+    return allBytes.done().buffer.asUint8List();
   }
 }

@@ -11,8 +11,8 @@ final class ReceiptRecognizer {
   final Duration _scanInterval;
   final Duration _scanTimeout;
   final VoidCallback? _onScanTimeout;
-  final Function(RecognizedReceipt)? _onScanComplete;
   final Function(ScanProgress)? _onScanUpdate;
+  final Function(RecognizedReceipt)? _onScanComplete;
 
   int _validScans;
   DateTime? _initializedScan;
@@ -51,31 +51,82 @@ final class ReceiptRecognizer {
 
     _lastScan = now;
 
-    final text = await _textRecognizer.processImage(inputImage);
-    final receipt = await ReceiptTextProcessor.processText(text);
-
+    final receipt = await _recognizeReceipt(inputImage);
     if (receipt == null) return null;
 
     final optimizedReceipt = _optimizer.optimize(receipt);
-    final validation = validateReceipt(optimizedReceipt);
+    final validation = _validateReceipt(optimizedReceipt);
 
     if (kDebugMode) {
       _printDebugInfo(optimizedReceipt, validation);
     }
 
+    return _handleValidationResult(now, optimizedReceipt, validation);
+  }
+
+  Future<RecognizedReceipt?> _recognizeReceipt(InputImage inputImage) async {
+    final text = await _textRecognizer.processImage(inputImage);
+    return await ReceiptTextProcessor.processText(text);
+  }
+
+  RecognizedReceipt? _handleValidationResult(
+    DateTime now,
+    RecognizedReceipt receipt,
+    ValidationResult validation,
+  ) {
     switch (validation.status) {
       case ReceiptCompleteness.complete:
         _validScans++;
         if (!_singleScan && _validScans < _minValidScans) {
-          return _handleIncompleteReceipt(now, optimizedReceipt, validation);
+          return _handleIncompleteReceipt(now, receipt, validation);
         }
-        return _handleValidReceipt(optimizedReceipt);
+        return _handleValidReceipt(receipt);
 
       case ReceiptCompleteness.nearlyComplete:
       case ReceiptCompleteness.incomplete:
       case ReceiptCompleteness.invalid:
-        return _handleIncompleteReceipt(now, optimizedReceipt, validation);
+        return _handleIncompleteReceipt(now, receipt, validation);
     }
+  }
+
+  ValidationResult _validateReceipt(RecognizedReceipt receipt) {
+    if (receipt.positions.isEmpty || receipt.sum == null) {
+      return ValidationResult(
+        status: ReceiptCompleteness.invalid,
+        matchPercentage: 0,
+        message: 'Receipt missing critical information',
+      );
+    }
+
+    final percentage = _calculateMatchPercentage(receipt);
+
+    if (receipt.isValid) {
+      return ValidationResult(
+        status: ReceiptCompleteness.complete,
+        matchPercentage: 100,
+        message: 'Receipt complete',
+      );
+    } else if (percentage >= _nearlyCompleteThreshold) {
+      return ValidationResult(
+        status: ReceiptCompleteness.nearlyComplete,
+        matchPercentage: percentage.toInt(),
+        message: 'Receipt nearly complete (${percentage.toInt()}%)',
+      );
+    } else {
+      return ValidationResult(
+        status: ReceiptCompleteness.incomplete,
+        matchPercentage: percentage.toInt(),
+        message: 'Receipt incomplete (${percentage.toInt()}%)',
+      );
+    }
+  }
+
+  double _calculateMatchPercentage(RecognizedReceipt receipt) {
+    final calculatedSum = receipt.calculatedSum.value;
+    final declaredSum = receipt.sum!.value;
+    return (calculatedSum < declaredSum)
+        ? (calculatedSum / declaredSum * 100)
+        : (declaredSum / calculatedSum * 100);
   }
 
   RecognizedReceipt acceptReceipt(RecognizedReceipt receipt) {
@@ -161,42 +212,5 @@ final class ReceiptRecognizer {
     }
 
     return null;
-  }
-
-  ValidationResult validateReceipt(RecognizedReceipt receipt) {
-    if (receipt.positions.isEmpty || receipt.sum == null) {
-      return ValidationResult(
-        status: ReceiptCompleteness.invalid,
-        matchPercentage: 0,
-        message: 'Receipt missing critical information',
-      );
-    }
-
-    final calculatedSum = receipt.calculatedSum.value;
-    final declaredSum = receipt.sum!.value;
-    final percentage =
-        (calculatedSum < declaredSum)
-            ? (calculatedSum / declaredSum * 100)
-            : (declaredSum / calculatedSum * 100);
-
-    if (receipt.isValid) {
-      return ValidationResult(
-        status: ReceiptCompleteness.complete,
-        matchPercentage: 100,
-        message: 'Receipt complete',
-      );
-    } else if (percentage >= _nearlyCompleteThreshold) {
-      return ValidationResult(
-        status: ReceiptCompleteness.nearlyComplete,
-        matchPercentage: percentage.toInt(),
-        message: 'Receipt nearly complete (${percentage.toInt()}%)',
-      );
-    } else {
-      return ValidationResult(
-        status: ReceiptCompleteness.incomplete,
-        matchPercentage: percentage.toInt(),
-        message: 'Receipt incomplete (${percentage.toInt()}%)',
-      );
-    }
   }
 }

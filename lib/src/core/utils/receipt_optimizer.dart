@@ -37,13 +37,27 @@ final class ReceiptOptimizer implements Optimizer {
 
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
+    _initializeIfNeeded();
+    _updateCompanies(receipt);
+    _updateSums(receipt);
+    _optimizeCompany(receipt);
+    _optimizeSum(receipt);
+    _cleanupGroups();
+    _processPositions(receipt);
+
+    return _createOptimizedReceipt(receipt);
+  }
+
+  void _initializeIfNeeded() {
     if (_shouldInitialize) {
       _groups.clear();
       _companies.clear();
       _sums.clear();
       _shouldInitialize = false;
     }
+  }
 
+  void _updateCompanies(RecognizedReceipt receipt) {
     if (receipt.company != null) {
       _companies.add(receipt.company!);
     }
@@ -51,7 +65,9 @@ final class ReceiptOptimizer implements Optimizer {
     if (_companies.length > _maxCacheSize) {
       _companies.removeAt(0);
     }
+  }
 
+  void _updateSums(RecognizedReceipt receipt) {
     if (receipt.sum != null) {
       _sums.add(receipt.sum!);
     }
@@ -59,14 +75,18 @@ final class ReceiptOptimizer implements Optimizer {
     if (_sums.length > _maxCacheSize) {
       _sums.removeAt(0);
     }
+  }
 
+  void _optimizeCompany(RecognizedReceipt receipt) {
     if (receipt.company == null && _companies.isNotEmpty) {
       final company = ReceiptNormalizer.sortByFrequency(
         _companies.map((c) => c.value).toList(),
       );
       receipt.company = _companies.last.copyWith(value: company.last);
     }
+  }
 
+  void _optimizeSum(RecognizedReceipt receipt) {
     if (receipt.sum == null && _sums.isNotEmpty) {
       final sum = ReceiptNormalizer.sortByFrequency(
         _sums.map((c) => c.formattedValue).toList(),
@@ -75,7 +95,9 @@ final class ReceiptOptimizer implements Optimizer {
         value: ReceiptFormatter.parse(sum.last),
       );
     }
+  }
 
+  void _cleanupGroups() {
     if (_groups.length >= _maxCacheSize) {
       DateTime now = DateTime.now();
       _groups.removeWhere(
@@ -84,42 +106,76 @@ final class ReceiptOptimizer implements Optimizer {
             g.stability < _stabilityThreshold,
       );
     }
+  }
 
+  void _processPositions(RecognizedReceipt receipt) {
     for (final position in receipt.positions) {
-      int bestConfidence = 0;
-      RecognizedGroup? bestGroup;
-      for (final group in _groups) {
-        final int productConfidence = group.calculateProductConfidence(
-          position.product,
-        );
-        final int priceConfidence = group.calculatePriceConfidence(
-          position.price,
-        );
-        final int confidence =
-            ((4 * productConfidence + priceConfidence) / 5).toInt();
-        final bool sameTimestamp = group.members.any(
-          (p) => position.timestamp == p.timestamp,
-        );
-        if (!sameTimestamp &&
-            confidence >= _confidenceThreshold &&
-            confidence > bestConfidence) {
-          bestConfidence = confidence;
-          bestGroup = group;
-          position.product.confidence = productConfidence;
-          position.price.confidence = priceConfidence;
-        }
-      }
-      if (bestGroup == null) {
-        final newGroup = RecognizedGroup(maxGroupSize: _maxCacheSize);
-        position.group = newGroup;
-        newGroup.addMember(position);
-        _groups.add(newGroup);
-      } else {
-        position.group = bestGroup;
-        bestGroup.addMember(position);
+      _processPosition(position);
+    }
+  }
+
+  void _processPosition(RecognizedPosition position) {
+    int bestConfidence = 0;
+    RecognizedGroup? bestGroup;
+
+    for (final group in _groups) {
+      final result = _calculateConfidence(position, group, bestConfidence);
+      if (result.shouldUseGroup) {
+        bestConfidence = result.confidence;
+        bestGroup = group;
+        position.product.confidence = result.productConfidence;
+        position.price.confidence = result.priceConfidence;
       }
     }
 
+    if (bestGroup == null) {
+      _createNewGroup(position);
+    } else {
+      _addToExistingGroup(position, bestGroup);
+    }
+  }
+
+  _ConfidenceResult _calculateConfidence(
+    RecognizedPosition position,
+    RecognizedGroup group,
+    int currentBestConfidence,
+  ) {
+    final int productConfidence = group.calculateProductConfidence(
+      position.product,
+    );
+    final int priceConfidence = group.calculatePriceConfidence(position.price);
+    final int confidence =
+        ((4 * productConfidence + priceConfidence) / 5).toInt();
+    final bool sameTimestamp = group.members.any(
+      (p) => position.timestamp == p.timestamp,
+    );
+
+    final shouldUseGroup =
+        !sameTimestamp &&
+        confidence >= _confidenceThreshold &&
+        confidence > currentBestConfidence;
+
+    return _ConfidenceResult(
+      productConfidence: productConfidence,
+      priceConfidence: priceConfidence,
+      confidence: confidence,
+      shouldUseGroup: shouldUseGroup,
+    );
+  }
+
+  void _createNewGroup(RecognizedPosition position) {
+    final newGroup = RecognizedGroup(maxGroupSize: _maxCacheSize);
+    position.group = newGroup;
+    newGroup.addMember(position);
+    _groups.add(newGroup);
+  }
+
+  void _addToExistingGroup(RecognizedPosition position, RecognizedGroup group) {
+    position.group = group;
+    group.addMember(position);
+  }
+
+  RecognizedReceipt _createOptimizedReceipt(RecognizedReceipt receipt) {
     final stableGroups = _groups.where(
       (g) => g.stability >= _stabilityThreshold,
     );
@@ -147,4 +203,18 @@ final class ReceiptOptimizer implements Optimizer {
     _sums.clear();
     _shouldInitialize = false;
   }
+}
+
+class _ConfidenceResult {
+  final int productConfidence;
+  final int priceConfidence;
+  final int confidence;
+  final bool shouldUseGroup;
+
+  _ConfidenceResult({
+    required this.productConfidence,
+    required this.priceConfidence,
+    required this.confidence,
+    required this.shouldUseGroup,
+  });
 }
