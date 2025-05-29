@@ -1,5 +1,9 @@
 import 'package:intl/intl.dart';
 
+/// Utility for formatting and parsing receipt values consistently.
+///
+/// Provides methods for handling monetary amounts and normalizing text
+/// to ensure consistent representation across the application.
 final class ReceiptFormatter {
   static String format(num value) => NumberFormat.decimalPatternDigits(
     locale: Intl.defaultLocale,

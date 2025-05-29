@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Main class for recognizing receipts from images.
+///
+/// Orchestrates the OCR and parsing processes, manages optimizations,
+/// and provides callbacks for scan progress and completion.
 final class ReceiptRecognizer {
   final TextRecognizer _textRecognizer;
   final Optimizer _optimizer;
@@ -18,6 +22,20 @@ final class ReceiptRecognizer {
   DateTime? _initializedScan;
   DateTime? _lastScan;
 
+  /// Creates a receipt recognizer with configurable parameters and callbacks.
+  ///
+  /// Parameters:
+  /// - [textRecognizer]: Custom text recognizer (uses default if not provided)
+  /// - [optimizer]: Custom optimizer (uses default if not provided)
+  /// - [script]: Script type for text recognition
+  /// - [singleScan]: Whether to use single-scan mode or continuous scanning
+  /// - [minValidScans]: Number of valid scans required for acceptance
+  /// - [nearlyCompleteThreshold]: Percentage threshold for nearly complete receipts
+  /// - [scanInterval]: Minimum time between scans
+  /// - [scanTimeout]: Maximum time for a scanning session
+  /// - [onScanTimeout]: Called when scanning times out
+  /// - [onScanUpdate]: Called with updates during scanning
+  /// - [onScanComplete]: Called when a valid receipt is recognized
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
@@ -42,6 +60,10 @@ final class ReceiptRecognizer {
        _onScanComplete = onScanComplete,
        _validScans = 0;
 
+  /// Processes an image and attempts to recognize a receipt from it.
+  ///
+  /// This is the main entry point for receipt recognition.
+  /// Returns a recognized receipt if validation passes, or null otherwise.
   Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
     final now = DateTime.now();
 
@@ -129,6 +151,10 @@ final class ReceiptRecognizer {
         : (declaredSum / calculatedSum * 100);
   }
 
+  /// Manually accepts a receipt that doesn't meet automatic validation criteria.
+  ///
+  /// Use this when a receipt is nearly complete and should be accepted despite
+  /// validation discrepancies. Resets the optimizer and scan counters.
   RecognizedReceipt acceptReceipt(RecognizedReceipt receipt) {
     _initializedScan = null;
     _optimizer.init();
@@ -136,6 +162,9 @@ final class ReceiptRecognizer {
     return receipt;
   }
 
+  /// Releases all resources used by the recognizer.
+  ///
+  /// Must be called when the recognizer is no longer needed.
   Future<void> close() async {
     _textRecognizer.close();
     _optimizer.close();

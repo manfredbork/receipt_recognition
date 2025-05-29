@@ -1,13 +1,28 @@
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Interface for receipt optimization components.
+///
+/// Optimizers improve recognition accuracy by processing and refining receipt data
+/// over multiple scans.
 abstract class Optimizer {
+  /// Initializes or resets the optimizer state.
   void init();
 
+  /// Processes a receipt to improve its recognition quality.
+  ///
+  /// Returns an optimized version of the input receipt.
   RecognizedReceipt optimize(RecognizedReceipt receipt);
 
+  /// Releases resources used by the optimizer.
   void close();
 }
 
+/// Default implementation of receipt optimizer that uses confidence scoring and grouping.
+///
+/// Improves recognition accuracy by:
+/// - Grouping similar items together
+/// - Applying confidence thresholds
+/// - Merging data from multiple scans
 final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedGroup> _groups = [];
   final List<RecognizedCompany> _companies = [];
@@ -19,6 +34,13 @@ final class ReceiptOptimizer implements Optimizer {
 
   bool _shouldInitialize;
 
+  /// Creates a new receipt optimizer with configurable thresholds.
+  ///
+  /// Parameters:
+  /// - [maxCacheSize]: Maximum number of items to keep in memory
+  /// - [confidenceThreshold]: Minimum confidence score (0-100) for matching
+  /// - [stabilityThreshold]: Minimum stability score (0-100) for groups
+  /// - [invalidateInterval]: Time after which unstable groups are removed
   ReceiptOptimizer({
     int maxCacheSize = 20,
     int confidenceThreshold = 75,
@@ -30,11 +52,18 @@ final class ReceiptOptimizer implements Optimizer {
        _invalidateInterval = invalidateInterval,
        _shouldInitialize = false;
 
+  /// Marks the optimizer for reinitialization on next optimization.
   @override
   void init() {
     _shouldInitialize = true;
   }
 
+  /// Processes a receipt to improve its recognition quality.
+  ///
+  /// Applies various optimization strategies including:
+  /// - Company name normalization
+  /// - Sum validation and correction
+  /// - Position grouping and confidence scoring
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt) {
     _initializeIfNeeded();
@@ -48,6 +77,7 @@ final class ReceiptOptimizer implements Optimizer {
     return _createOptimizedReceipt(receipt);
   }
 
+  /// Releases all resources used by the optimizer.
   void _initializeIfNeeded() {
     if (_shouldInitialize) {
       _groups.clear();
@@ -196,6 +226,9 @@ final class ReceiptOptimizer implements Optimizer {
     return receipt.copyWith(positions: mergedReceipt.positions);
   }
 
+  /// Releases all resources used by the optimizer.
+  ///
+  /// Clears all cached groups, companies, and sums.
   @override
   void close() {
     _groups.clear();

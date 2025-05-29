@@ -5,35 +5,49 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Parses raw OCR text into structured receipt data.
+///
+/// Uses pattern matching and spatial analysis to identify receipt components
+/// like company names, prices, products, and the total sum.
 final class ReceiptParser {
+  /// Pattern to match common supermarket/store names.
   static final RegExp patternCompany = RegExp(
     r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
     caseSensitive: false,
   );
 
+  /// Pattern to match various ways a total sum might be labeled.
   static final RegExp patternSumLabel = RegExp(
     r'(Zu zahlen|Gesamt|Summe|Total)',
     caseSensitive: false,
   );
 
+  /// Pattern for keywords that indicate we should stop parsing (end of receipt).
   static final RegExp patternStopKeywords = RegExp(
     r'(Geg.|Rückgeld)',
     caseSensitive: false,
   );
 
+  /// Pattern for keywords to ignore as they don't represent product items.
   static final RegExp patternIgnoreKeywords = RegExp(
     r'(E-Bon|Coupon|Eingabe|Posten|Stk|kg)',
     caseSensitive: false,
   );
 
+  /// Pattern for invalid amount formats (likely not price values).
   static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
 
+  /// Pattern to recognize monetary amounts with optional sign.
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 
+  /// Pattern to recognize text that might be product descriptions.
   static final RegExp patternUnknown = RegExp(r'\D{6,}');
 
   static const int boundingBoxBuffer = 50;
 
+  /// Processes raw OCR text into a structured receipt.
+  ///
+  /// This is the main entry point for receipt parsing.
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
