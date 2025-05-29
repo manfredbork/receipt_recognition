@@ -162,10 +162,10 @@ A crucial part that improves recognition accuracy through several mechanisms:
                                   │
                   ┌───────────────┼───────────────┐
                   │               │               │
-      ┌───────────▼──────┐ ┌───────▼─────┐ ┌───────▼─────┐
-      │ Group Management │ │Confidence   │ │Stability    │
-      │                  │ │Calculation  │ │Thresholds   │
-      └──────────────────┘ └─────────────┘ └─────────────┘
+      ┌───────────▼──────┐ ┌──────▼─────┐ ┌───────▼─────┐
+      │ Group Management │ │Confidence  │ │Stability    │
+      │                  │ │Calculation │ │Thresholds   │
+      └──────────────────┘ └────────────┘ └─────────────┘
 ```
 
 The optimizer:
