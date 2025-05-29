@@ -1,11 +1,22 @@
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Represents a line item position on a receipt, consisting of a product and its price.
+///
+/// Each position corresponds to a single item purchased in the transaction.
 final class RecognizedPosition {
+  /// The product part of this position (name/description).
   final RecognizedProduct product;
+
+  /// The price part of this position.
   final RecognizedPrice price;
 
+  /// Timestamp when this position was recognized.
   DateTime timestamp;
+
+  /// The operation performed on this position (added, updated, etc.).
   Operation operation;
+
+  /// Optional group this position belongs to for optimization purposes.
   RecognizedGroup? group;
 
   RecognizedPosition({
@@ -16,6 +27,7 @@ final class RecognizedPosition {
     this.group,
   });
 
+  /// Creates a copy of this position with optionally updated properties.
   RecognizedPosition copyWith({
     RecognizedProduct? product,
     RecognizedPrice? price,
@@ -32,5 +44,8 @@ final class RecognizedPosition {
     );
   }
 
+  /// Gets the overall confidence score for this position.
+  ///
+  /// Calculated as the average of product and price confidence scores.
   int get confidence => ((product.confidence + price.confidence) / 2).toInt();
 }

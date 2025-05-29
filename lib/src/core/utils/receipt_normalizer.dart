@@ -1,4 +1,12 @@
+/// Utility for normalizing and standardizing recognized text from receipts.
+///
+/// Provides methods to improve text quality by applying various normalization
+/// techniques and comparing against alternative recognitions.
 final class ReceiptNormalizer {
+  /// Normalizes text by comparing multiple alternative recognitions.
+  ///
+  /// Uses a consensus approach to improve accuracy by analyzing patterns
+  /// across multiple recognitions of the same text.
   static String? normalizeByAlternativeTexts(List<String> alternativeTexts) {
     if (alternativeTexts.isEmpty) return null;
     final frequencyTexts = sortByFrequency(alternativeTexts);
@@ -16,6 +24,10 @@ final class ReceiptNormalizer {
     return normalizedText;
   }
 
+  /// Normalizes the tail part of product text by removing price information.
+  ///
+  /// Removes trailing price-like patterns from product descriptions and
+  /// limits the overall length for consistent processing.
   static String normalizeTail(String value) {
     String replacedValue = value.replaceAllMapped(
       RegExp(r'(.*\S)(\s*\d+[.,]?\d{2,3}.*)'),
@@ -35,6 +47,10 @@ final class ReceiptNormalizer {
     return shortenValue;
   }
 
+  /// Normalizes special characters by comparing with alternative recognitions.
+  ///
+  /// Improves text quality by replacing problematic characters with more likely
+  /// alternatives based on comparisons with other recognized versions.
   static String normalizeSpecialChars(
     String bestText,
     List<String> otherTexts,
@@ -70,6 +86,10 @@ final class ReceiptNormalizer {
     return normalizedText;
   }
 
+  /// Normalizes spaces by analyzing word boundaries across multiple recognitions.
+  ///
+  /// Addresses issues with inconsistent spacing by comparing token patterns
+  /// across multiple versions of the same text.
   static String normalizeSpecialSpaces(
     String bestText,
     List<String> otherTexts,
@@ -99,6 +119,10 @@ final class ReceiptNormalizer {
     return bestTokens.join(separator);
   }
 
+  /// Sorts a list of strings by their frequency of occurrence.
+  ///
+  /// Returns a list ordered from least to most frequent, which helps
+  /// identify the most common (likely correct) versions of text.
   static List<String> sortByFrequency(List<String> values) {
     final Map<String, int> frequencyMap = {};
     for (final value in values) {

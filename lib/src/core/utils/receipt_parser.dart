@@ -5,6 +5,10 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Parses raw OCR text into structured receipt data.
+///
+/// Uses pattern matching and spatial analysis to identify receipt components
+/// like company names, prices, products, and the total sum.
 final class ReceiptParser {
   static final RegExp patternCompany = RegExp(
     r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
@@ -34,6 +38,9 @@ final class ReceiptParser {
 
   static const int boundingBoxBuffer = 50;
 
+  /// Processes raw OCR text into a structured receipt.
+  ///
+  /// This is the main entry point for receipt parsing.
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
