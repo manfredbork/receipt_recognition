@@ -143,7 +143,7 @@ The main entry point for the package. It orchestrates the entire recognition pro
 
 Leverages Google's ML Kit to perform OCR (Optical Character Recognition) on receipt images, converting the visual text into digital text.
 
-#### 3. Receipt Parser
+#### 3. ReceiptParser
 
 Analyzes the raw text to identify and categorize receipt elements:
 - Store/company name (e.g., Aldi, Rewe, Edeka, Penny, Lidl, Kaufland, Netto in German markets)
@@ -194,7 +194,7 @@ The optimizer:
 | Line Item Recognition   | ✅ Complete    | Products with prices           |
 | Receipt Merging         | ✅ Complete    | For improved accuracy          |
 | Product Normalization   | ✅ Complete    | Standardizes product names     |
-| Multi-language Support  | ⚠️ Partial      | Focus on English and German    |
+| Multi-language Support  | ⚠️ Partial     | Focus on English and German    |
 | Original Item Ordering  | ❌ Planned     | Preserving receipt line order  |
 | TSE Detection           | 🔄 In Progress | Coming soon                    |
 | Tax/Discount Detection  | 🔄 In Progress | Coming soon                    |
