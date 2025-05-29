@@ -12,7 +12,7 @@ final class ReceiptParser {
   );
 
   static final RegExp patternSumLabel = RegExp(
-    r'(Zu zahlen|Summe|Total)',
+    r'(Zu zahlen|Gesamt|Summe|Total)',
     caseSensitive: false,
   );
 
