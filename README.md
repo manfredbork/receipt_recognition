@@ -254,6 +254,108 @@ Better for real-time scanning with a live preview:
 4. **Multiple Scans**: Use the optimizer's merging capabilities for improved accuracy
 5. **Language Handling**: For mixed-language environments, consider setting the appropriate TextRecognitionScript when initializing the recognizer
 
+### Receipt Validation and Manual Acceptance
+
+The package includes a robust validation system that verifies receipt completeness based on the match between calculated sum (from line items) and the detected total sum. Four validation states are possible:
+
+```
++-------------------------+------------------------+-------------------------+
+| Validation State        | Description            | Match Percentage        |
++-------------------------+------------------------+-------------------------+
+| ReceiptCompleteness.    | Perfect match between  | 100%                    |
+| complete                | line items and total   |                         |
++-------------------------+------------------------+-------------------------+
+| ReceiptCompleteness.    | Very close match,      | 95-99%                  |
+| nearlyComplete          | acceptable for most    | (configurable)          |
+|                         | applications           |                         |
++-------------------------+------------------------+-------------------------+
+| ReceiptCompleteness.    | Partial recognition    | <95%                    |
+| incomplete              | with significant       |                         |
+|                         | discrepancies          |                         |
++-------------------------+------------------------+-------------------------+
+| ReceiptCompleteness.    | Missing critical data  | 0%                      |
+| invalid                 | (e.g., total sum)      |                         |
++-------------------------+------------------------+-------------------------+
+```
+
+You can track the validation state through the `onScanUpdate` callback:
+
+```dart
+final receiptRecognizer = ReceiptRecognizer(
+  onScanUpdate: (progress) {
+    // Check validation status
+    switch (progress.validationResult.status) {
+      case ReceiptCompleteness.nearlyComplete:
+        print('Receipt is ${progress.validationResult.matchPercentage}% complete');
+        // Consider using acceptReceipt here if percentage is acceptable
+        break;
+      case ReceiptCompleteness.incomplete:
+        print('Still scanning...');
+        break;
+      // Handle other cases
+    }
+  },
+);
+```
+
+#### Manual Receipt Acceptance
+
+When automatic validation doesn't reach 100% match but the receipt seems adequate, you can manually accept it using the `acceptReceipt` method:
+
+```dart
+// Example: Accepting a nearly complete receipt when user taps "Accept"
+void acceptCurrentReceipt() {
+  if (progress.mergedReceipt != null && 
+      progress.validationResult.matchPercentage! >= 95) {
+    final acceptedReceipt = receiptRecognizer.acceptReceipt(progress.mergedReceipt!);
+    // Handle the accepted receipt
+  }
+}
+```
+
+#### Receipt Validation Flow
+
+```
+                         ┌───────────────┐
+                         │    Scan       │
+                         │   Receipt     │
+                         └───────┬───────┘
+                                 │
+                                 ▼
+┌─────────────────┐      ┌───────────────┐      ┌─────────────────┐
+│                 │      │  Validation   │      │                 │
+│  Invalid (0%)   │◀─────┤   Process     ├─────▶│  Complete (100%)│
+│                 │      │               │      │                 │
+└─────────────────┘      └───────┬───────┘      └────────┬────────┘
+                                 │                       │
+                                 │                       │
+                                 ▼                       ▼
+              ┌─────────────────────────┐       ┌──────────────────┐
+              │                         │       │                  │
+              │  Incomplete (<95%)      │       │ Auto-accepted    │
+              │                         │       │                  │
+              └──────────┬──────────────┘       └──────────────────┘
+                         │
+                         │
+                         ▼
+              ┌─────────────────────────┐
+              │                         │
+              │  Nearly Complete (≥95%) │
+              │                         │
+              └──────────┬──────────────┘
+                         │
+                         │
+                         ▼
+              ┌─────────────────────────┐
+              │                         │
+              │  Manual Acceptance      │
+              │  acceptReceipt()        │
+              │                         │
+              └─────────────────────────┘
+```
+
+This workflow enables you to build UIs that show the user scanning progress and offer manual acceptance for receipts that don't achieve perfect validation but are still usable.
+
 ### Upcoming: Spatial Position-Based Item Ordering
 
 A key upcoming feature is the preservation of original item ordering from receipts across multiple scans. The planned algorithm will:
