@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.8] - 2024-05-29
+
+### ✨ Added
+- **Manual Receipt Acceptance**: Added `acceptReceipt()` method to manually accept receipts with validation discrepancies
+- **Enhanced Validation Flow**: Improved receipt validation with configurable thresholds and detailed status reporting
+- **Validation State Tracking**: Added comprehensive validation states (complete, nearlyComplete, incomplete, invalid)
+- **Documentation**: Added detailed documentation on validation workflow and manual acceptance
+
+### 🛠️ Changed
+- **Implementation Status Table**: Improved formatting of status table in documentation
+- **Progress Reporting**: Enhanced `ScanProgress` model with more detailed validation information
+- **Validation Logic**: Refined match percentage calculation between calculated and declared sums
+
+### 🐛 Fixed
+- **Receipt Merging**: Fixed edge cases in receipt merging that could lead to inaccurate total sums
+- **Stability Thresholds**: Adjusted default stability thresholds for more reliable scanning
+
 ## [0.0.7] - 2024-05-19
 
 ### 🐛 Fixed
