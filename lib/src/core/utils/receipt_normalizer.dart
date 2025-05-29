@@ -4,9 +4,10 @@ final class ReceiptNormalizer {
     final frequencyTexts = sortByFrequency(alternativeTexts);
     final List<String> normalizedTexts = [];
     for (final frequencyText in frequencyTexts) {
-      normalizedTexts.add(
-        normalizeTail(normalizeSpecialSpaces(frequencyText, frequencyTexts)),
+      final text = normalizeTail(
+        normalizeSpecialSpaces(frequencyText, frequencyTexts),
       );
+      normalizedTexts.add(text);
     }
     final normalizedText = normalizeSpecialChars(
       normalizedTexts.last,
@@ -16,10 +17,22 @@ final class ReceiptNormalizer {
   }
 
   static String normalizeTail(String value) {
-    return value.replaceAllMapped(
+    String replacedValue = value.replaceAllMapped(
       RegExp(r'(.*\S)(\s*\d+[.,]?\d{2,3}.*)'),
       (match) => '${match[1]}',
     );
+    if (RegExp(r'(\s*\d+[.,]?\d{2}\sEURO?)').hasMatch(value)) {
+      replacedValue = value;
+    }
+    final replacedTokens = replacedValue.split(' ');
+    String shortenValue = '';
+    for (final token in replacedTokens) {
+      shortenValue += shortenValue.isEmpty ? token : ' $token';
+      if (shortenValue.length > 16) {
+        break;
+      }
+    }
+    return shortenValue;
   }
 
   static String normalizeSpecialChars(
@@ -38,8 +51,11 @@ final class ReceiptNormalizer {
           if (RegExp(r'[!@#^*()?":{}|<>]').hasMatch(char) &&
               RegExp(r'[A-Za-z0-9]').hasMatch(compareChar)) {
             normalizedText += compareChar;
-          } else if (RegExp(r'[^A-Za-z]').hasMatch(char) &&
+          } else if (RegExp(r'[^A-Za-z\s]').hasMatch(char) &&
               RegExp(r'[A-Za-zÄÖÜäöüß]').hasMatch(compareChar)) {
+            normalizedText += compareChar;
+          } else if (RegExp(r'\s').hasMatch(char) &&
+              RegExp(r'[.,]').hasMatch(compareChar)) {
             normalizedText += compareChar;
           } else {
             normalizedText += char;

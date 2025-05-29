@@ -39,16 +39,16 @@ class RecognizedReceipt {
 final class ScanProgress {
   final List<RecognizedPosition> addedPositions;
   final List<RecognizedPosition> updatedPositions;
+  final ValidationResult validationResult;
   final int? estimatedPercentage;
   final RecognizedReceipt? mergedReceipt;
-  final bool nearlyComplete;
 
   ScanProgress({
     required this.addedPositions,
     required this.updatedPositions,
+    required this.validationResult,
     this.estimatedPercentage,
     this.mergedReceipt,
-    this.nearlyComplete = false,
   });
 }
 

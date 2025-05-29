@@ -15,16 +15,19 @@ final class ReceiptOptimizer implements Optimizer {
   final int _maxCacheSize;
   final int _confidenceThreshold;
   final int _stabilityThreshold;
+  final Duration _invalidateInterval;
 
   bool _shouldInitialize;
 
   ReceiptOptimizer({
     int maxCacheSize = 20,
-    int confidenceThreshold = 80,
-    int stabilityThreshold = 60,
+    int confidenceThreshold = 75,
+    int stabilityThreshold = 75,
+    Duration invalidateInterval = const Duration(seconds: 2),
   }) : _maxCacheSize = maxCacheSize,
        _confidenceThreshold = confidenceThreshold,
        _stabilityThreshold = stabilityThreshold,
+       _invalidateInterval = invalidateInterval,
        _shouldInitialize = false;
 
   @override
@@ -73,6 +76,15 @@ final class ReceiptOptimizer implements Optimizer {
       );
     }
 
+    if (_groups.length >= _maxCacheSize) {
+      DateTime now = DateTime.now();
+      _groups.removeWhere(
+        (g) =>
+            now.difference(g.timestamp) >= _invalidateInterval &&
+            g.stability < _stabilityThreshold,
+      );
+    }
+
     for (final position in receipt.positions) {
       int bestConfidence = 0;
       RecognizedGroup? bestGroup;
@@ -86,7 +98,7 @@ final class ReceiptOptimizer implements Optimizer {
         final int confidence =
             ((4 * productConfidence + priceConfidence) / 5).toInt();
         final bool sameTimestamp = group.members.any(
-              (p) => position.timestamp == p.timestamp,
+          (p) => position.timestamp == p.timestamp,
         );
         if (!sameTimestamp &&
             confidence >= _confidenceThreshold &&

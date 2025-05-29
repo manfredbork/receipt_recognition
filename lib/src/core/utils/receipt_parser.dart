@@ -52,14 +52,15 @@ final class ReceiptParser {
 
     RecognizedCompany? detectedCompany;
     RecognizedSumLabel? detectedSumLabel;
+    RecognizedAmount? detectedAmount;
 
     for (final line in lines) {
       if (detectedSumLabel != null &&
-          line.boundingBox.top > detectedSumLabel.line.boundingBox.bottom) {
+          line.boundingBox.top > detectedSumLabel.line.boundingBox.top) {
         continue;
       }
 
-      if (detectedCompany == null) {
+      if (detectedCompany == null && detectedAmount == null) {
         final company = patternCompany.stringMatch(line.text);
         if (company != null) {
           detectedCompany = RecognizedCompany(line: line, value: company);
@@ -90,7 +91,8 @@ final class ReceiptParser {
         final locale = _detectsLocale(amount);
         final trimmedAmount = ReceiptFormatter.trim(amount);
         final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
-        parsed.add(RecognizedAmount(line: line, value: value));
+        detectedAmount = RecognizedAmount(line: line, value: value);
+        parsed.add(detectedAmount);
       }
 
       final unknown = patternUnknown.stringMatch(line.text);
@@ -157,7 +159,7 @@ final class ReceiptParser {
     }
 
     final yAmounts = entities.whereType<RecognizedAmount>().toList();
-    if (sumLabel != null) {
+    if (sumLabel != null && yAmounts.isNotEmpty) {
       final ySumLabel = sumLabel.line.boundingBox;
 
       _sortByDistance(ySumLabel, yAmounts);

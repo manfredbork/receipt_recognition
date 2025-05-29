@@ -111,9 +111,7 @@ final class ReceiptRecognizer {
         print('-' * 50);
         print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
         for (final position in optimizedReceipt.positions) {
-          print(
-            '${position.product.normalizedText} ${position.price.formattedValue} ${position.confidence}% ${position.group?.stability}%',
-          );
+          print('${position.product.text} ${position.price.formattedValue}');
         }
         print(
           'Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
@@ -134,7 +132,7 @@ final class ReceiptRecognizer {
   RecognizedReceipt? _handleIncompleteReceipt(
     DateTime now,
     RecognizedReceipt receipt,
-    ValidationResult validation,
+    ValidationResult validationResult,
   ) {
     final addedPositions =
         receipt.positions.where((p) => p.operation == Operation.added).toList();
@@ -148,9 +146,9 @@ final class ReceiptRecognizer {
       ScanProgress(
         addedPositions: addedPositions,
         updatedPositions: updatedPositions,
-        estimatedPercentage: validation.matchPercentage,
+        validationResult: validationResult,
+        estimatedPercentage: validationResult.matchPercentage,
         mergedReceipt: receipt,
-        nearlyComplete: validation.status == ReceiptCompleteness.nearlyComplete,
       ),
     );
 

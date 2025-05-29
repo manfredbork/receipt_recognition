@@ -22,6 +22,7 @@ final class RecognizedGroup {
   }
 
   int calculateProductConfidence(RecognizedProduct product) {
+    if (_members.isEmpty) return 0;
     final total = _members.fold(
       0,
       (a, b) =>
@@ -35,6 +36,7 @@ final class RecognizedGroup {
   }
 
   int calculatePriceConfidence(RecognizedPrice price) {
+    if (_members.isEmpty) return 0;
     final total = _members.fold(
       0,
       (a, b) =>
@@ -44,7 +46,6 @@ final class RecognizedGroup {
                   100)
               .toInt(),
     );
-
     return (total / _members.length).toInt();
   }
 
@@ -59,4 +60,13 @@ final class RecognizedGroup {
   }
 
   int get stability => (_members.length / _maxGroupSize * 100).toInt();
+
+  DateTime get timestamp {
+    if (_members.isEmpty) {
+      return DateTime.now();
+    }
+    return _members
+        .reduce((a, b) => a.timestamp.isAfter(b.timestamp) ? a : b)
+        .timestamp;
+  }
 }
