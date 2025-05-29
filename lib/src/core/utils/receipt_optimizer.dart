@@ -73,14 +73,6 @@ final class ReceiptOptimizer implements Optimizer {
       );
     }
 
-    if (receipt.sum != null) {
-      receipt.positions.removeWhere(
-        (p) =>
-            p.price.value > receipt.sum!.value ||
-            p.price.formattedValue == receipt.sum!.formattedValue,
-      );
-    }
-
     for (final position in receipt.positions) {
       int bestConfidence = 0;
       RecognizedGroup? bestGroup;
@@ -91,11 +83,11 @@ final class ReceiptOptimizer implements Optimizer {
         final int priceConfidence = group.calculatePriceConfidence(
           position.price,
         );
-        final bool sameTimestamp = group.members.any(
-          (p) => position.timestamp == p.timestamp,
-        );
         final int confidence =
-            ((productConfidence + priceConfidence) / 2).toInt();
+            ((4 * productConfidence + priceConfidence) / 5).toInt();
+        final bool sameTimestamp = group.members.any(
+              (p) => position.timestamp == p.timestamp,
+        );
         if (!sameTimestamp &&
             confidence >= _confidenceThreshold &&
             confidence > bestConfidence) {

@@ -50,24 +50,29 @@ final class ReceiptParser {
     final bounds = RecognizedBounds.fromLines(lines);
     final receiptHalfWidth = (bounds.minLeft + bounds.maxRight) / 2;
 
-    bool detectedCompany = false;
-    bool detectedSumLabel = false;
+    RecognizedCompany? detectedCompany;
+    RecognizedSumLabel? detectedSumLabel;
 
     for (final line in lines) {
-      if (!detectedCompany) {
+      if (detectedSumLabel != null &&
+          line.boundingBox.top > detectedSumLabel.line.boundingBox.bottom) {
+        continue;
+      }
+
+      if (detectedCompany == null) {
         final company = patternCompany.stringMatch(line.text);
         if (company != null) {
-          parsed.add(RecognizedCompany(line: line, value: company));
-          detectedCompany = true;
+          detectedCompany = RecognizedCompany(line: line, value: company);
+          parsed.add(detectedCompany);
           continue;
         }
       }
 
-      if (!detectedSumLabel) {
+      if (detectedSumLabel == null) {
         final sumLabel = patternSumLabel.stringMatch(line.text);
         if (sumLabel != null) {
-          parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
-          detectedSumLabel = true;
+          detectedSumLabel = RecognizedSumLabel(line: line, value: sumLabel);
+          parsed.add(detectedSumLabel);
           continue;
         }
       }
@@ -95,9 +100,7 @@ final class ReceiptParser {
       }
     }
 
-    return parsed.toList()..sort(
-      (a, b) => a.line.boundingBox.right.compareTo(b.line.boundingBox.right),
-    );
+    return parsed.toList();
   }
 
   static String? _detectsLocale(String text) {
@@ -171,7 +174,7 @@ final class ReceiptParser {
         );
       }
     }
-    
+
     receipt.company = company;
 
     return receipt;

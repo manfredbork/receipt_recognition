@@ -112,7 +112,7 @@ final class ReceiptRecognizer {
         print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
         for (final position in optimizedReceipt.positions) {
           print(
-            '${position.product.normalizedText} ${position.price.formattedValue} ${position.confidence}%',
+            '${position.product.normalizedText} ${position.price.formattedValue} ${position.confidence}% ${position.group?.stability}%',
           );
         }
         print(
