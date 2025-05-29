@@ -10,30 +10,37 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Uses pattern matching and spatial analysis to identify receipt components
 /// like company names, prices, products, and the total sum.
 final class ReceiptParser {
+  /// Pattern to match common supermarket/store names.
   static final RegExp patternCompany = RegExp(
     r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
     caseSensitive: false,
   );
 
+  /// Pattern to match various ways a total sum might be labeled.
   static final RegExp patternSumLabel = RegExp(
     r'(Zu zahlen|Gesamt|Summe|Total)',
     caseSensitive: false,
   );
 
+  /// Pattern for keywords that indicate we should stop parsing (end of receipt).
   static final RegExp patternStopKeywords = RegExp(
     r'(Geg.|Rückgeld)',
     caseSensitive: false,
   );
 
+  /// Pattern for keywords to ignore as they don't represent product items.
   static final RegExp patternIgnoreKeywords = RegExp(
     r'(E-Bon|Coupon|Eingabe|Posten|Stk|kg)',
     caseSensitive: false,
   );
 
+  /// Pattern for invalid amount formats (likely not price values).
   static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
 
+  /// Pattern to recognize monetary amounts with optional sign.
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 
+  /// Pattern to recognize text that might be product descriptions.
   static final RegExp patternUnknown = RegExp(r'\D{6,}');
 
   static const int boundingBoxBuffer = 50;

@@ -2,7 +2,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Represents the operation performed on a recognized position during processing.
-/// Represents the operation performed on a recognized position during processing.
 enum Operation { none, added, updated }
 
 /// Base class for entities that have a value which can be formatted.

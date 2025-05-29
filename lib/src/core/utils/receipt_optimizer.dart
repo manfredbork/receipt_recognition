@@ -226,6 +226,9 @@ final class ReceiptOptimizer implements Optimizer {
     return receipt.copyWith(positions: mergedReceipt.positions);
   }
 
+  /// Releases all resources used by the optimizer.
+  ///
+  /// Clears all cached groups, companies, and sums.
   @override
   void close() {
     _groups.clear();
