@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   camera: ^0.10.5+9
   google_mlkit_text_recognition: ^0.15.0
+  audioplayers: ^5.2.1
   receipt_recognition:
     path: ../
 
@@ -91,3 +92,5 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+  assets:
+    - assets/sounds/checkout_beep.mp3

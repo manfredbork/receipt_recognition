@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:example/views/receipt_widget.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ class ReceiptRecognitionView extends StatefulWidget {
 
 class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     with CameraHandlerMixin {
+  final _audioPlayer = AudioPlayer();
   ReceiptRecognizer? _receiptRecognizer;
   RecognizedReceipt? _receipt;
   bool _canProcess = false;
@@ -50,7 +52,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   Future<void> _processImage(InputImage inputImage) async {
-    if (_cannotProcess()) {
+    if (!isReadyToProcess) {
       return;
     }
     _isBusy = true;
@@ -67,22 +69,26 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     }
   }
 
-  bool _cannotProcess() {
-    return _receiptRecognizer == null || !_canProcess || !_isReady || _isBusy;
-  }
-
   bool _isValidReceipt(RecognizedReceipt? receipt) {
     return receipt != null && receipt.positions.isNotEmpty;
   }
 
   void _handleSuccessfulScan(RecognizedReceipt receipt) {
+    _playScanSound();
+
     _receipt = receipt;
     _canProcess = false;
+
     stopLiveFeed();
+
     if (mounted) {
       _showSuccessNotification();
       setState(() {});
     }
+  }
+
+  void _playScanSound() {
+    _audioPlayer.play(AssetSource('sounds/checkout_beep.mp3'));
   }
 
   void _showSuccessNotification() {
@@ -111,6 +117,9 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     return _liveFeed();
   }
 
+  bool get isReadyToProcess =>
+      _receiptRecognizer != null && _canProcess && _isReady && !_isBusy;
+
   bool get isCameraPreviewReady =>
       cameraController?.value.isInitialized == true && !isControllerDisposed;
 
@@ -130,7 +139,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                 child: ElevatedButton.icon(
                   onPressed: () async {
                     setState(() {
-                      _receipt = null;
                       _canProcess = true;
                       _isReady = false;
                       isControllerDisposed = false;
@@ -150,15 +158,25 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                   ),
                 ),
               ),
-            if (_receipt != null && !_canProcess)
-              ReceiptWidget(
-                receipt: _receipt!,
-                onClose: () {
-                  setState(() {
-                    _receipt = null;
-                  });
-                },
-              ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 500),
+              switchInCurve: Curves.easeInOut,
+              switchOutCurve: Curves.easeInOut,
+              child:
+                  (_receipt != null && !_canProcess)
+                      ? ReceiptWidget(
+                        key: ValueKey(_receipt),
+                        receipt: _receipt!,
+                        onClose: () {
+                          Future.delayed(const Duration(milliseconds: 500), () {
+                            if (mounted) {
+                              setState(() => _receipt = null);
+                            }
+                          });
+                        },
+                      )
+                      : const SizedBox.shrink(),
+            ),
           ],
         ),
       ),
