@@ -78,7 +78,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     if (_cannotProcess()) {
       return;
     }
-
     _isBusy = true;
     try {
       final receipt = await _receiptRecognizer?.processImage(inputImage);
