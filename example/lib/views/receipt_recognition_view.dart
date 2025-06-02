@@ -27,6 +27,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   @override
   void initState() {
     super.initState();
+    _audioPlayer.setSource(AssetSource('sounds/checkout_beep.mp3'));
     _receiptRecognizer = ReceiptRecognizer(
       onScanUpdate: _onScanUpdate,
       onScanTimeout: _onScanTimeout,
@@ -40,20 +41,14 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     if (mounted) setState(() {});
   }
 
-  void _onScanUpdate(ScanProgress progress) {
-  }
+  void _onScanUpdate(ScanProgress progress) {}
 
   void _onScanTimeout() {
     _canProcess = false;
+    _receipt = null;
     stopLiveFeed();
     HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Scan failed', textAlign: TextAlign.center),
-        backgroundColor: Colors.red,
-        duration: Duration(seconds: 3),
-      ),
-    );
+    _showSnackBar('Scan failed', Colors.red);
     if (mounted) setState(() {});
   }
 
@@ -99,13 +94,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
   void _showSuccessNotification() {
     HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Scan succeed', textAlign: TextAlign.center),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 3),
-      ),
-    );
+    _showSnackBar('Scan succeed', Colors.green);
   }
 
   void _handleProcessingError(Object error, StackTrace stackTrace) {
@@ -116,6 +105,16 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     await startLiveFeed(_processImage);
     _isReady = true;
     if (mounted) setState(() {});
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, textAlign: TextAlign.center),
+        backgroundColor: color,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -138,40 +137,34 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
           children: <Widget>[
             if (isCameraPreviewReady)
               CameraPreview(cameraController!)
-            else
-              if (!isControllerDisposed && cameraBack == null)
-                const Center(child: CircularProgressIndicator())
-              else
-                if (_receipt == null)
-                  ScanInfoScreen(
-                    onStartScan: () async {
-                      setState(() {
-                        _receipt = null;
-                        _canProcess = true;
-                        _isReady = false;
-                        isControllerDisposed = false;
-                      });
-                      await _startLiveFeed();
-                    },
-                  ),
+            else if (!isControllerDisposed && cameraBack == null)
+              const Center(child: CircularProgressIndicator())
+            else if (_receipt == null)
+              ScanInfoScreen(
+                onStartScan: () async {
+                  setState(() {
+                    _receipt = null;
+                    _canProcess = true;
+                    _isReady = false;
+                    isControllerDisposed = false;
+                  });
+                  await _startLiveFeed();
+                },
+              ),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 500),
               switchInCurve: Curves.easeInOut,
               switchOutCurve: Curves.easeInOut,
               child:
-              (_receipt != null && !_canProcess)
-                  ? ReceiptWidget(
-                key: ValueKey(_receipt),
-                receipt: _receipt!,
-                onClose: () {
-                  Future.delayed(const Duration(milliseconds: 500), () {
-                    if (mounted) {
-                      setState(() => _receipt = null);
-                    }
-                  });
-                },
-              )
-                  : const SizedBox.shrink(),
+                  (_receipt != null && !_canProcess)
+                      ? ReceiptWidget(
+                        key: ValueKey(_receipt),
+                        receipt: _receipt!,
+                        onClose: () {
+                          setState(() => _receipt = null);
+                        },
+                      )
+                      : const SizedBox.shrink(),
             ),
           ],
         ),
