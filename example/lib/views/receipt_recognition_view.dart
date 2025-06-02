@@ -41,7 +41,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   void _onScanUpdate(ScanProgress progress) {
-    // TODO
   }
 
   void _onScanTimeout() {
