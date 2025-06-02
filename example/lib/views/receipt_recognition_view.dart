@@ -1,12 +1,12 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
+import 'package:example/views/camera_handler_mixin.dart';
 import 'package:example/views/receipt_widget.dart';
+import 'package:example/views/scan_info_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
-
-import 'camera_handler_mixin.dart';
 
 class ReceiptRecognitionView extends StatefulWidget {
   const ReceiptRecognitionView({super.key});
@@ -27,7 +27,10 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   @override
   void initState() {
     super.initState();
-    _receiptRecognizer = ReceiptRecognizer(onScanTimeout: _onScanTimeout);
+    _receiptRecognizer = ReceiptRecognizer(
+      onScanUpdate: _onScanUpdate,
+      onScanTimeout: _onScanTimeout,
+    );
     _initializeCamera();
   }
 
@@ -35,6 +38,10 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     final cameras = await availableCameras();
     await initCamera(cameras);
     if (mounted) setState(() {});
+  }
+
+  void _onScanUpdate(ScanProgress progress) {
+    // TODO
   }
 
   void _onScanTimeout() {
@@ -134,29 +141,17 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
               CameraPreview(cameraController!)
             else if (!isControllerDisposed && cameraBack == null)
               const Center(child: CircularProgressIndicator())
-            else
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    setState(() {
-                      _canProcess = true;
-                      _isReady = false;
-                      isControllerDisposed = false;
-                    });
-                    await _startLiveFeed();
-                  },
-                  icon: const Icon(Icons.document_scanner_outlined),
-                  label: const Text(
-                    'Start scanning',
-                    style: TextStyle(fontSize: 20),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
-                  ),
-                ),
+            else if (_receipt == null)
+              ScanInfoScreen(
+                onStartScan: () async {
+                  setState(() {
+                    _receipt = null;
+                    _canProcess = true;
+                    _isReady = false;
+                    isControllerDisposed = false;
+                  });
+                  await _startLiveFeed();
+                },
               ),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 500),
