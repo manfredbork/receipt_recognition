@@ -7,11 +7,13 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
-/// A Flutter widget that opens the camera, scans supermarket receipts,
-/// and overlays the parsed receipt items.
+/// A Flutter widget that allows scanning supermarket receipts by manually
+/// starting and stopping the camera feed.
 ///
-/// It integrates with the [ReceiptRecognizer] and handles platform-specific
-/// image stream conversion for ML Kit OCR.
+/// The user initiates scanning via an on-screen button, and the receipt is shown
+/// after a successful scan. A close button allows dismissing the result.
+///
+/// Integrates with [ReceiptRecognizer] and uses ML Kit for text recognition.
 class ReceiptRecognitionView extends StatefulWidget {
   const ReceiptRecognitionView({super.key});
 
@@ -32,6 +34,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
   CameraDescription? _cameraBack;
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
+  bool _isControllerDisposed = false;
   bool _canProcess = false;
   bool _isReady = false;
   bool _isBusy = false;
@@ -43,13 +46,15 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     _initializeCamera();
   }
 
-  /// Initializes the camera and starts the live feed.
+  /// Initializes available cameras but does not start the live feed.
+  ///
+  /// The live feed will be started later when the user initiates a scan.
   void _initializeCamera() async {
     _cameras = await availableCameras();
     for (var cam in _cameras) {
       if (cam.lensDirection == CameraLensDirection.back) {
         _cameraBack = cam;
-        await _startLiveFeed();
+        if (mounted) setState(() {});
         return;
       }
     }
@@ -61,8 +66,11 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
   }
 
   /// Called if scanning times out without producing a valid receipt.
+  ///
+  /// Stops the camera feed and notifies the user.
   void _onScanTimeout() {
     _canProcess = false;
+    _stopLiveFeed(); // Stop camera here
     HapticFeedback.lightImpact();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -103,8 +111,10 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
   void _handleSuccessfulScan(RecognizedReceipt receipt) {
     _receipt = receipt;
     _canProcess = false;
+    _stopLiveFeed();
     if (mounted) {
       _showSuccessNotification();
+      setState(() {});
     }
   }
 
@@ -130,38 +140,55 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
 
   /// Shows the live camera feed with overlaid receipt results, if any.
   Widget _liveFeed() {
-    if (_cameraBack == null ||
-        _cameraController == null ||
-        !_cameraController!.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
-    }
     return Scaffold(
       body: ColoredBox(
         color: Colors.black,
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            CameraPreview(_cameraController!),
-            _receipt == null || _canProcess
-                ? Container()
-                : ReceiptWidget(receipt: _receipt!),
+            if (_cameraController != null &&
+                !_isControllerDisposed &&
+                _cameraController!.value.isInitialized)
+              CameraPreview(_cameraController!)
+            else if (_cameraBack == null)
+              const Center(child: CircularProgressIndicator())
+            else
+              Center(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    setState(() {
+                      _receipt = null;
+                      _canProcess = true;
+                      _isReady = false;
+                      _isControllerDisposed = false;
+                    });
+                    await _startLiveFeed();
+                  },
+                  icon: const Icon(Icons.document_scanner_outlined),
+                  label: const Text(
+                    'Start scanning',
+                    style: TextStyle(fontSize: 20),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ),
+            if (_receipt != null && !_canProcess)
+              ReceiptWidget(
+                receipt: _receipt!,
+                onClose: () {
+                  setState(() {
+                    _receipt = null;
+                  });
+                },
+              ),
           ],
         ),
       ),
-      floatingActionButton:
-          !_isReady || _canProcess
-              ? null
-              : FloatingActionButton.extended(
-                onPressed: () {
-                  setState(() {
-                    _receipt = null;
-                    _canProcess = true;
-                  });
-                },
-                label: const Text('Scan receipt'),
-                icon: const Icon(Icons.document_scanner_outlined),
-              ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -175,8 +202,12 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     super.dispose();
   }
 
-  /// Starts camera stream and feeds image frames to the OCR engine.
+  /// Starts the live camera feed and begins image stream processing.
+  ///
+  /// This is triggered manually by user interaction, not automatically on startup.
   Future<void> _startLiveFeed() async {
+    if (_cameraBack == null || _cameraController != null) return;
+    _isControllerDisposed = false;
     _cameraController = CameraController(
       _cameraBack!,
       ResolutionPreset.high,
@@ -199,16 +230,23 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView> {
     });
   }
 
-  /// Stops the camera and releases camera controller resources.
+  /// Stops the live camera feed and releases associated resources.
+  ///
+  /// This is automatically triggered after a scan completes or times out.
   Future<void> _stopLiveFeed() async {
-    await _cameraController?.stopImageStream();
-    await _cameraController?.dispose();
-    _cameraController = null;
+    if (_cameraController != null && !_isControllerDisposed) {
+      final controller = _cameraController!;
+      _cameraController = null;
+      _isControllerDisposed = true;
+      if (mounted) setState(() {});
+      await controller.stopImageStream();
+      await controller.dispose();
+    }
   }
 
   /// Converts raw [CameraImage] into [InputImage] and processes it.
   void _processCameraImage(CameraImage image) {
-    if (!_canProcess || _isBusy) return;
+    if (_isControllerDisposed || !_canProcess || _isBusy) return;
 
     final inputImage = _inputImageFromCameraImage(image);
     if (inputImage != null) {
