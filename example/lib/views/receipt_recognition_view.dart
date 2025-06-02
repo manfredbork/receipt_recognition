@@ -22,6 +22,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   ReceiptRecognizer? _receiptRecognizer;
   RecognizedReceipt? _receipt;
   ScanProgress? _scanProgress;
+  String? _errorMessage;
   int _maxProgress = 0;
   bool _canProcess = false;
   bool _isReady = false;
@@ -55,13 +56,23 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   void _onScanTimeout() {
+    if (_receipt != null) return;
+
     _canProcess = false;
     _receipt = null;
     _maxProgress = 0;
     stopLiveFeed();
     HapticFeedback.lightImpact();
-    _showSnackBar('Scan failed', Colors.red);
-    if (mounted) setState(() {});
+
+    setState(() {
+      _errorMessage = 'Scan failed – try again';
+    });
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _errorMessage != null) {
+        setState(() => _errorMessage = null);
+      }
+    });
   }
 
   Future<void> _processImage(InputImage inputImage) async {
@@ -92,22 +103,18 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     _receipt = receipt;
     _canProcess = false;
     _maxProgress = 0;
+    _errorMessage = null;
 
     stopLiveFeed();
 
     if (mounted) {
-      _showSuccessNotification();
+      HapticFeedback.lightImpact();
       setState(() {});
     }
   }
 
   void _playScanSound() {
     _audioPlayer.play(AssetSource('sounds/checkout_beep.mp3'));
-  }
-
-  void _showSuccessNotification() {
-    HapticFeedback.lightImpact();
-    _showSnackBar('Scan succeed', Colors.green);
   }
 
   void _handleProcessingError(Object error, StackTrace stackTrace) {
@@ -118,16 +125,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     await startLiveFeed(_processImage);
     _isReady = true;
     if (mounted) setState(() {});
-  }
-
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, textAlign: TextAlign.center),
-        backgroundColor: color,
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   @override
@@ -196,7 +193,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
               )
             else if (!isControllerDisposed && cameraBack == null)
               const Center(child: CircularProgressIndicator())
-            else if (_receipt == null)
+            else if (_receipt == null && _errorMessage == null)
               ScanInfoScreen(
                 onStartScan: () async {
                   setState(() {
@@ -223,6 +220,29 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                       )
                       : const SizedBox.shrink(),
             ),
+            if (_receipt == null && _errorMessage != null)
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  margin: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withAlpha(224),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Scan failed. Please try again.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
