@@ -45,7 +45,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
   void _onScanTimeout() {
     _canProcess = false;
-    stopLiveFeed(); // Stop camera here
+    stopLiveFeed();
     HapticFeedback.lightImpact();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -138,38 +138,40 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
           children: <Widget>[
             if (isCameraPreviewReady)
               CameraPreview(cameraController!)
-            else if (!isControllerDisposed && cameraBack == null)
-              const Center(child: CircularProgressIndicator())
-            else if (_receipt == null)
-              ScanInfoScreen(
-                onStartScan: () async {
-                  setState(() {
-                    _receipt = null;
-                    _canProcess = true;
-                    _isReady = false;
-                    isControllerDisposed = false;
-                  });
-                  await _startLiveFeed();
-                },
-              ),
+            else
+              if (!isControllerDisposed && cameraBack == null)
+                const Center(child: CircularProgressIndicator())
+              else
+                if (_receipt == null)
+                  ScanInfoScreen(
+                    onStartScan: () async {
+                      setState(() {
+                        _receipt = null;
+                        _canProcess = true;
+                        _isReady = false;
+                        isControllerDisposed = false;
+                      });
+                      await _startLiveFeed();
+                    },
+                  ),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 500),
               switchInCurve: Curves.easeInOut,
               switchOutCurve: Curves.easeInOut,
               child:
-                  (_receipt != null && !_canProcess)
-                      ? ReceiptWidget(
-                        key: ValueKey(_receipt),
-                        receipt: _receipt!,
-                        onClose: () {
-                          Future.delayed(const Duration(milliseconds: 500), () {
-                            if (mounted) {
-                              setState(() => _receipt = null);
-                            }
-                          });
-                        },
-                      )
-                      : const SizedBox.shrink(),
+              (_receipt != null && !_canProcess)
+                  ? ReceiptWidget(
+                key: ValueKey(_receipt),
+                receipt: _receipt!,
+                onClose: () {
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (mounted) {
+                      setState(() => _receipt = null);
+                    }
+                  });
+                },
+              )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
