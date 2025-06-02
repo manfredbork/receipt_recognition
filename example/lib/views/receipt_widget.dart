@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
-/// A UI widget that displays a parsed [RecognizedReceipt] in a styled layout.
-///
-/// Shows the store name, scanned line items, and the total amount,
-/// including decorative zigzag borders.
-///
-/// Optionally displays a close button in the header to allow dismissing the widget.
 class ReceiptWidget extends StatelessWidget {
   final RecognizedReceipt receipt;
   final VoidCallback? onClose;
@@ -108,9 +102,6 @@ class ReceiptWidget extends StatelessWidget {
   }
 }
 
-/// A decorative zigzag edge used at the top and bottom of the receipt display.
-///
-/// Typically used to simulate a cut receipt edge.
 class ZigzagEdgeWidget extends StatelessWidget {
   final bool isTop;
   final double zigzagWidth;
@@ -118,7 +109,6 @@ class ZigzagEdgeWidget extends StatelessWidget {
   final Color triangleColor;
   final double height;
 
-  /// Creates a zigzag border widget for use in [ReceiptWidget].
   const ZigzagEdgeWidget({
     super.key,
     this.isTop = false,
@@ -142,7 +132,6 @@ class ZigzagEdgeWidget extends StatelessWidget {
   }
 }
 
-/// Internal painter class that draws a row of zigzag triangles.
 class _ZigzagEdgePainter extends CustomPainter {
   final bool isTop;
   final double zigzagWidth;

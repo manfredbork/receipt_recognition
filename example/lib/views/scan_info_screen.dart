@@ -68,7 +68,6 @@ class ScanInfoScreen extends StatelessWidget {
                   child: Center(
                     child: SizedBox(
                       width: 240,
-                      // or any width that feels balanced (e.g., 220–280)
                       child: ElevatedButton.icon(
                         onPressed: onStartScan,
                         icon: const Icon(Icons.document_scanner_outlined),

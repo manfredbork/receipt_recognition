@@ -1,6 +1,7 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:example/views/camera_handler_mixin.dart';
+import 'package:example/views/position_overlay.dart';
 import 'package:example/views/receipt_widget.dart';
 import 'package:example/views/scan_info_screen.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +21,8 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   final _audioPlayer = AudioPlayer();
   ReceiptRecognizer? _receiptRecognizer;
   RecognizedReceipt? _receipt;
+  ScanProgress? _scanProgress;
+  int _maxProgress = 0;
   bool _canProcess = false;
   bool _isReady = false;
   bool _isBusy = false;
@@ -41,11 +44,20 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     if (mounted) setState(() {});
   }
 
-  void _onScanUpdate(ScanProgress progress) {}
+  void _onScanUpdate(ScanProgress progress) {
+    setState(() {
+      _scanProgress = progress;
+      final current = progress.estimatedPercentage ?? 0;
+      if (current > _maxProgress) {
+        _maxProgress = current;
+      }
+    });
+  }
 
   void _onScanTimeout() {
     _canProcess = false;
     _receipt = null;
+    _maxProgress = 0;
     stopLiveFeed();
     HapticFeedback.lightImpact();
     _showSnackBar('Scan failed', Colors.red);
@@ -79,6 +91,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
     _receipt = receipt;
     _canProcess = false;
+    _maxProgress = 0;
 
     stopLiveFeed();
 
@@ -136,7 +149,51 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
           fit: StackFit.expand,
           children: <Widget>[
             if (isCameraPreviewReady)
-              CameraPreview(cameraController!)
+              Stack(
+                fit: StackFit.expand,
+                children: [
+                  CameraPreview(cameraController!),
+                  if (_scanProgress?.addedPositions.isNotEmpty == true)
+                    PositionOverlay(
+                      positions: _scanProgress!.addedPositions,
+                      imageSize: Size(
+                        cameraController!.value.previewSize!.height,
+                        cameraController!.value.previewSize!.width,
+                      ),
+                      screenSize: MediaQuery.of(context).size,
+                      company: _scanProgress?.mergedReceipt?.company,
+                      sum: _scanProgress?.mergedReceipt?.sum,
+                    ),
+                  if (_scanProgress != null && _maxProgress > 0)
+                    Center(
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: CircularProgressIndicator(
+                              value: (_maxProgress / 100).clamp(0.0, 1.0),
+                              strokeWidth: 6,
+                              backgroundColor: Colors.white24,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.greenAccent,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '$_maxProgress%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              )
             else if (!isControllerDisposed && cameraBack == null)
               const Center(child: CircularProgressIndicator())
             else if (_receipt == null)
