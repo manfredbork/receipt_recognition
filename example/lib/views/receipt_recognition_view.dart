@@ -1,9 +1,9 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
-import 'package:example/views/camera_handler_mixin.dart';
-import 'package:example/views/position_overlay.dart';
-import 'package:example/views/receipt_widget.dart';
-import 'package:example/views/scan_info_screen.dart';
+import 'package:example/services/camera_handler_mixin.dart';
+import 'package:example/widgets/position_overlay.dart';
+import 'package:example/widgets/receipt_widget.dart';
+import 'package:example/widgets/scan_info_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
