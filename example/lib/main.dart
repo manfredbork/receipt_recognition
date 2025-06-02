@@ -14,7 +14,7 @@ class ExampleApp extends StatelessWidget {
       title: 'Example Receipt Recognition',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightGreen),
       ),
       home: const ReceiptRecognitionView(),
     );

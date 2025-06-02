@@ -64,14 +64,13 @@ final class ReceiptNormalizer {
         for (int j = 0; j < bestText.length; j++) {
           final char = bestText[j];
           final compareChar = otherTexts[i][j];
-          if (RegExp(r'[!@#^*()?":{}|<>]').hasMatch(char) &&
+          if (RegExp(r'[@#^*()?":{}|<>]').hasMatch(char) &&
               RegExp(r'[A-Za-z0-9]').hasMatch(compareChar)) {
             normalizedText += compareChar;
-          } else if (RegExp(r'[^A-Za-z\s]').hasMatch(char) &&
-              RegExp(r'[A-Za-zÄÖÜäöüß]').hasMatch(compareChar)) {
-            normalizedText += compareChar;
-          } else if (RegExp(r'\s').hasMatch(char) &&
-              RegExp(r'[.,]').hasMatch(compareChar)) {
+          } else if (RegExp(r'[^A-Za-z ]').hasMatch(char) &&
+              RegExp(
+                r'[A-Za-zßàâäèéêëîïôœùûüÿçÀÂÄÈÉÊËÎÏÔŒÙÛÜŸÇ]',
+              ).hasMatch(compareChar)) {
             normalizedText += compareChar;
           } else {
             normalizedText += char;
