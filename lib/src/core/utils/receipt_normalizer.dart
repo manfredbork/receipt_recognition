@@ -68,7 +68,9 @@ final class ReceiptNormalizer {
               RegExp(r'[A-Za-z0-9]').hasMatch(compareChar)) {
             normalizedText += compareChar;
           } else if (RegExp(r'[^A-Za-z ]').hasMatch(char) &&
-              RegExp(r'[A-Za-zßàâäèéêëîïôœùûüÿçÀÂÄÈÉÊËÎÏÔŒÙÛÜŸÇ]').hasMatch(compareChar)) {
+              RegExp(
+                r'[A-Za-zßàâäèéêëîïôœùûüÿçÀÂÄÈÉÊËÎÏÔŒÙÛÜŸÇ]',
+              ).hasMatch(compareChar)) {
             normalizedText += compareChar;
           } else {
             normalizedText += char;
