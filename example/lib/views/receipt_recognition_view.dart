@@ -46,6 +46,9 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   void _onScanUpdate(ScanProgress progress) {
+    if (progress.estimatedPercentage == 100) {
+      _playScanSound();
+    }
     setState(() {
       _scanProgress = progress;
       final current = progress.estimatedPercentage ?? 0;
@@ -98,8 +101,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   void _handleSuccessfulScan(RecognizedReceipt receipt) {
-    _playScanSound();
-
     _receipt = receipt;
     _canProcess = false;
     _maxProgress = 0;

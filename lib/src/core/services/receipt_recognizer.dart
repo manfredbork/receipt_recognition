@@ -14,6 +14,7 @@ final class ReceiptRecognizer {
   final int _nearlyCompleteThreshold;
   final Duration _scanInterval;
   final Duration _scanTimeout;
+  final Duration _scanCompleteDelay;
   final VoidCallback? _onScanTimeout;
   final Function(ScanProgress)? _onScanUpdate;
   final Function(RecognizedReceipt)? _onScanComplete;
@@ -33,6 +34,7 @@ final class ReceiptRecognizer {
   /// - [nearlyCompleteThreshold]: Percentage threshold for nearly complete receipts
   /// - [scanInterval]: Minimum time between scans
   /// - [scanTimeout]: Maximum time for a scanning session
+  /// - [scanCompleteDelay]: Delay time when scan is completed
   /// - [onScanTimeout]: Called when scanning times out
   /// - [onScanUpdate]: Called with updates during scanning
   /// - [onScanComplete]: Called when a valid receipt is recognized
@@ -45,6 +47,7 @@ final class ReceiptRecognizer {
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 10),
     Duration scanTimeout = const Duration(seconds: 30),
+    Duration scanCompleteDelay = const Duration(milliseconds: 500),
     VoidCallback? onScanTimeout,
     Function(ScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
@@ -55,6 +58,7 @@ final class ReceiptRecognizer {
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
+       _scanCompleteDelay = scanCompleteDelay,
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
        _onScanComplete = onScanComplete,
@@ -77,13 +81,28 @@ final class ReceiptRecognizer {
     if (receipt == null) return null;
 
     final optimizedReceipt = _optimizer.optimize(receipt);
+
+    if (optimizedReceipt.isValid) {
+      _validScans++;
+    }
+
     final validation = _validateReceipt(optimizedReceipt);
 
     if (kDebugMode) {
       _printDebugInfo(optimizedReceipt, validation);
     }
 
-    return _handleValidationResult(now, optimizedReceipt, validation);
+    final finalReceipt = _handleValidationResult(
+      now,
+      optimizedReceipt,
+      validation,
+    );
+
+    if (validation.matchPercentage == 100) {
+      return Future.delayed(_scanCompleteDelay, () => finalReceipt);
+    }
+
+    return finalReceipt;
   }
 
   Future<RecognizedReceipt?> _recognizeReceipt(InputImage inputImage) async {
@@ -98,11 +117,7 @@ final class ReceiptRecognizer {
   ) {
     switch (validation.status) {
       case ReceiptCompleteness.complete:
-        _validScans++;
-        if (!_singleScan && _validScans < _minValidScans) {
-          return _handleIncompleteReceipt(now, receipt, validation);
-        }
-        return _handleValidReceipt(receipt);
+        return _handleValidReceipt(receipt, validation);
 
       case ReceiptCompleteness.nearlyComplete:
       case ReceiptCompleteness.incomplete:
@@ -122,7 +137,7 @@ final class ReceiptRecognizer {
 
     final percentage = _calculateMatchPercentage(receipt);
 
-    if (receipt.isValid) {
+    if (percentage.round() == 100) {
       return ValidationResult(
         status: ReceiptCompleteness.complete,
         matchPercentage: 100,
@@ -144,8 +159,9 @@ final class ReceiptRecognizer {
   }
 
   double _calculateMatchPercentage(RecognizedReceipt receipt) {
+    final totalValidScans = _singleScan ? 1 : _minValidScans;
     final calculatedNumerator = receipt.calculatedSum.value + _validScans;
-    final calculatedDenominator = receipt.sum!.value + _minValidScans;
+    final calculatedDenominator = receipt.sum!.value + totalValidScans;
     return (calculatedNumerator < calculatedDenominator)
         ? (calculatedNumerator / calculatedDenominator * 100)
         : (calculatedDenominator / calculatedNumerator * 100);
@@ -201,7 +217,12 @@ final class ReceiptRecognizer {
     }
   }
 
-  RecognizedReceipt _handleValidReceipt(RecognizedReceipt receipt) {
+  RecognizedReceipt _handleValidReceipt(
+    RecognizedReceipt receipt,
+    ValidationResult validationResult,
+  ) {
+    _handleOnScanUpdate(receipt, validationResult);
+
     _initializedScan = null;
     _optimizer.init();
     _onScanComplete?.call(receipt);
@@ -214,24 +235,9 @@ final class ReceiptRecognizer {
     RecognizedReceipt receipt,
     ValidationResult validationResult,
   ) {
-    final positions =
-        receipt.positions.where((p) => p.operation != Operation.none).toList();
-    final addedPositions =
-        positions.where((p) => p.operation == Operation.added).toList();
-    final updatedPositions =
-        positions.where((p) => p.operation == Operation.updated).toList();
+    _handleOnScanUpdate(receipt, validationResult);
 
     _initializedScan ??= now;
-    _onScanUpdate?.call(
-      ScanProgress(
-        positions: positions,
-        addedPositions: addedPositions,
-        updatedPositions: updatedPositions,
-        validationResult: validationResult,
-        estimatedPercentage: validationResult.matchPercentage,
-        mergedReceipt: receipt,
-      ),
-    );
 
     if (_initializedScan != null &&
         now.difference(_initializedScan!) >= _scanTimeout) {
@@ -242,5 +248,28 @@ final class ReceiptRecognizer {
     }
 
     return null;
+  }
+
+  void _handleOnScanUpdate(
+    RecognizedReceipt receipt,
+    ValidationResult validationResult,
+  ) {
+    final positions =
+        receipt.positions.where((p) => p.operation != Operation.none).toList();
+    final addedPositions =
+        positions.where((p) => p.operation == Operation.added).toList();
+    final updatedPositions =
+        positions.where((p) => p.operation == Operation.updated).toList();
+
+    _onScanUpdate?.call(
+      ScanProgress(
+        positions: positions,
+        addedPositions: addedPositions,
+        updatedPositions: updatedPositions,
+        validationResult: validationResult,
+        estimatedPercentage: validationResult.matchPercentage,
+        mergedReceipt: receipt,
+      ),
+    );
   }
 }
