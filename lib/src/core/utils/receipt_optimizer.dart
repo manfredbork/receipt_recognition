@@ -42,10 +42,10 @@ final class ReceiptOptimizer implements Optimizer {
   /// - [stabilityThreshold]: Minimum stability score (0-100) for groups
   /// - [invalidateInterval]: Time after which unstable groups are removed
   ReceiptOptimizer({
-    int maxCacheSize = 20,
+    int maxCacheSize = 50,
     int confidenceThreshold = 75,
-    int stabilityThreshold = 75,
-    Duration invalidateInterval = const Duration(seconds: 2),
+    int stabilityThreshold = 50,
+    Duration invalidateInterval = const Duration(seconds: 1),
   }) : _maxCacheSize = maxCacheSize,
        _confidenceThreshold = confidenceThreshold,
        _stabilityThreshold = stabilityThreshold,
@@ -230,26 +230,41 @@ final class ReceiptOptimizer implements Optimizer {
       final position = group.members.reduce(
         (a, b) => a.confidence > b.confidence ? a : b,
       );
+
       mergedReceipt.positions.add(position);
+
       if (mergedReceipt.isValid) break;
     }
 
-    final sum = mergedReceipt.sum?.value ?? double.maxFinite;
-    if (mergedReceipt.calculatedSum.value > sum) {
-      final positionToRemove =
-          mergedReceipt.positions
-              .where(
-                (p) =>
-                    ReceiptFormatter.format(sum - p.price.value) ==
-                    mergedReceipt.calculatedSum.formattedValue,
-              )
-              .lastOrNull;
-      if (positionToRemove != null) {
-        mergedReceipt.positions.remove(positionToRemove);
-      }
-    }
+    _removeSingleOutlierToMatchSum(mergedReceipt);
+    _discardLowestConfidence(mergedReceipt);
 
     return receipt.copyWith(positions: mergedReceipt.positions);
+  }
+
+  void _removeSingleOutlierToMatchSum(RecognizedReceipt receipt) {
+    final calculatedSum = receipt.calculatedSum.value;
+    if (receipt.sum != null && calculatedSum > receipt.sum!.value) {
+      final positions = List<RecognizedPosition>.from(receipt.positions);
+      positions.sort((a, b) => a.price.value.compareTo(b.price.value));
+      final singleOutlier = positions.lastOrNull;
+      if (singleOutlier != null &&
+          singleOutlier.price.formattedValue == receipt.sum!.formattedValue) {
+        receipt.positions.remove(singleOutlier);
+      }
+    }
+  }
+
+  void _discardLowestConfidence(RecognizedReceipt receipt) {
+    final calculatedSum = receipt.calculatedSum.value;
+    if (receipt.sum != null && calculatedSum > receipt.sum!.value) {
+      final positions = List<RecognizedPosition>.from(receipt.positions);
+      positions.sort((a, b) => a.confidence.compareTo(b.confidence));
+      final lowestConfidence = positions.firstOrNull;
+      if (lowestConfidence != null) {
+        receipt.positions.remove(lowestConfidence);
+      }
+    }
   }
 
   /// Releases all resources used by the optimizer.

@@ -45,7 +45,7 @@ final class ReceiptRecognizer {
     bool singleScan = false,
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
-    Duration scanInterval = const Duration(milliseconds: 10),
+    Duration scanInterval = const Duration(milliseconds: 50),
     Duration scanTimeout = const Duration(seconds: 30),
     Duration scanCompleteDelay = const Duration(milliseconds: 500),
     VoidCallback? onScanTimeout,

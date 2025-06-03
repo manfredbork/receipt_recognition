@@ -41,7 +41,7 @@ final class ReceiptParser {
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 
   /// Pattern to recognize text that might be product descriptions.
-  static final RegExp patternUnknown = RegExp(r'\D{6,}');
+  static final RegExp patternUnknown = RegExp(r'[\D\S]{4,}');
 
   static const int boundingBoxBuffer = 50;
 
