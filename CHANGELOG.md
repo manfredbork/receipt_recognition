@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.9] - 2025-06-03
+
+### ✨ Added
+- **Smarter Scan Confidence Filtering**: The recognition engine can now automatically ignore low-confidence items that might distort the total sum.
+- **Status Getter**: Added a simple flag to detect if scanning is still in progress.
+- **Improved Example App**: The example app now includes best practice instructions, live scan overlays, and a clearer UI for scanning and viewing receipts.
+
+### 🛠️ Changed
+- **Internal Optimizations**: Minor refactoring and documentation improvements to ensure better readability and maintainability of the code.
+
+### 🐛 Fixed
+- **Sum Calculation Accuracy**: Fixed cases where incorrect items could cause mismatches with the printed total.
+- **Scan Stability**: Improved reliability of the scan process for varied receipt lengths and layouts.
+
 ## [0.0.8] - 2024-05-29
 
 ### ✨ Added
