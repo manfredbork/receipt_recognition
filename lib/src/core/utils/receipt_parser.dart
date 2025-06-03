@@ -91,7 +91,11 @@ final class ReceiptParser {
         continue;
       }
 
-      _tryParseAmount(line, parsed, receiptHalfWidth);
+      if (_tryParseAmount(line, parsed, receiptHalfWidth)) {
+        detectedAmount = parsed.last as RecognizedAmount;
+        continue;
+      }
+
       _tryParseUnknown(line, parsed, receiptHalfWidth);
     }
 
@@ -139,7 +143,7 @@ final class ReceiptParser {
     return patternIgnoreKeywords.hasMatch(line.text);
   }
 
-  static void _tryParseAmount(
+  static bool _tryParseAmount(
     TextLine line,
     List<RecognizedEntity> parsed,
     double receiptHalfWidth,
@@ -150,7 +154,9 @@ final class ReceiptParser {
       final trimmedAmount = ReceiptFormatter.trim(amount);
       final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
       parsed.add(RecognizedAmount(line: line, value: value));
+      return true;
     }
+    return false;
   }
 
   static void _tryParseUnknown(
