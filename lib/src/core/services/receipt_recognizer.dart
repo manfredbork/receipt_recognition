@@ -144,11 +144,11 @@ final class ReceiptRecognizer {
   }
 
   double _calculateMatchPercentage(RecognizedReceipt receipt) {
-    final calculatedSum = receipt.calculatedSum.value;
-    final declaredSum = receipt.sum!.value;
-    return (calculatedSum < declaredSum)
-        ? (calculatedSum / declaredSum * 100)
-        : (declaredSum / calculatedSum * 100);
+    final calculatedNumerator = receipt.calculatedSum.value + _validScans;
+    final calculatedDenominator = receipt.sum!.value + _minValidScans;
+    return (calculatedNumerator < calculatedDenominator)
+        ? (calculatedNumerator / calculatedDenominator * 100)
+        : (calculatedDenominator / calculatedNumerator * 100);
   }
 
   /// Manually accepts a receipt that doesn't meet automatic validation criteria.
@@ -214,16 +214,17 @@ final class ReceiptRecognizer {
     RecognizedReceipt receipt,
     ValidationResult validationResult,
   ) {
+    final positions =
+        receipt.positions.where((p) => p.operation != Operation.none).toList();
     final addedPositions =
-        receipt.positions.where((p) => p.operation == Operation.added).toList();
+        positions.where((p) => p.operation == Operation.added).toList();
     final updatedPositions =
-        receipt.positions
-            .where((p) => p.operation == Operation.updated)
-            .toList();
+        positions.where((p) => p.operation == Operation.updated).toList();
 
     _initializedScan ??= now;
     _onScanUpdate?.call(
       ScanProgress(
+        positions: positions,
         addedPositions: addedPositions,
         updatedPositions: updatedPositions,
         validationResult: validationResult,

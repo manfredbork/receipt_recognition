@@ -72,6 +72,7 @@ final class ReceiptOptimizer implements Optimizer {
     _optimizeCompany(receipt);
     _optimizeSum(receipt);
     _cleanupGroups();
+    _resetOperations();
     _processPositions(receipt);
 
     return _createOptimizedReceipt(receipt);
@@ -138,6 +139,14 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  void _resetOperations() {
+    for (final group in _groups) {
+      for (final position in group.members) {
+        position.operation = Operation.none;
+      }
+    }
+  }
+
   void _processPositions(RecognizedReceipt receipt) {
     for (final position in receipt.positions) {
       _processPosition(position);
@@ -196,12 +205,14 @@ final class ReceiptOptimizer implements Optimizer {
   void _createNewGroup(RecognizedPosition position) {
     final newGroup = RecognizedGroup(maxGroupSize: _maxCacheSize);
     position.group = newGroup;
+    position.operation = Operation.added;
     newGroup.addMember(position);
     _groups.add(newGroup);
   }
 
   void _addToExistingGroup(RecognizedPosition position, RecognizedGroup group) {
     position.group = group;
+    position.operation = Operation.updated;
     group.addMember(position);
   }
 
@@ -221,6 +232,21 @@ final class ReceiptOptimizer implements Optimizer {
       );
       mergedReceipt.positions.add(position);
       if (mergedReceipt.isValid) break;
+    }
+
+    final sum = mergedReceipt.sum?.value ?? double.maxFinite;
+    if (mergedReceipt.calculatedSum.value > sum) {
+      final positionToRemove =
+          mergedReceipt.positions
+              .where(
+                (p) =>
+                    ReceiptFormatter.format(sum - p.price.value) ==
+                    mergedReceipt.calculatedSum.formattedValue,
+              )
+              .lastOrNull;
+      if (positionToRemove != null) {
+        mergedReceipt.positions.remove(positionToRemove);
+      }
     }
 
     return receipt.copyWith(positions: mergedReceipt.positions);

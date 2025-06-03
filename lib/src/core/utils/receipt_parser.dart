@@ -252,7 +252,7 @@ final class ReceiptParser {
       product: product,
       price: price,
       timestamp: timestamp,
-      operation: Operation.added,
+      operation: Operation.none,
     );
     product.position = position;
     price.position = position;

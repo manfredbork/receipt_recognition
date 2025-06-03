@@ -54,6 +54,9 @@ class RecognizedReceipt {
 ///
 /// Contains information about newly recognized items and current validation status.
 final class ScanProgress {
+  /// Positions that were recognized in this scan.
+  final List<RecognizedPosition> positions;
+
   /// Positions that were newly added in this scan.
   final List<RecognizedPosition> addedPositions;
 
@@ -70,6 +73,7 @@ final class ScanProgress {
   final RecognizedReceipt? mergedReceipt;
 
   ScanProgress({
+    required this.positions,
     required this.addedPositions,
     required this.updatedPositions,
     required this.validationResult,

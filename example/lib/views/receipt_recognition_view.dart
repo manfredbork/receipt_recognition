@@ -150,9 +150,9 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                 fit: StackFit.expand,
                 children: [
                   CameraPreview(cameraController!),
-                  if (_scanProgress?.addedPositions.isNotEmpty == true)
+                  if (_scanProgress?.positions.isNotEmpty == true)
                     PositionOverlay(
-                      positions: _scanProgress!.addedPositions,
+                      positions: _scanProgress!.positions,
                       imageSize: Size(
                         cameraController!.value.previewSize!.height,
                         cameraController!.value.previewSize!.width,
