@@ -1,13 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// A widget that overlays bounding boxes for recognized receipt elements.
+///
+/// Displays visual rectangles on top of a camera or image preview to indicate
+/// the positions of products, the store/company, and the total sum.
 class PositionOverlay extends StatelessWidget {
+  /// List of recognized product-price positions to display.
   final List<RecognizedPosition> positions;
+
+  /// Optionally highlights the recognized store/company information.
   final RecognizedCompany? company;
+
+  /// Optionally highlights the recognized total sum.
   final RecognizedSum? sum;
+
+  /// Original size of the scanned image.
   final Size imageSize;
+
+  /// Target screen size to scale the bounding boxes onto.
   final Size screenSize;
 
+  /// Creates a [PositionOverlay] to visualize recognized receipt data.
   const PositionOverlay({
     super.key,
     required this.positions,

@@ -9,7 +9,12 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// A screen that manages the full camera-based receipt recognition flow.
+///
+/// Displays a camera preview, handles scan progress, overlays bounding boxes,
+/// and shows the result in a formatted receipt widget when scanning completes.
 class ReceiptRecognitionView extends StatefulWidget {
+  /// Creates a new instance of [ReceiptRecognitionView].
   const ReceiptRecognitionView({super.key});
 
   @override
@@ -18,14 +23,31 @@ class ReceiptRecognitionView extends StatefulWidget {
 
 class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     with CameraHandlerMixin {
+  /// Audio player for playing a scan confirmation sound.
   final _audioPlayer = AudioPlayer();
+
+  /// Instance of the receipt recognizer used to process frames.
   ReceiptRecognizer? _receiptRecognizer;
+
+  /// The recognized receipt, if one was successfully scanned.
   RecognizedReceipt? _receipt;
+
+  /// Current progress and intermediate data from the scanning process.
   ScanProgress? _scanProgress;
+
+  /// Error message shown if the scan fails.
   String? _errorMessage;
+
+  /// Tracks the maximum percentage of scan progress reached.
   int _maxProgress = 0;
+
+  /// Whether the app is currently allowed to process frames.
   bool _canProcess = false;
+
+  /// Whether the camera feed is initialized and ready for processing.
   bool _isReady = false;
+
+  /// Whether the app is currently processing a frame.
   bool _isBusy = false;
 
   @override
@@ -37,6 +59,32 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
       onScanTimeout: _onScanTimeout,
     );
     _initializeCamera();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _liveFeed();
+  }
+
+  /// Whether the system is ready and allowed to process the next frame.
+  bool get isReadyToProcess =>
+      _receiptRecognizer != null && _canProcess && _isReady && !_isBusy;
+
+  /// Whether the camera preview is initialized and not disposed.
+  bool get isCameraPreviewReady =>
+      cameraController?.value.isInitialized == true && !isControllerDisposed;
+
+  /// Whether the scan is still in progress (i.e., not yet 100% complete).
+  bool get isScanInProgress => (_scanProgress?.estimatedPercentage ?? 0) < 100;
+
+  @override
+  void dispose() {
+    _canProcess = false;
+    _isReady = false;
+    _isBusy = false;
+    _receiptRecognizer?.close();
+    stopLiveFeed();
+    super.dispose();
   }
 
   void _initializeCamera() async {
@@ -53,6 +101,9 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
         _maxProgress = current;
       }
     });
+    if (!isScanInProgress) {
+      _playScanSound();
+    }
   }
 
   void _onScanTimeout() {
@@ -98,8 +149,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   void _handleSuccessfulScan(RecognizedReceipt receipt) {
-    _playScanSound();
-
     _receipt = receipt;
     _canProcess = false;
     _maxProgress = 0;
@@ -127,17 +176,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     if (mounted) setState(() {});
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return _liveFeed();
-  }
-
-  bool get isReadyToProcess =>
-      _receiptRecognizer != null && _canProcess && _isReady && !_isBusy;
-
-  bool get isCameraPreviewReady =>
-      cameraController?.value.isInitialized == true && !isControllerDisposed;
-
   Widget _liveFeed() {
     return Scaffold(
       body: ColoredBox(
@@ -150,9 +188,10 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                 fit: StackFit.expand,
                 children: [
                   CameraPreview(cameraController!),
-                  if (_scanProgress?.addedPositions.isNotEmpty == true)
+                  if (_scanProgress?.positions.isNotEmpty == true)
                     PositionOverlay(
-                      positions: _scanProgress!.addedPositions,
+                      positions:
+                          isScanInProgress ? _scanProgress!.positions : [],
                       imageSize: Size(
                         cameraController!.value.previewSize!.height,
                         cameraController!.value.previewSize!.width,
@@ -247,15 +286,5 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _canProcess = false;
-    _isReady = false;
-    _isBusy = false;
-    _receiptRecognizer?.close();
-    stopLiveFeed();
-    super.dispose();
   }
 }

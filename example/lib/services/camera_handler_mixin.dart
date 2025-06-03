@@ -5,11 +5,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+/// A mixin to manage camera setup, lifecycle, and streaming for MLKit-based apps.
+///
+/// Provides methods for initializing the back-facing camera, starting/stopping
+/// a live feed, and converting camera frames into MLKit-compatible [InputImage]s.
 mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
+  /// The back-facing camera, if available.
   CameraDescription? cameraBack;
+
+  /// The active camera controller used for managing the live feed.
   CameraController? cameraController;
+
+  /// Whether the camera is currently streaming image frames.
   bool isStreaming = false;
 
+  /// Mapping from [DeviceOrientation] to degree-based orientation values.
   final orientations = {
     DeviceOrientation.portraitUp: 0,
     DeviceOrientation.landscapeLeft: 90,
@@ -17,8 +27,10 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
     DeviceOrientation.landscapeRight: 270,
   };
 
+  /// Indicates if the camera controller has been disposed.
   bool isControllerDisposed = false;
 
+  /// Initializes the back-facing camera from a list of available cameras.
   Future<void> initCamera(List<CameraDescription> cameras) async {
     for (var cam in cameras) {
       if (cam.lensDirection == CameraLensDirection.back) {
@@ -29,6 +41,9 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
+  /// Starts the live image stream and processes each frame using [processImage].
+  ///
+  /// Converts [CameraImage] frames into [InputImage]s for use with MLKit.
   Future<void> startLiveFeed(Function(InputImage) processImage) async {
     if (cameraController != null || isStreaming || isControllerDisposed) return;
     isControllerDisposed = false;
@@ -59,6 +74,7 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
     });
   }
 
+  /// Stops the live image stream and disposes of the camera controller.
   Future<void> stopLiveFeed() async {
     if (!isStreaming) return;
     isStreaming = false;
@@ -85,6 +101,7 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
+  /// Converts a [CameraImage] into an [InputImage] for MLKit processing.
   InputImage? convertToInputImage(CameraImage image) {
     if (cameraController == null || image.planes.isEmpty) return null;
 

@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// A widget that visually displays a recognized receipt.
+///
+/// Shows the company name, a list of recognized product positions with prices,
+/// and the total sum if available. An optional close button can be shown.
 class ReceiptWidget extends StatelessWidget {
+  /// The recognized receipt data to display.
   final RecognizedReceipt receipt;
+
+  /// Optional callback triggered when the close icon is tapped.
   final VoidCallback? onClose;
 
+  /// Creates a [ReceiptWidget] with a given [receipt] and optional [onClose] handler.
   const ReceiptWidget({super.key, required this.receipt, this.onClose});
 
   @override
@@ -102,13 +110,26 @@ class ReceiptWidget extends StatelessWidget {
   }
 }
 
+/// A decorative widget that renders a zigzag edge like a receipt tear.
+///
+/// Can be positioned at the top or bottom of a receipt block.
 class ZigzagEdgeWidget extends StatelessWidget {
+  /// Whether the zigzag is rendered at the top (`true`) or bottom (`false`).
   final bool isTop;
+
+  /// Width of each zigzag triangle base.
   final double zigzagWidth;
+
+  /// Height of each zigzag triangle.
   final double zigzagHeight;
+
+  /// Color used to fill the zigzag triangles.
   final Color triangleColor;
+
+  /// Height of the overall painted area.
   final double height;
 
+  /// Creates a [ZigzagEdgeWidget] with configurable styling and placement.
   const ZigzagEdgeWidget({
     super.key,
     this.isTop = false,

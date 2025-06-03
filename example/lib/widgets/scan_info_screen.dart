@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 
+/// A screen that provides guidance on how to scan receipts effectively.
+///
+/// Displays best practices for scanning, such as lighting, alignment,
+/// and stability, with a call-to-action button to start scanning.
 class ScanInfoScreen extends StatelessWidget {
+  /// Callback triggered when the user taps the "Start scanning" button.
   final VoidCallback onStartScan;
 
+  /// Creates a [ScanInfoScreen] with a required [onStartScan] callback.
   const ScanInfoScreen({super.key, required this.onStartScan});
 
   @override
