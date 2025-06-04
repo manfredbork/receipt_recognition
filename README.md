@@ -364,7 +364,7 @@ This workflow enables you to build UIs that show the user scanning progress and 
 
 ### Upcoming: Spatial Position-Based Item Ordering
 
-A key upcoming feature is the preservation of original item ordering from receipts across multiple scans. The planned algorithm will:
+A key upcoming feature is the preservation of original item ordered from receipts across multiple scans. The planned algorithm will:
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌───────────────────┐
@@ -379,7 +379,7 @@ A key upcoming feature is the preservation of original item ordering from receip
 4. **Confidence weighting**: Prioritize positions with higher recognition confidence
 5. **Order stabilization**: Maintain consistent ordering across multiple scans
 
-This enhancement will significantly improve the usability for expense tracking and financial applications that require precise item order preservation.
+This enhancement will significantly improve the usability of expense tracking and financial applications that require precise item order preservation.
 
 ---
 
