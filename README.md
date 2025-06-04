@@ -108,6 +108,12 @@ void dispose() {
 
 For an advanced use case, we provide an example of using this package with a video feed. You can integrate it with a camera feed (via a package like `camera`), and continuously scan receipts in real time.
 
+<p style="width:100vh">
+  <img src="screenshots/screenshot1.png" style="width:25vh" alt="Best Practices" />
+  <img src="screenshots/screenshot2.png" style="width:25vh" alt="Supermarket Receipt" />
+  <img src="screenshots/screenshot3.png" style="width:25vh" alt="Smartphone Receipt" />
+</p>
+
 Refer to the **[example app](example/lib/main.dart)** for an implementation that uses live camera data to recognize and process receipts as they appear in the frame.
 
 ---
@@ -358,7 +364,7 @@ This workflow enables you to build UIs that show the user scanning progress and 
 
 ### Upcoming: Spatial Position-Based Item Ordering
 
-A key upcoming feature is the preservation of original item ordering from receipts across multiple scans. The planned algorithm will:
+A key upcoming feature is the preservation of original item ordered from receipts across multiple scans. The planned algorithm will:
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌───────────────────┐
@@ -373,7 +379,7 @@ A key upcoming feature is the preservation of original item ordering from receip
 4. **Confidence weighting**: Prioritize positions with higher recognition confidence
 5. **Order stabilization**: Maintain consistent ordering across multiple scans
 
-This enhancement will significantly improve the usability for expense tracking and financial applications that require precise item order preservation.
+This enhancement will significantly improve the usability of expense tracking and financial applications that require precise item order preservation.
 
 ---
 

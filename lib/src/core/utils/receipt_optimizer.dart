@@ -184,7 +184,7 @@ final class ReceiptOptimizer implements Optimizer {
     );
     final int priceConfidence = group.calculatePriceConfidence(position.price);
     final int confidence =
-        ((4 * productConfidence + priceConfidence) / 5).toInt();
+        ((3 * productConfidence + priceConfidence) / 4).toInt();
     final bool sameTimestamp = group.members.any(
       (p) => position.timestamp == p.timestamp,
     );
@@ -237,32 +237,26 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     _removeSingleOutlierToMatchSum(mergedReceipt);
-    _discardLowestConfidence(mergedReceipt);
 
     return receipt.copyWith(positions: mergedReceipt.positions);
   }
 
   void _removeSingleOutlierToMatchSum(RecognizedReceipt receipt) {
-    final calculatedSum = receipt.calculatedSum.value;
-    if (receipt.sum != null && calculatedSum > receipt.sum!.value) {
-      final positions = List<RecognizedPosition>.from(receipt.positions);
-      positions.sort((a, b) => a.price.value.compareTo(b.price.value));
-      final singleOutlier = positions.lastOrNull;
-      if (singleOutlier != null &&
-          singleOutlier.price.formattedValue == receipt.sum!.formattedValue) {
-        receipt.positions.remove(singleOutlier);
-      }
-    }
-  }
+    final target = receipt.sum?.value;
+    if (target == null || receipt.positions.length <= 1) return;
 
-  void _discardLowestConfidence(RecognizedReceipt receipt) {
-    final calculatedSum = receipt.calculatedSum.value;
-    if (receipt.sum != null && calculatedSum > receipt.sum!.value) {
-      final positions = List<RecognizedPosition>.from(receipt.positions);
-      positions.sort((a, b) => a.confidence.compareTo(b.confidence));
-      final lowestConfidence = positions.firstOrNull;
-      if (lowestConfidence != null) {
-        receipt.positions.remove(lowestConfidence);
+    for (final position in receipt.positions) {
+      final testSum = receipt.positions
+          .where((p) => p != position)
+          .fold<double>(0.0, (sum, p) => sum + p.price.value);
+
+      if ((testSum - target).abs() < 0.01) {
+        final group = position.group;
+        if (group != null) {
+          group.members.remove(position);
+        }
+        receipt.positions.remove(position);
+        break;
       }
     }
   }
