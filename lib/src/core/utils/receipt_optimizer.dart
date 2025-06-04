@@ -250,7 +250,11 @@ final class ReceiptOptimizer implements Optimizer {
       final singleOutlier = positions.lastOrNull;
       if (singleOutlier != null &&
           singleOutlier.price.formattedValue == receipt.sum!.formattedValue) {
-        receipt.positions.remove(singleOutlier);
+        final group = singleOutlier.group;
+        if (group != null) {
+          group.members.remove(singleOutlier);
+          receipt.positions.remove(singleOutlier);
+        }
       }
     }
   }
@@ -262,7 +266,11 @@ final class ReceiptOptimizer implements Optimizer {
       positions.sort((a, b) => a.confidence.compareTo(b.confidence));
       final lowestConfidence = positions.firstOrNull;
       if (lowestConfidence != null) {
-        receipt.positions.remove(lowestConfidence);
+        final group = lowestConfidence.group;
+        if (group != null) {
+          group.members.remove(lowestConfidence);
+          receipt.positions.remove(lowestConfidence);
+        }
       }
     }
   }
