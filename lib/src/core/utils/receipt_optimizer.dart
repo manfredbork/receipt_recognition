@@ -184,7 +184,7 @@ final class ReceiptOptimizer implements Optimizer {
     );
     final int priceConfidence = group.calculatePriceConfidence(position.price);
     final int confidence =
-        ((4 * productConfidence + priceConfidence) / 5).toInt();
+        ((3 * productConfidence + priceConfidence) / 4).toInt();
     final bool sameTimestamp = group.members.any(
       (p) => position.timestamp == p.timestamp,
     );
@@ -237,49 +237,27 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     _removeSingleOutlierToMatchSum(mergedReceipt);
-    _discardLowestConfidence(mergedReceipt);
 
     return receipt.copyWith(positions: mergedReceipt.positions);
   }
 
   void _removeSingleOutlierToMatchSum(RecognizedReceipt receipt) {
-    final sum = receipt.sum;
-    final calculated = receipt.calculatedSum.value;
+    final target = receipt.sum?.value;
+    if (target == null || receipt.positions.length <= 1) return;
 
-    if (sum == null || calculated <= sum.value) return;
+    for (final position in receipt.positions) {
+      final testSum = receipt.positions
+          .where((p) => p != position)
+          .fold<double>(0.0, (sum, p) => sum + p.price.value);
 
-    final positions =
-        receipt.positions.toList()
-          ..sort((a, b) => a.price.value.compareTo(b.price.value));
-
-    final outlier = positions.lastOrNull;
-
-    final isSuspicious =
-        positions.length > 1 &&
-        outlier != null &&
-        outlier.price.formattedValue == sum.formattedValue;
-
-    if (isSuspicious) {
-      outlier.group?.members.remove(outlier);
-      receipt.positions.remove(outlier);
-    }
-  }
-
-  void _discardLowestConfidence(RecognizedReceipt receipt) {
-    final sum = receipt.sum;
-    final calculated = receipt.calculatedSum.value;
-
-    if (sum == null || calculated <= sum.value) return;
-
-    final positions =
-        receipt.positions.toList()
-          ..sort((a, b) => a.confidence.compareTo(b.confidence));
-
-    final leastReliable = positions.firstOrNull;
-
-    if (positions.length > 1 && leastReliable != null) {
-      leastReliable.group?.members.remove(leastReliable);
-      receipt.positions.remove(leastReliable);
+      if ((testSum - target).abs() < 0.01) {
+        final group = position.group;
+        if (group != null) {
+          group.members.remove(position);
+        }
+        receipt.positions.remove(position);
+        break;
+      }
     }
   }
 

@@ -108,6 +108,12 @@ void dispose() {
 
 For an advanced use case, we provide an example of using this package with a video feed. You can integrate it with a camera feed (via a package like `camera`), and continuously scan receipts in real time.
 
+<p style="width:100vh">
+  <img src="screenshots/screenshot1.png" style="width:30vh" alt="Best Practices" />
+  <img src="screenshots/screenshot2.png" style="width:30vh" alt="Supermarket Receipt" />
+  <img src="screenshots/screenshot3.png" style="width:30vh" alt="Smartphone Receipt" />
+</p>
+
 Refer to the **[example app](example/lib/main.dart)** for an implementation that uses live camera data to recognize and process receipts as they appear in the frame.
 
 ---

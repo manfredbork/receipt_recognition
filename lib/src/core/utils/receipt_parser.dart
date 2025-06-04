@@ -34,6 +34,12 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
+  /// Pattern to detect lines that likely do not represent product names.
+  static final _patternLikelyNotProduct = RegExp(
+    r'\bx\s?\d+',
+    caseSensitive: false,
+  );
+
   /// Pattern for invalid amount formats (likely not price values).
   static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
 
@@ -51,7 +57,8 @@ final class ReceiptParser {
   static RecognizedReceipt? processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
-    return _buildReceipt(parsedEntities);
+    final filteredEntities = _filterIntermediaryEntities(parsedEntities);
+    return _buildReceipt(filteredEntities);
   }
 
   static List<TextLine> _convertText(RecognizedText text) {
@@ -96,7 +103,9 @@ final class ReceiptParser {
         continue;
       }
 
-      _tryParseUnknown(line, parsed, receiptHalfWidth);
+      if (_tryParseUnknown(line, parsed, receiptHalfWidth)) {
+        continue;
+      }
     }
 
     return parsed.toList();
@@ -107,7 +116,7 @@ final class ReceiptParser {
     RecognizedSumLabel? detectedSumLabel,
   ) {
     return detectedSumLabel != null &&
-        line.boundingBox.top > detectedSumLabel.line.boundingBox.top;
+        line.boundingBox.top > detectedSumLabel.line.boundingBox.bottom;
   }
 
   static bool _tryParseCompany(
@@ -159,15 +168,18 @@ final class ReceiptParser {
     return false;
   }
 
-  static void _tryParseUnknown(
+  static bool _tryParseUnknown(
     TextLine line,
     List<RecognizedEntity> parsed,
     double receiptHalfWidth,
   ) {
+    if (_patternLikelyNotProduct.hasMatch(line.text)) return false;
     final unknown = patternUnknown.stringMatch(line.text);
     if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
       parsed.add(RecognizedUnknown(line: line, value: line.text));
+      return true;
     }
+    return false;
   }
 
   static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
@@ -178,10 +190,13 @@ final class ReceiptParser {
     final company = _findCompany(entities);
     final sumLabel = _findSumLabel(entities);
 
-    _processAmounts(entities, yUnknowns, receipt, forbidden);
     _setReceiptSum(entities, sumLabel, receipt);
+    _processAmounts(entities, yUnknowns, receipt, forbidden);
 
     receipt.company = company;
+
+    _filterSuspiciousProducts(receipt);
+    _trimToMatchSum(receipt);
 
     return receipt;
   }
@@ -212,6 +227,7 @@ final class ReceiptParser {
   ) {
     for (final entity in entities) {
       if (entity is RecognizedAmount) {
+        if (receipt.sum?.line == entity.line) continue;
         _createPositionForAmount(entity, yUnknowns, receipt, forbidden);
       }
     }
@@ -223,6 +239,8 @@ final class ReceiptParser {
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
   ) {
+    if (entity == receipt.sum) return;
+
     final yAmount = entity.line.boundingBox;
     _sortByDistance(yAmount, yUnknowns);
 
@@ -241,10 +259,20 @@ final class ReceiptParser {
     RecognizedUnknown unknown,
     List<RecognizedUnknown> forbidden,
   ) {
-    final yT = (amountBounds.top - unknown.line.boundingBox.top).abs();
-    final yB = (amountBounds.bottom - unknown.line.boundingBox.bottom).abs();
+    final unknownText = ReceiptFormatter.trim(unknown.value);
+    final unknownBox = unknown.line.boundingBox;
+
+    final yT = (amountBounds.top - unknownBox.top).abs();
+    final yB = (amountBounds.bottom - unknownBox.bottom).abs();
     final yCompare = min(yT, yB);
-    return !forbidden.contains(unknown) && yCompare <= boundingBoxBuffer;
+
+    final isLeftOfAmount = unknownBox.left < amountBounds.left;
+    final isLikelyLabel = ReceiptParser.patternSumLabel.hasMatch(unknownText);
+
+    return !forbidden.contains(unknown) &&
+        yCompare <= boundingBoxBuffer &&
+        isLeftOfAmount &&
+        !isLikelyLabel;
   }
 
   static RecognizedPosition _createPosition(
@@ -278,11 +306,14 @@ final class ReceiptParser {
     final ySumLabel = sumLabel.line.boundingBox;
     _sortByDistance(ySumLabel, yAmounts);
 
-    if (_isNearbyAmount(ySumLabel, yAmounts.first)) {
+    final closestAmount = yAmounts.first;
+
+    if (_isNearbyAmount(ySumLabel, closestAmount)) {
       receipt.sum = RecognizedSum(
-        value: yAmounts.first.value,
-        line: yAmounts.first.line,
+        value: closestAmount.value,
+        line: closestAmount.line,
       );
+      closestAmount.isSum = true;
     }
   }
 
@@ -299,18 +330,170 @@ final class ReceiptParser {
     return Intl.defaultLocale;
   }
 
-  static void _sortByDistance(
-    Rect boundingBox,
+  static void _sortByDistance(Rect amountBox, List<RecognizedEntity> entities) {
+    entities.sort((a, b) {
+      int verticalCompare(Rect aBox, Rect bBox) {
+        final aT = (amountBox.top - aBox.top).abs();
+        final bT = (amountBox.top - bBox.top).abs();
+        final aB = (amountBox.bottom - aBox.bottom).abs();
+        final bB = (amountBox.bottom - bBox.bottom).abs();
+        return min(aT, aB).compareTo(min(bT, bB));
+      }
+
+      final result = verticalCompare(a.line.boundingBox, b.line.boundingBox);
+      return result != 0
+          ? result
+          : a.line.boundingBox.left.compareTo(b.line.boundingBox.left);
+    });
+  }
+
+  static List<RecognizedEntity> _filterIntermediaryEntities(
     List<RecognizedEntity> entities,
   ) {
-    entities.sort((a, b) {
-      final aT = (boundingBox.top - a.line.boundingBox.top).abs();
-      final bT = (boundingBox.top - b.line.boundingBox.top).abs();
-      final aB = (boundingBox.bottom - a.line.boundingBox.bottom).abs();
-      final bB = (boundingBox.bottom - b.line.boundingBox.bottom).abs();
-      final aCompare = min(aT, aB);
-      final bCompare = min(bT, bB);
-      return aCompare.compareTo(bCompare);
-    });
+    final filtered = <RecognizedEntity>[];
+    const verticalTolerance = boundingBoxBuffer;
+
+    final leftUnknown = _minBy(
+      entities.whereType<RecognizedUnknown>(),
+      (e) => e.line.boundingBox.left,
+    );
+
+    final rightAmount = _maxBy(
+      entities.whereType<RecognizedAmount>(),
+      (e) => e.line.boundingBox.right,
+    );
+
+    if (leftUnknown == null || rightAmount == null) return entities;
+
+    final sumLabel = entities.whereType<RecognizedSumLabel>().firstOrNull;
+
+    RecognizedAmount? sum;
+    for (final a in entities.whereType<RecognizedAmount>()) {
+      if (sumLabel != null && _isNearbyAmount(sumLabel.line.boundingBox, a)) {
+        sum = a;
+        break;
+      }
+    }
+
+    for (final entity in entities) {
+      final type = entity.runtimeType;
+
+      if (type == RecognizedCompany) {
+        filtered.add(entity);
+        continue;
+      }
+
+      final betweenUnknownAndAmount =
+          _isBetweenHorizontallyAndAlignedVertically(
+            entity,
+            leftUnknown,
+            rightAmount,
+            verticalTolerance,
+          );
+
+      final betweenSumLabelAndSum =
+          sumLabel != null &&
+          sum != null &&
+          entity.line.boundingBox.top > sumLabel.line.boundingBox.bottom &&
+          entity.line.boundingBox.bottom < sum.line.boundingBox.top;
+
+      if (!betweenUnknownAndAmount && !betweenSumLabelAndSum) {
+        filtered.add(entity);
+      }
+    }
+
+    return filtered;
+  }
+
+  static bool _isBetweenHorizontallyAndAlignedVertically(
+    RecognizedEntity entity,
+    RecognizedUnknown leftUnknown,
+    RecognizedAmount rightAmount,
+    int verticalTolerance,
+  ) {
+    final box = entity.line.boundingBox;
+
+    final horizontallyBetween =
+        box.left > leftUnknown.line.boundingBox.right &&
+        box.right < rightAmount.line.boundingBox.left;
+
+    final topDeltaUnknown = (box.top - leftUnknown.line.boundingBox.top).abs();
+    final bottomDeltaUnknown =
+        (box.bottom - leftUnknown.line.boundingBox.bottom).abs();
+
+    final topDeltaAmount = (box.top - rightAmount.line.boundingBox.top).abs();
+    final bottomDeltaAmount =
+        (box.bottom - rightAmount.line.boundingBox.bottom).abs();
+
+    final verticallyAligned =
+        topDeltaUnknown < verticalTolerance ||
+        bottomDeltaUnknown < verticalTolerance ||
+        topDeltaAmount < verticalTolerance ||
+        bottomDeltaAmount < verticalTolerance;
+
+    return horizontallyBetween && verticallyAligned;
+  }
+
+  static void _trimToMatchSum(RecognizedReceipt receipt) {
+    final target = receipt.sum?.value;
+    if (target == null || receipt.positions.length <= 1) return;
+
+    receipt.positions.removeWhere(
+      (pos) =>
+          receipt.sum != null &&
+          (pos.price.value - receipt.sum!.value).abs() < 0.01 &&
+          ReceiptParser.patternSumLabel.hasMatch(pos.product.value),
+    );
+
+    final positions = [...receipt.positions];
+    positions.sort((a, b) => a.confidence.compareTo(b.confidence));
+
+    num currentSum = receipt.calculatedSum.value;
+    for (final pos in positions) {
+      if (currentSum <= target) break;
+
+      final newSum = currentSum - pos.price.value;
+      if ((newSum - target).abs() < (currentSum - target).abs()) {
+        receipt.positions.remove(pos);
+        pos.group?.members.remove(pos);
+        currentSum = newSum;
+      }
+    }
+  }
+
+  static void _filterSuspiciousProducts(RecognizedReceipt receipt) {
+    receipt.positions.removeWhere(
+      (pos) => _patternLikelyNotProduct.hasMatch(pos.product.value),
+    );
+  }
+
+  static T? _minBy<T>(Iterable<T> items, num Function(T) selector) {
+    T? minItem;
+    num? minValue;
+
+    for (final item in items) {
+      final value = selector(item);
+      if (minValue == null || value < minValue) {
+        minValue = value;
+        minItem = item;
+      }
+    }
+
+    return minItem;
+  }
+
+  static T? _maxBy<T>(Iterable<T> items, num Function(T) selector) {
+    T? maxItem;
+    num? maxValue;
+
+    for (final item in items) {
+      final value = selector(item);
+      if (maxValue == null || value > maxValue) {
+        maxValue = value;
+        maxItem = item;
+      }
+    }
+
+    return maxItem;
   }
 }
