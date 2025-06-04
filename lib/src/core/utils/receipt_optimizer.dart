@@ -243,36 +243,43 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   void _removeSingleOutlierToMatchSum(RecognizedReceipt receipt) {
-    final calculatedSum = receipt.calculatedSum.value;
-    if (receipt.sum != null && calculatedSum > receipt.sum!.value) {
-      final positions = List<RecognizedPosition>.from(receipt.positions);
-      positions.sort((a, b) => a.price.value.compareTo(b.price.value));
-      final singleOutlier = positions.lastOrNull;
-      if (positions.length > 1 &&
-          singleOutlier != null &&
-          singleOutlier.price.formattedValue == receipt.sum!.formattedValue) {
-        final group = singleOutlier.group;
-        if (group != null) {
-          group.members.remove(singleOutlier);
-          receipt.positions.remove(singleOutlier);
-        }
-      }
+    final sum = receipt.sum;
+    final calculated = receipt.calculatedSum.value;
+
+    if (sum == null || calculated <= sum.value) return;
+
+    final positions =
+        receipt.positions.toList()
+          ..sort((a, b) => a.price.value.compareTo(b.price.value));
+
+    final outlier = positions.lastOrNull;
+
+    final isSuspicious =
+        positions.length > 1 &&
+        outlier != null &&
+        outlier.price.formattedValue == sum.formattedValue;
+
+    if (isSuspicious) {
+      outlier.group?.members.remove(outlier);
+      receipt.positions.remove(outlier);
     }
   }
 
   void _discardLowestConfidence(RecognizedReceipt receipt) {
-    final calculatedSum = receipt.calculatedSum.value;
-    if (receipt.sum != null && calculatedSum > receipt.sum!.value) {
-      final positions = List<RecognizedPosition>.from(receipt.positions);
-      positions.sort((a, b) => a.confidence.compareTo(b.confidence));
-      final lowestConfidence = positions.firstOrNull;
-      if (positions.length > 1 && lowestConfidence != null) {
-        final group = lowestConfidence.group;
-        if (group != null) {
-          group.members.remove(lowestConfidence);
-          receipt.positions.remove(lowestConfidence);
-        }
-      }
+    final sum = receipt.sum;
+    final calculated = receipt.calculatedSum.value;
+
+    if (sum == null || calculated <= sum.value) return;
+
+    final positions =
+        receipt.positions.toList()
+          ..sort((a, b) => a.confidence.compareTo(b.confidence));
+
+    final leastReliable = positions.firstOrNull;
+
+    if (positions.length > 1 && leastReliable != null) {
+      leastReliable.group?.members.remove(leastReliable);
+      receipt.positions.remove(leastReliable);
     }
   }
 
