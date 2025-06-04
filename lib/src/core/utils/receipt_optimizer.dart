@@ -248,7 +248,8 @@ final class ReceiptOptimizer implements Optimizer {
       final positions = List<RecognizedPosition>.from(receipt.positions);
       positions.sort((a, b) => a.price.value.compareTo(b.price.value));
       final singleOutlier = positions.lastOrNull;
-      if (singleOutlier != null &&
+      if (positions.length > 1 &&
+          singleOutlier != null &&
           singleOutlier.price.formattedValue == receipt.sum!.formattedValue) {
         final group = singleOutlier.group;
         if (group != null) {
@@ -265,7 +266,7 @@ final class ReceiptOptimizer implements Optimizer {
       final positions = List<RecognizedPosition>.from(receipt.positions);
       positions.sort((a, b) => a.confidence.compareTo(b.confidence));
       final lowestConfidence = positions.firstOrNull;
-      if (lowestConfidence != null) {
+      if (positions.length > 1 && lowestConfidence != null) {
         final group = lowestConfidence.group;
         if (group != null) {
           group.members.remove(lowestConfidence);
