@@ -313,7 +313,6 @@ final class ReceiptParser {
         value: closestAmount.value,
         line: closestAmount.line,
       );
-      closestAmount.isSum = true;
     }
   }
 
