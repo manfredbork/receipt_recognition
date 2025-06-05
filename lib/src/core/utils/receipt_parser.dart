@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:collection/collection.dart';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
@@ -11,52 +12,46 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Uses pattern matching and spatial analysis to identify receipt components
 /// like company names, prices, products, and the total sum.
 final class ReceiptParser {
-  /// Pattern to match common supermarket/store names.
+  /// Pattern to match known supermarket or store names.
   static final RegExp patternCompany = RegExp(
     r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
     caseSensitive: false,
   );
 
-  /// Pattern to match various ways a total sum might be labeled.
+  /// Pattern to detect common total sum labels on receipts.
   static final RegExp patternSumLabel = RegExp(
     r'(Zu zahlen|Gesamt|Summe|Total)',
     caseSensitive: false,
   );
 
-  /// Pattern for keywords that indicate we should stop parsing (end of receipt).
+  /// Pattern indicating where parsing should stop (e.g., refunds or change lines).
   static final RegExp patternStopKeywords = RegExp(
     r'(Geg.|Rückgeld)',
     caseSensitive: false,
   );
 
-  /// Pattern for keywords to ignore as they don't represent product items.
+  /// Pattern to identify ignorable keywords not related to products.
   static final RegExp patternIgnoreKeywords = RegExp(
     r'(E-Bon|Coupon|Eingabe|Posten|Stk|kg)',
     caseSensitive: false,
   );
 
-  /// Pattern to detect lines that likely do not represent product names.
-  static final _patternLikelyNotProduct = RegExp(
-    r'\bx\s?\d+',
-    caseSensitive: false,
-  );
-
-  /// Pattern for invalid amount formats (likely not price values).
+  /// Pattern to match invalid number formats (e.g., 1.234,00).
   static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
 
-  /// Pattern to recognize monetary amounts with optional sign.
+  /// Pattern to match monetary values (e.g., 1,99 or -5.00).
   static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 
-  /// Pattern to recognize text that might be product descriptions.
+  /// Pattern to match strings likely to be product descriptions.
   static final RegExp patternUnknown = RegExp(r'[\D\S]{4,}');
 
-  /// Pattern for product-like lines that are likely metadata (e.g. quantity x price).
+  /// Pattern to exclude lines with likely metadata or quantity info.
   static final RegExp patternLikelyNotProduct = RegExp(
     r'(\bx\s?\d+)|(\d+[,.]\d{2}/\w+)|(\d+\s*(Pcs|Stk|kg|g))|(^\s*\d+[,.]\d{2}\s*$)',
     caseSensitive: false,
   );
 
-  /// Pattern to detect unit prices (e.g. 9,99/kg or 0,95/100g).
+  /// Pattern to detect unit prices like "2,99/kg" or "0,89/100g".
   static final RegExp patternUnitPrice = RegExp(
     r'\d+[,.]\d{2}/\w+',
     caseSensitive: false,
@@ -68,11 +63,17 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  /// Pattern to detect standalone price-looking numbers (e.g. "10,00").
+  /// Pattern to detect price-like numbers not paired with labels.
   static final RegExp patternStandalonePrice = RegExp(r'^\s*\d+[,.]\d{2}\s*$');
 
-  /// Pattern to detect standalone integers (e.g. "1", "189"), but not prices.
+  /// Pattern to match integers that look like product metadata (e.g., 1, 189).
   static final RegExp patternStandaloneInteger = RegExp(r'^\s*\d+\s*$');
+
+  /// Pattern to filter out suspicious or metadata-like product names.
+  static final RegExp patternSuspiciousProductName = RegExp(
+    r'\bx\s?\d+',
+    caseSensitive: false,
+  );
 
   /// Processes raw OCR text into a structured receipt.
   ///
@@ -413,12 +414,12 @@ final class ReceiptParser {
     final filtered = <RecognizedEntity>[];
     const verticalTolerance = ReceiptConstants.boundingBoxBuffer;
 
-    final leftUnknown = _minBy(
+    final leftUnknown = minBy(
       entities.whereType<RecognizedUnknown>(),
       (e) => e.line.boundingBox.left,
     );
 
-    final rightAmount = _maxBy(
+    final rightAmount = maxBy(
       entities.whereType<RecognizedAmount>(),
       (e) => e.line.boundingBox.right,
     );
@@ -523,37 +524,7 @@ final class ReceiptParser {
 
   static void _filterSuspiciousProducts(RecognizedReceipt receipt) {
     receipt.positions.removeWhere(
-      (pos) => _patternLikelyNotProduct.hasMatch(pos.product.value),
+      (pos) => patternSuspiciousProductName.hasMatch(pos.product.value),
     );
-  }
-
-  static T? _minBy<T>(Iterable<T> items, num Function(T) selector) {
-    T? minItem;
-    num? minValue;
-
-    for (final item in items) {
-      final value = selector(item);
-      if (minValue == null || value < minValue) {
-        minValue = value;
-        minItem = item;
-      }
-    }
-
-    return minItem;
-  }
-
-  static T? _maxBy<T>(Iterable<T> items, num Function(T) selector) {
-    T? maxItem;
-    num? maxValue;
-
-    for (final item in items) {
-      final value = selector(item);
-      if (maxValue == null || value > maxValue) {
-        maxValue = value;
-        maxItem = item;
-      }
-    }
-
-    return maxItem;
   }
 }

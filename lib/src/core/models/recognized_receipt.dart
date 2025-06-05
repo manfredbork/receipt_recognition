@@ -122,3 +122,14 @@ class ReceiptConstants {
   /// Vertical tolerance (in pixels) for comparing bounding box alignment.
   static const int boundingBoxBuffer = 50;
 }
+
+extension ReceiptHash on RecognizedReceipt {
+  /// A simple fingerprint based on position count and sum.
+  String get fingerprint {
+    final positionsHash = positions
+        .map((p) => '${p.product.value}:${p.price.value}')
+        .join(',');
+    final sumValue = sum?.formattedValue ?? '';
+    return '$positionsHash|$sumValue';
+  }
+}
