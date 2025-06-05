@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:collection/collection.dart';
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
@@ -10,46 +12,68 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Uses pattern matching and spatial analysis to identify receipt components
 /// like company names, prices, products, and the total sum.
 final class ReceiptParser {
-  /// Pattern to match common supermarket/store names.
+  /// Pattern to match known supermarket or store names.
   static final RegExp patternCompany = RegExp(
     r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
     caseSensitive: false,
   );
 
-  /// Pattern to match various ways a total sum might be labeled.
+  /// Pattern to detect common total sum labels on receipts.
   static final RegExp patternSumLabel = RegExp(
     r'(Zu zahlen|Gesamt|Summe|Total)',
     caseSensitive: false,
   );
 
-  /// Pattern for keywords that indicate we should stop parsing (end of receipt).
+  /// Pattern indicating where parsing should stop (e.g., refunds or change lines).
   static final RegExp patternStopKeywords = RegExp(
     r'(Geg.|Rückgeld)',
     caseSensitive: false,
   );
 
-  /// Pattern for keywords to ignore as they don't represent product items.
+  /// Pattern to identify ignorable keywords not related to products.
   static final RegExp patternIgnoreKeywords = RegExp(
     r'(E-Bon|Coupon|Eingabe|Posten|Stk|kg)',
     caseSensitive: false,
   );
 
-  /// Pattern to detect lines that likely do not represent product names.
-  static final _patternLikelyNotProduct = RegExp(
-    r'\bx\s?\d+',
+  /// Pattern to match invalid number formats (e.g., 1.234,00).
+  static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
+
+  /// Pattern to match monetary values (e.g., 1,99 or -5.00).
+  static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
+
+  /// Pattern to match strings likely to be product descriptions.
+  static final RegExp patternUnknown = RegExp(r'[\D\S]{4,}');
+
+  /// Pattern to exclude lines with likely metadata or quantity info.
+  static final RegExp patternLikelyNotProduct = RegExp(
+    r'(\bx\s?\d+)|(\d+[,.]\d{2}/\w+)|(\d+\s*(Pcs|Stk|kg|g))|(^\s*\d+[,.]\d{2}\s*$)',
     caseSensitive: false,
   );
 
-  /// Pattern for invalid amount formats (likely not price values).
-  static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
+  /// Pattern to detect unit prices like "2,99/kg" or "0,89/100g".
+  static final RegExp patternUnitPrice = RegExp(
+    r'\d+[,.]\d{2}/\w+',
+    caseSensitive: false,
+  );
 
-  /// Pattern to recognize monetary amounts with optional sign.
-  static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
+  /// Pattern to detect quantity-like words (e.g. "2 Pcs", "0,3kg").
+  static final RegExp patternQuantityMetadata = RegExp(
+    r'\d+\s*(Pcs|Stk|kg|g)',
+    caseSensitive: false,
+  );
 
-  /// Pattern to recognize text that might be product descriptions.
-  static final RegExp patternUnknown = RegExp(r'[\D\S]{4,}');
+  /// Pattern to detect price-like numbers not paired with labels.
+  static final RegExp patternStandalonePrice = RegExp(r'^\s*\d+[,.]\d{2}\s*$');
 
-  static const int boundingBoxBuffer = 50;
+  /// Pattern to match integers that look like product metadata (e.g., 1, 189).
+  static final RegExp patternStandaloneInteger = RegExp(r'^\s*\d+\s*$');
+
+  /// Pattern to filter out suspicious or metadata-like product names.
+  static final RegExp patternSuspiciousProductName = RegExp(
+    r'\bx\s?\d+',
+    caseSensitive: false,
+  );
 
   /// Processes raw OCR text into a structured receipt.
   ///
@@ -136,11 +160,21 @@ final class ReceiptParser {
   }
 
   static bool _tryParseSumLabel(TextLine line, List<RecognizedEntity> parsed) {
-    final sumLabel = patternSumLabel.stringMatch(line.text);
-    if (sumLabel != null) {
-      parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+    final text = ReceiptFormatter.trim(line.text);
+
+    if (patternSumLabel.hasMatch(text)) {
+      parsed.add(RecognizedSumLabel(line: line, value: text));
       return true;
     }
+
+    for (final label in _knownSumLabels()) {
+      final threshold = _adaptiveThreshold(label);
+      if (ratio(text, label) >= threshold) {
+        parsed.add(RecognizedSumLabel(line: line, value: label));
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -173,12 +207,14 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double receiptHalfWidth,
   ) {
-    if (_patternLikelyNotProduct.hasMatch(line.text)) return false;
+    if (_isLikelyMetadataLine(line)) return false;
+
     final unknown = patternUnknown.stringMatch(line.text);
     if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
       parsed.add(RecognizedUnknown(line: line, value: line.text));
       return true;
     }
+
     return false;
   }
 
@@ -198,7 +234,7 @@ final class ReceiptParser {
     _filterSuspiciousProducts(receipt);
     _trimToMatchSum(receipt);
 
-    return receipt;
+    return receipt.copyWith(entities: entities, sumLabel: sumLabel);
   }
 
   static RecognizedCompany? _findCompany(List<RecognizedEntity> entities) {
@@ -270,7 +306,7 @@ final class ReceiptParser {
     final isLikelyLabel = ReceiptParser.patternSumLabel.hasMatch(unknownText);
 
     return !forbidden.contains(unknown) &&
-        yCompare <= boundingBoxBuffer &&
+        yCompare <= ReceiptConstants.boundingBoxBuffer &&
         isLeftOfAmount &&
         !isLikelyLabel;
   }
@@ -313,15 +349,41 @@ final class ReceiptParser {
         value: closestAmount.value,
         line: closestAmount.line,
       );
-      closestAmount.isSum = true;
     }
+  }
+
+  static bool _isLikelyMetadataLine(TextLine line) {
+    final text = line.text;
+
+    return patternLikelyNotProduct.hasMatch(text) ||
+        patternUnitPrice.hasMatch(text) ||
+        patternQuantityMetadata.hasMatch(text) ||
+        patternStandaloneInteger.hasMatch(text) ||
+        patternStandalonePrice.hasMatch(text);
+  }
+
+  static List<String> _knownSumLabels() {
+    final source = patternSumLabel.pattern;
+    final match = RegExp(r'\((.*?)\)').firstMatch(source);
+    if (match == null) return [];
+
+    return match.group(1)!.split('|').map((s) => s.trim()).toList();
+  }
+
+  static int _adaptiveThreshold(String label) {
+    final length = label.length;
+
+    if (length <= 3) return 95;
+    if (length <= 6) return 90;
+    if (length <= 12) return 85;
+    return 80;
   }
 
   static bool _isNearbyAmount(Rect sumLabelBounds, RecognizedAmount amount) {
     final yT = (sumLabelBounds.top - amount.line.boundingBox.top).abs();
     final yB = (sumLabelBounds.bottom - amount.line.boundingBox.bottom).abs();
     final yCompare = min(yT, yB);
-    return yCompare <= boundingBoxBuffer;
+    return yCompare <= ReceiptConstants.boundingBoxBuffer;
   }
 
   static String? _detectsLocale(String text) {
@@ -351,14 +413,14 @@ final class ReceiptParser {
     List<RecognizedEntity> entities,
   ) {
     final filtered = <RecognizedEntity>[];
-    const verticalTolerance = boundingBoxBuffer;
+    const verticalTolerance = ReceiptConstants.boundingBoxBuffer;
 
-    final leftUnknown = _minBy(
+    final leftUnknown = minBy(
       entities.whereType<RecognizedUnknown>(),
       (e) => e.line.boundingBox.left,
     );
 
-    final rightAmount = _maxBy(
+    final rightAmount = maxBy(
       entities.whereType<RecognizedAmount>(),
       (e) => e.line.boundingBox.right,
     );
@@ -445,55 +507,51 @@ final class ReceiptParser {
           ReceiptParser.patternSumLabel.hasMatch(pos.product.value),
     );
 
-    final positions = [...receipt.positions];
-    positions.sort((a, b) => a.confidence.compareTo(b.confidence));
-
+    final positions = [...receipt.positions]
+      ..sort((a, b) => a.confidence.compareTo(b.confidence));
     num currentSum = receipt.calculatedSum.value;
+
     for (final pos in positions) {
       if (currentSum <= target) break;
 
       final newSum = currentSum - pos.price.value;
-      if ((newSum - target).abs() < (currentSum - target).abs()) {
+      final improvement = (currentSum - target).abs() - (newSum - target).abs();
+
+      if (improvement > 0) {
         receipt.positions.remove(pos);
         pos.group?.members.remove(pos);
+
+        if ((pos.group?.members.isEmpty ?? false)) {
+          receipt.positions.removeWhere((p) => p.group == pos.group);
+        }
+
         currentSum = newSum;
       }
     }
   }
 
   static void _filterSuspiciousProducts(RecognizedReceipt receipt) {
-    receipt.positions.removeWhere(
-      (pos) => _patternLikelyNotProduct.hasMatch(pos.product.value),
-    );
-  }
+    final toRemove = <RecognizedPosition>[];
 
-  static T? _minBy<T>(Iterable<T> items, num Function(T) selector) {
-    T? minItem;
-    num? minValue;
+    for (final pos in receipt.positions) {
+      final productText = ReceiptFormatter.trim(pos.product.value);
 
-    for (final item in items) {
-      final value = selector(item);
-      if (minValue == null || value < minValue) {
-        minValue = value;
-        minItem = item;
+      final isSuspicious = ReceiptParser.patternSuspiciousProductName.hasMatch(
+        productText,
+      );
+
+      if (isSuspicious) {
+        toRemove.add(pos);
       }
     }
 
-    return minItem;
-  }
+    for (final pos in toRemove) {
+      receipt.positions.remove(pos);
+      pos.group?.members.remove(pos);
 
-  static T? _maxBy<T>(Iterable<T> items, num Function(T) selector) {
-    T? maxItem;
-    num? maxValue;
-
-    for (final item in items) {
-      final value = selector(item);
-      if (maxValue == null || value > maxValue) {
-        maxValue = value;
-        maxItem = item;
+      if ((pos.group?.members.isEmpty ?? false)) {
+        receipt.positions.removeWhere((p) => p.group == pos.group);
       }
     }
-
-    return maxItem;
   }
 }

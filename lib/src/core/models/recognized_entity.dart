@@ -64,8 +64,6 @@ final class RecognizedSumLabel extends RecognizedEntity<String> {
 
 /// Represents a monetary amount recognized from the receipt.
 final class RecognizedAmount extends RecognizedEntity<num> {
-  bool isSum = false;
-
   RecognizedAmount({required super.value, required super.line});
 
   @override

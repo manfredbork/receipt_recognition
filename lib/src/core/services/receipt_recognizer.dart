@@ -88,9 +88,7 @@ final class ReceiptRecognizer {
 
     final validation = _validateReceipt(optimizedReceipt);
 
-    if (kDebugMode) {
-      _printDebugInfo(optimizedReceipt, validation);
-    }
+    _printDebugInfo(optimizedReceipt, validation);
 
     final finalReceipt = _handleValidationResult(
       now,
@@ -201,18 +199,24 @@ final class ReceiptRecognizer {
   ) {
     if (kDebugMode) {
       if (optimizedReceipt.positions.isNotEmpty) {
-        print('-' * 50);
-        print('Validation status: ${validation.status}');
-        print('Message: ${validation.message}');
-        print('-' * 50);
-        print('Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
+        print('🧾${'-' * 48}');
+        print('✅ Validation status: ${validation.status}');
+        print('💬 Message: ${validation.message}');
+        print('🧾${'-' * 48}');
+        print('🏪 Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
+        const int totalWidth = 40;
         for (final position in optimizedReceipt.positions) {
-          print('${position.product.text} ${position.price.formattedValue}');
+          final product = position.product.text;
+          final price = position.price.formattedValue;
+          print('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
         }
         print(
-          'Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
+          '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
         );
-        print('Recognized sum: ${optimizedReceipt.sum?.formattedValue}');
+        print('🧾 Sum in receipt: ${optimizedReceipt.sum?.formattedValue}');
+        print(
+          '📌 Optimizer final sum label: ${optimizedReceipt.sumLabel?.formattedValue}',
+        );
       }
     }
   }

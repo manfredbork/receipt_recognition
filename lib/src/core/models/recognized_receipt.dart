@@ -13,32 +13,44 @@ class RecognizedReceipt {
   /// The total sum recognized from the receipt, if any.
   RecognizedSum? sum;
 
+  /// The label text (e.g., "Total" or "Summe") associated with the recognized sum.
+  RecognizedSumLabel? sumLabel;
+
   /// The company/store name recognized from the receipt, if any.
   RecognizedCompany? company;
+
+  /// All intermediate OCR entities parsed from the receipt (lines, labels, amounts, etc.).
+  final List<RecognizedEntity>? entities;
 
   RecognizedReceipt({
     required this.positions,
     required this.timestamp,
     this.sum,
+    this.sumLabel,
     this.company,
+    this.entities,
   });
 
   /// Creates an empty receipt with the current timestamp.
   factory RecognizedReceipt.empty() =>
-      RecognizedReceipt(positions: [], timestamp: DateTime.now());
+      RecognizedReceipt(positions: [], timestamp: DateTime.now(), entities: []);
 
   /// Creates a copy of this receipt with optionally updated properties.
   RecognizedReceipt copyWith({
+    RecognizedCompany? company,
+    RecognizedSum? sum,
+    RecognizedSumLabel? sumLabel,
+    List<RecognizedEntity>? entities,
     List<RecognizedPosition>? positions,
     DateTime? timestamp,
-    RecognizedSum? sum,
-    RecognizedCompany? company,
   }) {
     return RecognizedReceipt(
+      company: company ?? this.company,
+      sum: sum ?? this.sum,
+      sumLabel: sumLabel ?? this.sumLabel,
+      entities: entities ?? this.entities,
       positions: positions ?? this.positions,
       timestamp: timestamp ?? this.timestamp,
-      sum: sum ?? this.sum,
-      company: company ?? this.company,
     );
   }
 
@@ -109,4 +121,21 @@ class ValidationResult {
   final String? message;
 
   ValidationResult({required this.status, this.matchPercentage, this.message});
+}
+
+/// Centralized constants shared between receipt parsing and optimization.
+class ReceiptConstants {
+  /// Vertical tolerance (in pixels) for comparing bounding box alignment.
+  static const int boundingBoxBuffer = 50;
+}
+
+extension ReceiptHash on RecognizedReceipt {
+  /// A simple fingerprint based on position count and sum.
+  String get fingerprint {
+    final positionsHash = positions
+        .map((p) => '${p.product.value}:${p.price.value}')
+        .join(',');
+    final sumValue = sum?.formattedValue ?? '';
+    return '$positionsHash|$sumValue';
+  }
 }
