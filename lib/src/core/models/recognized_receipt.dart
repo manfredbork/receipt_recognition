@@ -16,16 +16,20 @@ class RecognizedReceipt {
   /// The company/store name recognized from the receipt, if any.
   RecognizedCompany? company;
 
+  /// All intermediate OCR entities parsed from the receipt (lines, labels, amounts, etc.).
+  final List<RecognizedEntity>? entities;
+
   RecognizedReceipt({
     required this.positions,
     required this.timestamp,
     this.sum,
     this.company,
+    this.entities,
   });
 
   /// Creates an empty receipt with the current timestamp.
   factory RecognizedReceipt.empty() =>
-      RecognizedReceipt(positions: [], timestamp: DateTime.now());
+      RecognizedReceipt(positions: [], timestamp: DateTime.now(), entities: []);
 
   /// Creates a copy of this receipt with optionally updated properties.
   RecognizedReceipt copyWith({
@@ -33,12 +37,14 @@ class RecognizedReceipt {
     DateTime? timestamp,
     RecognizedSum? sum,
     RecognizedCompany? company,
+    List<RecognizedEntity>? entities,
   }) {
     return RecognizedReceipt(
       positions: positions ?? this.positions,
       timestamp: timestamp ?? this.timestamp,
       sum: sum ?? this.sum,
       company: company ?? this.company,
+      entities: entities ?? this.entities,
     );
   }
 
@@ -109,4 +115,10 @@ class ValidationResult {
   final String? message;
 
   ValidationResult({required this.status, this.matchPercentage, this.message});
+}
+
+/// Centralized constants shared between receipt parsing and optimization.
+class ReceiptConstants {
+  /// Vertical tolerance (in pixels) for comparing bounding box alignment.
+  static const int boundingBoxBuffer = 50;
 }

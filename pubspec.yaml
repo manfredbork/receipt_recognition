@@ -15,6 +15,7 @@ dependencies:
   fuzzywuzzy: ^1.2.0
   google_mlkit_text_recognition: ^0.15.0
   intl: ^0.20.2
+  collection: ^1.18.0
 
 dev_dependencies:
   flutter_test:

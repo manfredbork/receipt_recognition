@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
@@ -48,8 +49,6 @@ final class ReceiptParser {
 
   /// Pattern to recognize text that might be product descriptions.
   static final RegExp patternUnknown = RegExp(r'[\D\S]{4,}');
-
-  static const int boundingBoxBuffer = 50;
 
   /// Processes raw OCR text into a structured receipt.
   ///
@@ -136,11 +135,21 @@ final class ReceiptParser {
   }
 
   static bool _tryParseSumLabel(TextLine line, List<RecognizedEntity> parsed) {
-    final sumLabel = patternSumLabel.stringMatch(line.text);
-    if (sumLabel != null) {
-      parsed.add(RecognizedSumLabel(line: line, value: sumLabel));
+    final text = ReceiptFormatter.trim(line.text);
+
+    if (patternSumLabel.hasMatch(text)) {
+      parsed.add(RecognizedSumLabel(line: line, value: text));
       return true;
     }
+
+    for (final label in _knownSumLabels()) {
+      final threshold = _adaptiveThreshold(label);
+      if (ratio(text, label) >= threshold) {
+        parsed.add(RecognizedSumLabel(line: line, value: label));
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -198,7 +207,7 @@ final class ReceiptParser {
     _filterSuspiciousProducts(receipt);
     _trimToMatchSum(receipt);
 
-    return receipt;
+    return receipt.copyWith(entities: entities);
   }
 
   static RecognizedCompany? _findCompany(List<RecognizedEntity> entities) {
@@ -270,7 +279,7 @@ final class ReceiptParser {
     final isLikelyLabel = ReceiptParser.patternSumLabel.hasMatch(unknownText);
 
     return !forbidden.contains(unknown) &&
-        yCompare <= boundingBoxBuffer &&
+        yCompare <= ReceiptConstants.boundingBoxBuffer &&
         isLeftOfAmount &&
         !isLikelyLabel;
   }
@@ -316,11 +325,28 @@ final class ReceiptParser {
     }
   }
 
+  static List<String> _knownSumLabels() {
+    final source = patternSumLabel.pattern;
+    final match = RegExp(r'\((.*?)\)').firstMatch(source);
+    if (match == null) return [];
+
+    return match.group(1)!.split('|').map((s) => s.trim()).toList();
+  }
+
+  static int _adaptiveThreshold(String label) {
+    final length = label.length;
+
+    if (length <= 3) return 95;
+    if (length <= 6) return 90;
+    if (length <= 12) return 85;
+    return 80;
+  }
+
   static bool _isNearbyAmount(Rect sumLabelBounds, RecognizedAmount amount) {
     final yT = (sumLabelBounds.top - amount.line.boundingBox.top).abs();
     final yB = (sumLabelBounds.bottom - amount.line.boundingBox.bottom).abs();
     final yCompare = min(yT, yB);
-    return yCompare <= boundingBoxBuffer;
+    return yCompare <= ReceiptConstants.boundingBoxBuffer;
   }
 
   static String? _detectsLocale(String text) {
@@ -350,7 +376,7 @@ final class ReceiptParser {
     List<RecognizedEntity> entities,
   ) {
     final filtered = <RecognizedEntity>[];
-    const verticalTolerance = boundingBoxBuffer;
+    const verticalTolerance = ReceiptConstants.boundingBoxBuffer;
 
     final leftUnknown = _minBy(
       entities.whereType<RecognizedUnknown>(),

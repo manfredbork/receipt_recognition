@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Interface for receipt optimization components.
@@ -27,6 +28,8 @@ final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedGroup> _groups = [];
   final List<RecognizedCompany> _companies = [];
   final List<RecognizedSum> _sums = [];
+  final List<_SumCandidate> _sumCandidates = [];
+  final int _sumConfirmationThreshold;
   final int _maxCacheSize;
   final int _confidenceThreshold;
   final int _stabilityThreshold;
@@ -37,16 +40,19 @@ final class ReceiptOptimizer implements Optimizer {
   /// Creates a new receipt optimizer with configurable thresholds.
   ///
   /// Parameters:
+  /// - [sumConfirmationThreshold]: Minimum number of matching detections to confirm a sum
   /// - [maxCacheSize]: Maximum number of items to keep in memory
   /// - [confidenceThreshold]: Minimum confidence score (0-100) for matching
   /// - [stabilityThreshold]: Minimum stability score (0-100) for groups
   /// - [invalidateInterval]: Time after which unstable groups are removed
   ReceiptOptimizer({
+    int sumConfirmationThreshold = 2,
     int maxCacheSize = 50,
     int confidenceThreshold = 75,
     int stabilityThreshold = 50,
     Duration invalidateInterval = const Duration(seconds: 1),
-  }) : _maxCacheSize = maxCacheSize,
+  }) : _sumConfirmationThreshold = sumConfirmationThreshold,
+       _maxCacheSize = maxCacheSize,
        _confidenceThreshold = confidenceThreshold,
        _stabilityThreshold = stabilityThreshold,
        _invalidateInterval = invalidateInterval,
@@ -101,19 +107,52 @@ final class ReceiptOptimizer implements Optimizer {
   void _updateSums(RecognizedReceipt receipt) {
     if (receipt.sum != null) {
       _sums.add(receipt.sum!);
-    }
 
-    if (_sums.length > _maxCacheSize) {
-      _sums.removeAt(0);
+      final sumLabel = receipt.entities
+          ?.whereType<RecognizedSumLabel>()
+          .firstWhereOrNull(
+            (label) =>
+                (label.line.boundingBox.top - receipt.sum!.line.boundingBox.top)
+                    .abs() <
+                ReceiptConstants.boundingBoxBuffer,
+          );
+
+      if (sumLabel != null) {
+        final candidate = _SumCandidate(
+          label: sumLabel,
+          sum: receipt.sum!,
+          verticalDistance:
+              (sumLabel.line.boundingBox.top -
+                      receipt.sum!.line.boundingBox.top)
+                  .abs()
+                  .toInt(),
+        );
+
+        final existing =
+            _sumCandidates.where((c) => c.matches(candidate)).firstOrNull;
+        if (existing != null) {
+          existing.confirm();
+        } else {
+          _sumCandidates.add(candidate);
+        }
+
+        if (_sumCandidates.length > _maxCacheSize) {
+          _sumCandidates.removeAt(0);
+        }
+      }
     }
   }
 
   void _optimizeCompany(RecognizedReceipt receipt) {
     if (receipt.company == null && _companies.isNotEmpty) {
-      final company = ReceiptNormalizer.sortByFrequency(
-        _companies.map((c) => c.value).toList(),
-      );
-      receipt.company = _companies.last.copyWith(value: company.last);
+      final lastCompany = _companies.lastOrNull;
+      if (lastCompany != null) {
+        final mostFrequent =
+            ReceiptNormalizer.sortByFrequency(
+              _companies.map((c) => c.value).toList(),
+            ).last;
+        receipt.company = lastCompany.copyWith(value: mostFrequent);
+      }
     }
   }
 
@@ -149,6 +188,25 @@ final class ReceiptOptimizer implements Optimizer {
 
   void _processPositions(RecognizedReceipt receipt) {
     for (final position in receipt.positions) {
+      final stableSums =
+          _sumCandidates
+              .where((c) => c.confirmations >= _sumConfirmationThreshold)
+              .toList()
+            ..sort((a, b) => a.verticalDistance.compareTo(b.verticalDistance));
+      final stableSum = stableSums.firstOrNull;
+
+      if (stableSum != null &&
+          (position.price.value - stableSum.sum.value).abs() < 0.01) {
+        if (stableSum.confirmations >= _sumConfirmationThreshold) {
+          return;
+        }
+      }
+
+      if (stableSum != null &&
+          position.product.value == stableSum.label.line.text) {
+        return;
+      }
+
       _processPosition(position);
     }
   }
@@ -226,10 +284,9 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     final RecognizedReceipt mergedReceipt = RecognizedReceipt.empty();
+
     for (final group in stableGroups) {
-      final position = group.members.reduce(
-        (a, b) => a.confidence > b.confidence ? a : b,
-      );
+      final position = maxBy(group.members, (p) => p.confidence)!;
 
       mergedReceipt.positions.add(position);
 
@@ -285,4 +342,23 @@ class _ConfidenceResult {
     required this.confidence,
     required this.shouldUseGroup,
   });
+}
+
+class _SumCandidate {
+  final RecognizedSumLabel label;
+  final RecognizedSum sum;
+  final int verticalDistance;
+  int confirmations = 1;
+
+  _SumCandidate({
+    required this.label,
+    required this.sum,
+    required this.verticalDistance,
+  });
+
+  bool matches(_SumCandidate other) =>
+      label.line.text == other.label.line.text &&
+      (sum.value - other.sum.value).abs() < 0.01;
+
+  void confirm() => confirmations++;
 }
