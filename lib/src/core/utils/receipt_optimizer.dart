@@ -88,7 +88,13 @@ final class ReceiptOptimizer implements Optimizer {
     _resetOperations();
     _processPositions(receipt);
 
-    return _createOptimizedReceipt(receipt);
+    final newReceipt = _createOptimizedReceipt(receipt);
+
+    final isBetter =
+        newReceipt.isValid &&
+        newReceipt.positions.length >= receipt.positions.length;
+
+    return isBetter ? newReceipt : receipt;
   }
 
   void _initializeIfNeeded() {
@@ -96,7 +102,10 @@ final class ReceiptOptimizer implements Optimizer {
       _groups.clear();
       _companies.clear();
       _sums.clear();
+      _sumCandidates.clear();
       _shouldInitialize = false;
+      _unchangedCount = 0;
+      _lastFingerprint = null;
     }
   }
 
@@ -184,12 +193,13 @@ final class ReceiptOptimizer implements Optimizer {
 
   void _optimizeSum(RecognizedReceipt receipt) {
     if (receipt.sum == null && _sums.isNotEmpty) {
-      final sum =
-          ReceiptNormalizer.sortByFrequency(
-            _sums.map((c) => c.formattedValue).toList(),
-          ).lastOrNull;
-      if (sum != null) {
-        receipt.sum = _sums.last.copyWith(value: ReceiptFormatter.parse(sum));
+      final sum = ReceiptNormalizer.sortByFrequency(
+        _sums.map((c) => c.formattedValue).toList(),
+      );
+      final parsed = ReceiptFormatter.parse(sum.last);
+
+      if ((parsed - receipt.calculatedSum.value).abs() < 0.01) {
+        receipt.sum = _sums.last.copyWith(value: parsed);
       }
     }
   }
@@ -203,6 +213,7 @@ final class ReceiptOptimizer implements Optimizer {
             g.stability < _stabilityThreshold,
       );
     }
+    _groups.removeWhere((g) => g.members.isEmpty);
   }
 
   void _resetOperations() {
@@ -215,27 +226,23 @@ final class ReceiptOptimizer implements Optimizer {
 
   void _processPositions(RecognizedReceipt receipt) {
     final stableSum = minBy(
-      _sumCandidates.where((c) => c.confirmations >= _sumConfirmationThreshold),
+      _sumCandidates.where(
+        (c) =>
+            c.confirmations >= _sumConfirmationThreshold &&
+            _isConfirmedSumValid(c, receipt),
+      ),
       (c) => c.verticalDistance,
     );
 
-    final isWaitingForSumConfirmation = receipt.isValid && stableSum == null;
-
-    if (isWaitingForSumConfirmation) {
-      return;
-    }
+    final isStableSumConfirmed = stableSum != null;
 
     for (final position in receipt.positions) {
-      if (stableSum != null &&
-          (position.price.value - stableSum.sum.value).abs() < 0.01) {
-        if (stableSum.confirmations >= _sumConfirmationThreshold) {
-          continue;
-        }
-      }
+      if (isStableSumConfirmed) {
+        final matchesStableSum =
+            (position.price.value - stableSum.sum.value).abs() < 0.01 ||
+            position.product.value == stableSum.label.line.text;
 
-      if (stableSum != null &&
-          position.product.value == stableSum.label.line.text) {
-        continue;
+        if (matchesStableSum) continue;
       }
 
       _processPosition(position);
@@ -306,6 +313,10 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   RecognizedReceipt _createOptimizedReceipt(RecognizedReceipt receipt) {
+    if (receipt.positions.isEmpty && receipt.isValid) {
+      return receipt;
+    }
+
     final stableGroups = _groups.where(
       (g) => g.stability >= _stabilityThreshold,
     );
@@ -339,6 +350,8 @@ final class ReceiptOptimizer implements Optimizer {
     final target = receipt.sum?.value;
     if (target == null || receipt.positions.length <= 1) return;
 
+    final originalLength = receipt.positions.length;
+
     for (final position in receipt.positions) {
       final testSum = receipt.positions
           .where((p) => p != position)
@@ -350,9 +363,21 @@ final class ReceiptOptimizer implements Optimizer {
           group.members.remove(position);
         }
         receipt.positions.remove(position);
-        break;
+
+        if (receipt.positions.length == originalLength) break;
+        return;
       }
     }
+  }
+
+  bool _isConfirmedSumValid(
+    _SumCandidate candidate,
+    RecognizedReceipt receipt,
+  ) {
+    if (receipt.positions.length < 2) return false;
+
+    final calculated = receipt.calculatedSum.value;
+    return (candidate.sum.value - calculated).abs() < 0.01;
   }
 
   /// Releases all resources used by the optimizer.

@@ -207,12 +207,14 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double receiptHalfWidth,
   ) {
-    if (_isLikelyMetadataLine(line, receiptHalfWidth)) return false;
+    if (_isLikelyMetadataLine(line)) return false;
+
     final unknown = patternUnknown.stringMatch(line.text);
     if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
       parsed.add(RecognizedUnknown(line: line, value: line.text));
       return true;
     }
+
     return false;
   }
 
@@ -232,7 +234,7 @@ final class ReceiptParser {
     _filterSuspiciousProducts(receipt);
     _trimToMatchSum(receipt);
 
-    return receipt.copyWith(entities: entities);
+    return receipt.copyWith(entities: entities, sumLabel: sumLabel);
   }
 
   static RecognizedCompany? _findCompany(List<RecognizedEntity> entities) {
@@ -350,15 +352,14 @@ final class ReceiptParser {
     }
   }
 
-  static bool _isLikelyMetadataLine(TextLine line, double receiptHalfWidth) {
+  static bool _isLikelyMetadataLine(TextLine line) {
     final text = line.text;
-    final isLeftAligned = line.boundingBox.left < receiptHalfWidth;
 
     return patternLikelyNotProduct.hasMatch(text) ||
         patternUnitPrice.hasMatch(text) ||
         patternQuantityMetadata.hasMatch(text) ||
         patternStandaloneInteger.hasMatch(text) ||
-        (isLeftAligned && patternStandalonePrice.hasMatch(text));
+        patternStandalonePrice.hasMatch(text);
   }
 
   static List<String> _knownSumLabels() {
@@ -506,25 +507,51 @@ final class ReceiptParser {
           ReceiptParser.patternSumLabel.hasMatch(pos.product.value),
     );
 
-    final positions = [...receipt.positions];
-    positions.sort((a, b) => a.confidence.compareTo(b.confidence));
-
+    final positions = [...receipt.positions]
+      ..sort((a, b) => a.confidence.compareTo(b.confidence));
     num currentSum = receipt.calculatedSum.value;
+
     for (final pos in positions) {
       if (currentSum <= target) break;
 
       final newSum = currentSum - pos.price.value;
-      if ((newSum - target).abs() < (currentSum - target).abs()) {
+      final improvement = (currentSum - target).abs() - (newSum - target).abs();
+
+      if (improvement > 0) {
         receipt.positions.remove(pos);
         pos.group?.members.remove(pos);
+
+        if ((pos.group?.members.isEmpty ?? false)) {
+          receipt.positions.removeWhere((p) => p.group == pos.group);
+        }
+
         currentSum = newSum;
       }
     }
   }
 
   static void _filterSuspiciousProducts(RecognizedReceipt receipt) {
-    receipt.positions.removeWhere(
-      (pos) => patternSuspiciousProductName.hasMatch(pos.product.value),
-    );
+    final toRemove = <RecognizedPosition>[];
+
+    for (final pos in receipt.positions) {
+      final productText = ReceiptFormatter.trim(pos.product.value);
+
+      final isSuspicious = ReceiptParser.patternSuspiciousProductName.hasMatch(
+        productText,
+      );
+
+      if (isSuspicious) {
+        toRemove.add(pos);
+      }
+    }
+
+    for (final pos in toRemove) {
+      receipt.positions.remove(pos);
+      pos.group?.members.remove(pos);
+
+      if ((pos.group?.members.isEmpty ?? false)) {
+        receipt.positions.removeWhere((p) => p.group == pos.group);
+      }
+    }
   }
 }

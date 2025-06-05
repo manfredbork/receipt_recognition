@@ -13,6 +13,9 @@ class RecognizedReceipt {
   /// The total sum recognized from the receipt, if any.
   RecognizedSum? sum;
 
+  /// The label text (e.g., "Total" or "Summe") associated with the recognized sum.
+  RecognizedSumLabel? sumLabel;
+
   /// The company/store name recognized from the receipt, if any.
   RecognizedCompany? company;
 
@@ -23,6 +26,7 @@ class RecognizedReceipt {
     required this.positions,
     required this.timestamp,
     this.sum,
+    this.sumLabel,
     this.company,
     this.entities,
   });
@@ -33,18 +37,20 @@ class RecognizedReceipt {
 
   /// Creates a copy of this receipt with optionally updated properties.
   RecognizedReceipt copyWith({
+    RecognizedCompany? company,
+    RecognizedSum? sum,
+    RecognizedSumLabel? sumLabel,
+    List<RecognizedEntity>? entities,
     List<RecognizedPosition>? positions,
     DateTime? timestamp,
-    RecognizedSum? sum,
-    RecognizedCompany? company,
-    List<RecognizedEntity>? entities,
   }) {
     return RecognizedReceipt(
+      company: company ?? this.company,
+      sum: sum ?? this.sum,
+      sumLabel: sumLabel ?? this.sumLabel,
+      entities: entities ?? this.entities,
       positions: positions ?? this.positions,
       timestamp: timestamp ?? this.timestamp,
-      sum: sum ?? this.sum,
-      company: company ?? this.company,
-      entities: entities ?? this.entities,
     );
   }
 
