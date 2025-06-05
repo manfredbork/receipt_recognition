@@ -50,6 +50,30 @@ final class ReceiptParser {
   /// Pattern to recognize text that might be product descriptions.
   static final RegExp patternUnknown = RegExp(r'[\D\S]{4,}');
 
+  /// Pattern for product-like lines that are likely metadata (e.g. quantity x price).
+  static final RegExp patternLikelyNotProduct = RegExp(
+    r'(\bx\s?\d+)|(\d+[,.]\d{2}/\w+)|(\d+\s*(Pcs|Stk|kg|g))|(^\s*\d+[,.]\d{2}\s*$)',
+    caseSensitive: false,
+  );
+
+  /// Pattern to detect unit prices (e.g. 9,99/kg or 0,95/100g).
+  static final RegExp patternUnitPrice = RegExp(
+    r'\d+[,.]\d{2}/\w+',
+    caseSensitive: false,
+  );
+
+  /// Pattern to detect quantity-like words (e.g. "2 Pcs", "0,3kg").
+  static final RegExp patternQuantityMetadata = RegExp(
+    r'\d+\s*(Pcs|Stk|kg|g)',
+    caseSensitive: false,
+  );
+
+  /// Pattern to detect standalone price-looking numbers (e.g. "10,00").
+  static final RegExp patternStandalonePrice = RegExp(r'^\s*\d+[,.]\d{2}\s*$');
+
+  /// Pattern to detect standalone integers (e.g. "1", "189"), but not prices.
+  static final RegExp patternStandaloneInteger = RegExp(r'^\s*\d+\s*$');
+
   /// Processes raw OCR text into a structured receipt.
   ///
   /// This is the main entry point for receipt parsing.
@@ -182,7 +206,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double receiptHalfWidth,
   ) {
-    if (_patternLikelyNotProduct.hasMatch(line.text)) return false;
+    if (_isLikelyMetadataLine(line, receiptHalfWidth)) return false;
     final unknown = patternUnknown.stringMatch(line.text);
     if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
       parsed.add(RecognizedUnknown(line: line, value: line.text));
@@ -323,6 +347,17 @@ final class ReceiptParser {
         line: closestAmount.line,
       );
     }
+  }
+
+  static bool _isLikelyMetadataLine(TextLine line, double receiptHalfWidth) {
+    final text = line.text;
+    final isLeftAligned = line.boundingBox.left < receiptHalfWidth;
+
+    return patternLikelyNotProduct.hasMatch(text) ||
+        patternUnitPrice.hasMatch(text) ||
+        patternQuantityMetadata.hasMatch(text) ||
+        patternStandaloneInteger.hasMatch(text) ||
+        (isLeftAligned && patternStandalonePrice.hasMatch(text));
   }
 
   static List<String> _knownSumLabels() {
