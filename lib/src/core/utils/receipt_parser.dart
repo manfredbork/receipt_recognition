@@ -12,69 +12,6 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Uses pattern matching and spatial analysis to identify receipt components
 /// like company names, prices, products, and the total sum.
 final class ReceiptParser {
-  /// Pattern to match known supermarket or store names.
-  static final RegExp patternCompany = RegExp(
-    r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
-    caseSensitive: false,
-  );
-
-  /// Pattern to detect common total sum labels on receipts.
-  static final RegExp patternSumLabel = RegExp(
-    r'(Zu zahlen|Gesamt|Summe|Total)',
-    caseSensitive: false,
-  );
-
-  /// Pattern indicating where parsing should stop (e.g., refunds or change lines).
-  static final RegExp patternStopKeywords = RegExp(
-    r'(Geg.|Rückgeld)',
-    caseSensitive: false,
-  );
-
-  /// Pattern to identify ignorable keywords not related to products.
-  static final RegExp patternIgnoreKeywords = RegExp(
-    r'(E-Bon|Coupon|Eingabe|Posten|Stk|kg)',
-    caseSensitive: false,
-  );
-
-  /// Pattern to match invalid number formats (e.g., 1.234,00).
-  static final RegExp patternInvalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3}');
-
-  /// Pattern to match monetary values (e.g., 1,99 or -5.00).
-  static final RegExp patternAmount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
-
-  /// Pattern to match strings likely to be product descriptions.
-  static final RegExp patternUnknown = RegExp(r'[\D\S]{4,}');
-
-  /// Pattern to exclude lines with likely metadata or quantity info.
-  static final RegExp patternLikelyNotProduct = RegExp(
-    r'(\bx\s?\d+)|(\d+[,.]\d{2}/\w+)|(\d+\s*(Pcs|Stk|kg|g))|(^\s*\d+[,.]\d{2}\s*$)',
-    caseSensitive: false,
-  );
-
-  /// Pattern to detect unit prices like "2,99/kg" or "0,89/100g".
-  static final RegExp patternUnitPrice = RegExp(
-    r'\d+[,.]\d{2}/\w+',
-    caseSensitive: false,
-  );
-
-  /// Pattern to detect quantity-like words (e.g. "2 Pcs", "0,3kg").
-  static final RegExp patternQuantityMetadata = RegExp(
-    r'\d+\s*(Pcs|Stk|kg|g)',
-    caseSensitive: false,
-  );
-
-  /// Pattern to detect price-like numbers not paired with labels.
-  static final RegExp patternStandalonePrice = RegExp(r'^\s*\d+[,.]\d{2}\s*$');
-
-  /// Pattern to match integers that look like product metadata (e.g., 1, 189).
-  static final RegExp patternStandaloneInteger = RegExp(r'^\s*\d+\s*$');
-
-  /// Pattern to filter out suspicious or metadata-like product names.
-  static final RegExp patternSuspiciousProductName = RegExp(
-    r'\bx\s?\d+',
-    caseSensitive: false,
-  );
-
   /// Processes raw OCR text into a structured receipt.
   ///
   /// This is the main entry point for receipt parsing.
@@ -150,7 +87,7 @@ final class ReceiptParser {
     RecognizedAmount? detectedAmount,
   ) {
     if (detectedCompany == null && detectedAmount == null) {
-      final company = patternCompany.stringMatch(line.text);
+      final company = ReceiptPatterns.company.stringMatch(line.text);
       if (company != null) {
         parsed.add(RecognizedCompany(line: line, value: company));
         return true;
@@ -162,7 +99,7 @@ final class ReceiptParser {
   static bool _tryParseSumLabel(TextLine line, List<RecognizedEntity> parsed) {
     final text = ReceiptFormatter.trim(line.text);
 
-    if (patternSumLabel.hasMatch(text)) {
+    if (ReceiptPatterns.sumLabel.hasMatch(text)) {
       parsed.add(RecognizedSumLabel(line: line, value: text));
       return true;
     }
@@ -179,11 +116,11 @@ final class ReceiptParser {
   }
 
   static bool _shouldStopParsing(TextLine line) {
-    return patternStopKeywords.hasMatch(line.text);
+    return ReceiptPatterns.stopKeywords.hasMatch(line.text);
   }
 
   static bool _shouldIgnoreLine(TextLine line) {
-    return patternIgnoreKeywords.hasMatch(line.text);
+    return ReceiptPatterns.ignoreKeywords.hasMatch(line.text);
   }
 
   static bool _tryParseAmount(
@@ -191,7 +128,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double receiptHalfWidth,
   ) {
-    final amount = patternAmount.stringMatch(line.text);
+    final amount = ReceiptPatterns.amount.stringMatch(line.text);
     if (amount != null && line.boundingBox.left > receiptHalfWidth) {
       final locale = _detectsLocale(amount);
       final trimmedAmount = ReceiptFormatter.trim(amount);
@@ -209,7 +146,7 @@ final class ReceiptParser {
   ) {
     if (_isLikelyMetadataLine(line)) return false;
 
-    final unknown = patternUnknown.stringMatch(line.text);
+    final unknown = ReceiptPatterns.unknown.stringMatch(line.text);
     if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
       parsed.add(RecognizedUnknown(line: line, value: line.text));
       return true;
@@ -307,7 +244,7 @@ final class ReceiptParser {
     final yCompare = min(yT, yB);
 
     final isLeftOfAmount = unknownBox.left < amountBounds.left;
-    final isLikelyLabel = ReceiptParser.patternSumLabel.hasMatch(unknownText);
+    final isLikelyLabel = ReceiptPatterns.sumLabel.hasMatch(unknownText);
 
     return !forbidden.contains(unknown) &&
         yCompare <= ReceiptConstants.boundingBoxBuffer &&
@@ -359,15 +296,15 @@ final class ReceiptParser {
   static bool _isLikelyMetadataLine(TextLine line) {
     final text = line.text;
 
-    return patternLikelyNotProduct.hasMatch(text) ||
-        patternUnitPrice.hasMatch(text) ||
-        patternQuantityMetadata.hasMatch(text) ||
-        patternStandaloneInteger.hasMatch(text) ||
-        patternStandalonePrice.hasMatch(text);
+    return ReceiptPatterns.likelyNotProduct.hasMatch(text) ||
+        ReceiptPatterns.quantityMetadata.hasMatch(text) ||
+        ReceiptPatterns.unitPrice.hasMatch(text) ||
+        ReceiptPatterns.standaloneInteger.hasMatch(text) ||
+        ReceiptPatterns.standalonePrice.hasMatch(text);
   }
 
   static List<String> _knownSumLabels() {
-    final source = patternSumLabel.pattern;
+    final source = ReceiptPatterns.sumLabel.pattern;
     final match = RegExp(r'\((.*?)\)').firstMatch(source);
     if (match == null) return [];
 
@@ -384,15 +321,23 @@ final class ReceiptParser {
   }
 
   static bool _isNearbyAmount(Rect sumLabelBounds, RecognizedAmount amount) {
-    final yT = (sumLabelBounds.top - amount.line.boundingBox.top).abs();
-    final yB = (sumLabelBounds.bottom - amount.line.boundingBox.bottom).abs();
+    final amountBox = amount.line.boundingBox;
+
+    final yT = (sumLabelBounds.top - amountBox.top).abs();
+    final yB = (sumLabelBounds.bottom - amountBox.bottom).abs();
+    final yCenter = (sumLabelBounds.top + sumLabelBounds.bottom) / 2;
+
+    final amountCenter = (amountBox.top + amountBox.bottom) / 2;
+    final isAboveOrAligned =
+        amountCenter <= yCenter + ReceiptConstants.boundingBoxBuffer / 2;
+
     final yCompare = min(yT, yB);
-    return yCompare <= ReceiptConstants.boundingBoxBuffer;
+    return isAboveOrAligned && yCompare <= ReceiptConstants.boundingBoxBuffer;
   }
 
   static String? _detectsLocale(String text) {
     if (text.contains('.')) return 'en_US';
-    if (text.contains(',')) return 'eu';
+    if (text.contains(',')) return 'de_DE';
     return Intl.defaultLocale;
   }
 
@@ -501,14 +446,14 @@ final class ReceiptParser {
   }
 
   static void _trimToMatchSum(RecognizedReceipt receipt) {
-    final target = receipt.sum?.value;
+    /*final target = receipt.sum?.value;
     if (target == null || receipt.positions.length <= 1) return;
 
     receipt.positions.removeWhere(
       (pos) =>
           receipt.sum != null &&
           (pos.price.value - receipt.sum!.value).abs() < 0.01 &&
-          ReceiptParser.patternSumLabel.hasMatch(pos.product.value),
+          ReceiptPatterns.sumLabel.hasMatch(pos.product.value),
     );
 
     final positions = [...receipt.positions]
@@ -531,7 +476,7 @@ final class ReceiptParser {
 
         currentSum = newSum;
       }
-    }
+    }*/
   }
 
   static void _filterSuspiciousProducts(RecognizedReceipt receipt) {
@@ -540,7 +485,7 @@ final class ReceiptParser {
     for (final pos in receipt.positions) {
       final productText = ReceiptFormatter.trim(pos.product.value);
 
-      final isSuspicious = ReceiptParser.patternSuspiciousProductName.hasMatch(
+      final isSuspicious = ReceiptPatterns.suspiciousProductName.hasMatch(
         productText,
       );
 
