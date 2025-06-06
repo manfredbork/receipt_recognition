@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.0] - 2025-06-06
+
+### ✨ Added
+
+* **Stable Sum Detection**: The scanner now identifies the most likely total amount by combining confidence and position tracking across multiple frames.
+* **Live Bounding Boxes**: Detected receipt items are now outlined live on the camera preview, making it easier to see what's recognized in real time.
+
+### 🛠️ Changed
+
+* **Metadata Filtering**: The engine is better at ignoring irrelevant lines like footer notes or fiscal metadata, keeping the product list clean.
+* **Enhanced Merge Logic**: Optimized how multi-frame receipts are combined, improving structure and reliability even in fragmented scans.
+
+### 🐛 Fixed
+
+* **Incorrect Totals**: Fixed an issue where prices from unrelated lines could falsely be interpreted as the receipt’s sum.
+* **Layout Glitches**: Resolved occasional misalignments or line skips when processing longer or poorly lit receipts.
+
+---
+
 ## [0.0.9] - 2025-06-03
 
 ### ✨ Added
@@ -15,6 +34,8 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Fixed
 - **Sum Calculation Accuracy**: Fixed cases where incorrect items could cause mismatches with the printed total.
 - **Scan Stability**: Improved reliability of the scan process for varied receipt lengths and layouts.
+
+---
 
 ## [0.0.8] - 2024-05-29
 
@@ -33,10 +54,14 @@ All notable changes to this project will be documented in this file.
 - **Receipt Merging**: Fixed edge cases in receipt merging that could lead to inaccurate total sums
 - **Stability Thresholds**: Adjusted default stability thresholds for more reliable scanning
 
+---
+
 ## [0.0.7] - 2024-05-19
 
 ### 🐛 Fixed
 - **Pass static analysis**: Added curly braces to reach 50/50 points.
+
+---
 
 ## [0.0.6] - 2024-05-18
 
