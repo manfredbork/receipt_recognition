@@ -12,6 +12,9 @@ class PositionOverlay extends StatelessWidget {
   /// Optionally highlights the recognized store/company information.
   final RecognizedCompany? company;
 
+  /// Optionally highlights the recognized sum label.
+  final RecognizedSumLabel? sumLabel;
+
   /// Optionally highlights the recognized total sum.
   final RecognizedSum? sum;
 
@@ -28,6 +31,7 @@ class PositionOverlay extends StatelessWidget {
     required this.imageSize,
     required this.screenSize,
     this.company,
+    this.sumLabel,
     this.sum,
   });
 
@@ -39,6 +43,7 @@ class PositionOverlay extends StatelessWidget {
         imageSize: imageSize,
         screenSize: screenSize,
         company: company,
+        sumLabel: sumLabel,
         sum: sum,
       ),
     );
@@ -48,6 +53,7 @@ class PositionOverlay extends StatelessWidget {
 class _PositionPainter extends CustomPainter {
   final List<RecognizedPosition> positions;
   final RecognizedCompany? company;
+  final RecognizedSumLabel? sumLabel;
   final RecognizedSum? sum;
   final Size imageSize;
   final Size screenSize;
@@ -57,6 +63,7 @@ class _PositionPainter extends CustomPainter {
     required this.imageSize,
     required this.screenSize,
     this.company,
+    this.sumLabel,
     this.sum,
   });
 
@@ -71,6 +78,12 @@ class _PositionPainter extends CustomPainter {
     final paintCompany =
         Paint()
           ..color = Colors.blueAccent.withAlpha(192)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2;
+
+    final paintTotalLabel =
+        Paint()
+          ..color = Colors.red.withAlpha(192)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
@@ -90,6 +103,11 @@ class _PositionPainter extends CustomPainter {
     if (company != null) {
       final rect = _scaleRect(company!.line.boundingBox);
       canvas.drawRect(rect, paintCompany);
+    }
+
+    if (sumLabel != null) {
+      final rect = _scaleRect(sumLabel!.line.boundingBox);
+      canvas.drawRect(rect, paintTotalLabel);
     }
 
     if (sum != null) {

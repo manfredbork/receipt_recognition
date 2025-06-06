@@ -198,6 +198,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                       ),
                       screenSize: MediaQuery.of(context).size,
                       company: _scanProgress?.mergedReceipt?.company,
+                      sumLabel: _scanProgress?.mergedReceipt?.sumLabel,
                       sum: _scanProgress?.mergedReceipt?.sum,
                     ),
                   if (_scanProgress != null && _maxProgress > 0)
