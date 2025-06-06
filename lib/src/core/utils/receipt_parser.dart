@@ -222,15 +222,12 @@ final class ReceiptParser {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
-
     final company = _findCompany(entities);
     final sumLabel = _findSumLabel(entities);
 
     _setReceiptSum(entities, sumLabel, receipt);
     _processAmounts(entities, yUnknowns, receipt, forbidden);
-
-    receipt.company = company;
-
+    _processCompany(company, receipt);
     _filterSuspiciousProducts(receipt);
     _trimToMatchSum(receipt);
 
@@ -253,6 +250,13 @@ final class ReceiptParser {
       }
     }
     return null;
+  }
+
+  static void _processCompany(
+    RecognizedCompany? company,
+    RecognizedReceipt receipt,
+  ) {
+    receipt.company = company;
   }
 
   static void _processAmounts(
