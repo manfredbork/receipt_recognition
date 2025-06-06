@@ -57,6 +57,12 @@ abstract class ReceiptPatterns {
   /// Pattern to match integers that look like product metadata (e.g., 1, 189).
   static final RegExp standaloneInteger = RegExp(r'^\s*\d+\s*$');
 
+  /// Price-like patterns that might appear on the left but are not product names.
+  static final RegExp misleadingPriceLikeLeft = RegExp(
+    r'^\s*-?\d+\s*[.,]\s*\d{2}\s*([€$¢£]?\s*(x\s*\d*)?)?$',
+    caseSensitive: false,
+  );
+
   /// Pattern to filter out suspicious or metadata-like product names.
   static final RegExp suspiciousProductName = RegExp(
     r'\bx\s?\d+',

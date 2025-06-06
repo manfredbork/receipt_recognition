@@ -300,7 +300,8 @@ final class ReceiptParser {
         ReceiptPatterns.quantityMetadata.hasMatch(text) ||
         ReceiptPatterns.unitPrice.hasMatch(text) ||
         ReceiptPatterns.standaloneInteger.hasMatch(text) ||
-        ReceiptPatterns.standalonePrice.hasMatch(text);
+        ReceiptPatterns.standalonePrice.hasMatch(text) ||
+        ReceiptPatterns.misleadingPriceLikeLeft.hasMatch(text);
   }
 
   static List<String> _knownSumLabels() {
@@ -446,7 +447,7 @@ final class ReceiptParser {
   }
 
   static void _trimToMatchSum(RecognizedReceipt receipt) {
-    /*final target = receipt.sum?.value;
+    final target = receipt.sum?.value;
     if (target == null || receipt.positions.length <= 1) return;
 
     receipt.positions.removeWhere(
@@ -476,7 +477,7 @@ final class ReceiptParser {
 
         currentSum = newSum;
       }
-    }*/
+    }
   }
 
   static void _filterSuspiciousProducts(RecognizedReceipt receipt) {
