@@ -239,8 +239,7 @@ final class ReceiptOptimizer implements Optimizer {
     for (final position in receipt.positions) {
       if (isStableSumConfirmed) {
         final matchesStableSum =
-            (position.price.value - stableSum.sum.value).abs() < 0.01 ||
-            position.product.value == stableSum.label.line.text;
+            (position.price.value - stableSum.sum.value).abs() < 0.01;
 
         if (matchesStableSum) continue;
       }
