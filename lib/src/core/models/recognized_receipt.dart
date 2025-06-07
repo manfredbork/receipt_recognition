@@ -145,7 +145,7 @@ class ValidationResult {
 /// Centralized constants shared between receipt parsing and optimization.
 class ReceiptConstants {
   /// Vertical tolerance (in pixels) for comparing bounding box alignment.
-  static const int boundingBoxBuffer = 50;
+  static const int boundingBoxBuffer = 30;
 }
 
 extension ReceiptHash on RecognizedReceipt {

@@ -25,11 +25,11 @@ abstract class Optimizer {
 /// - Applying confidence thresholds
 /// - Merging data from multiple scans
 final class ReceiptOptimizer implements Optimizer {
-  final ReceiptThresholder _thresholder;
   final List<RecognizedGroup> _groups = [];
   final List<RecognizedCompany> _companies = [];
   final List<RecognizedSum> _sums = [];
   final List<_SumCandidate> _sumCandidates = [];
+  final ReceiptThresholder _thresholder;
   final int _loopThreshold;
   final int _sumConfirmationThreshold;
   final int _maxCacheSize;
@@ -37,7 +37,8 @@ final class ReceiptOptimizer implements Optimizer {
   final Duration _invalidateInterval;
 
   bool _shouldInitialize;
-  int _unchangedCount = 0;
+  bool _needsRegrouping;
+  int _unchangedCount;
   String? _lastFingerprint;
 
   /// Creates a new receipt optimizer with configurable thresholds.
@@ -62,7 +63,9 @@ final class ReceiptOptimizer implements Optimizer {
        _maxCacheSize = maxCacheSize,
        _stabilityThreshold = stabilityThreshold,
        _invalidateInterval = invalidateInterval,
-       _shouldInitialize = false;
+       _shouldInitialize = false,
+       _needsRegrouping = false,
+       _unchangedCount = 0;
 
   /// Marks the optimizer for reinitialization on next optimization.
   @override
@@ -103,6 +106,7 @@ final class ReceiptOptimizer implements Optimizer {
       _sums.clear();
       _sumCandidates.clear();
       _shouldInitialize = false;
+      _needsRegrouping = false;
       _unchangedCount = 0;
       _lastFingerprint = null;
     }
@@ -117,6 +121,9 @@ final class ReceiptOptimizer implements Optimizer {
 
     if (_lastFingerprint == fingerprint) {
       _unchangedCount++;
+      if (_unchangedCount == (_loopThreshold ~/ 2)) {
+        _needsRegrouping = true;
+      }
       if (_unchangedCount >= _loopThreshold) {
         return false;
       }
@@ -126,6 +133,14 @@ final class ReceiptOptimizer implements Optimizer {
 
     _lastFingerprint = fingerprint;
     return true;
+  }
+
+  void _forceRegroup() {
+    final allPositions = _groups.expand((g) => g.members).toList();
+    _groups.clear();
+    for (final position in allPositions) {
+      _processPosition(position);
+    }
   }
 
   void _updateCompanies(RecognizedReceipt receipt) {
@@ -250,6 +265,11 @@ final class ReceiptOptimizer implements Optimizer {
       recognizedSum: receipt.sum?.value.toDouble(),
       calculatedSum: receipt.calculatedSum.value.toDouble(),
     );
+
+    if (_needsRegrouping) {
+      _forceRegroup();
+      _needsRegrouping = false;
+    }
   }
 
   void _processPosition(RecognizedPosition position) {
