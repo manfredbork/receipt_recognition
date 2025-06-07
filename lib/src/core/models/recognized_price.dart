@@ -1,3 +1,4 @@
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Represents a price recognized from a receipt.
@@ -16,6 +17,21 @@ final class RecognizedPrice extends RecognizedEntity<num> {
     this.confidence = 0,
     this.position,
   });
+
+  /// Creates a copy of this price with optionally updated properties.
+  RecognizedPrice copyWith({
+    num? value,
+    TextLine? line,
+    int? confidence,
+    RecognizedPosition? position,
+  }) {
+    return RecognizedPrice(
+      value: value ?? this.value,
+      line: line ?? this.line,
+      confidence: confidence ?? this.confidence,
+      position: position ?? this.position,
+    );
+  }
 
   /// Formats the price value using the ReceiptFormatter.
   @override

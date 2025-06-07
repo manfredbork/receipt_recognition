@@ -274,25 +274,29 @@ final class ReceiptOptimizer implements Optimizer {
     RecognizedGroup group,
     int currentBestConfidence,
   ) {
-    final int productConfidence = group.calculateProductConfidence(
+    final productConfidence = group.calculateProductConfidence(
       position.product,
     );
-    final int priceConfidence = group.calculatePriceConfidence(position.price);
-    final int confidence =
-        ((3 * productConfidence + priceConfidence) / 4).toInt();
+    final priceConfidence = group.calculatePriceConfidence(position.price);
+
+    final positionConfidence = position.copyWith(
+      product: position.product.copyWith(confidence: productConfidence),
+      price: position.price.copyWith(confidence: priceConfidence),
+    );
+
     final bool sameTimestamp = group.members.any(
       (p) => position.timestamp == p.timestamp,
     );
 
     final shouldUseGroup =
         !sameTimestamp &&
-        confidence >= _confidenceThreshold &&
-        confidence > currentBestConfidence;
+        positionConfidence.confidence >= _confidenceThreshold &&
+        positionConfidence.confidence > currentBestConfidence;
 
     return _ConfidenceResult(
-      productConfidence: productConfidence,
-      priceConfidence: priceConfidence,
-      confidence: confidence,
+      productConfidence: positionConfidence.product.confidence,
+      priceConfidence: positionConfidence.price.confidence,
+      confidence: positionConfidence.confidence,
       shouldUseGroup: shouldUseGroup,
     );
   }

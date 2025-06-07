@@ -30,24 +30,52 @@ final class RecognizedGroup {
     }
 
     _members.add(position);
+    recalculateAllConfidences();
   }
 
-  /// Calculates confidence score for a product based on text similarity.
+  /// Recalculates product and price confidences for all group members,
+  /// ensuring the latest scores are used for optimization.
   ///
-  /// Uses fuzzy matching to compare the product name with existing members.
-  /// Returns a score from 0-100 indicating confidence level.
+  /// This method is triggered when new members are added to the group.
+  void recalculateAllConfidences() {
+    for (final member in _members) {
+      member.product.confidence = calculateProductConfidence(member.product);
+      member.price.confidence = calculatePriceConfidence(member.price);
+    }
+  }
+
+  /// Calculates an adaptive confidence score for a product name based on similarity
+  /// to previously recognized group members.
+  ///
+  /// Uses fuzzy string matching (partial and full ratio) and penalizes inconsistent
+  /// matches using the standard deviation of scores. This helps prioritize stable
+  /// and coherent groupings over noisy OCR data.
+  ///
+  /// Returns an integer score between 0–100 indicating confidence.
   int calculateProductConfidence(RecognizedProduct product) {
     if (_members.isEmpty) return 0;
-    final total = _members.fold(
-      0,
-      (a, b) =>
-          a +
-          max(
-            partialRatio(product.value, b.product.value),
-            ratio(product.value, b.product.value),
-          ),
-    );
-    return (total / _members.length).toInt();
+
+    final scores =
+        _members.map((b) {
+          final partial = partialRatio(product.value, b.product.value);
+          final full = ratio(product.value, b.product.value);
+          return max(partial, full);
+        }).toList();
+
+    if (scores.isEmpty) return 0;
+
+    final average = scores.reduce((a, b) => a + b) / scores.length;
+
+    final variance =
+        scores
+            .map((s) => (s - average) * (s - average))
+            .reduce((a, b) => a + b) /
+        scores.length;
+
+    final stddev = sqrt(variance);
+    final weight = stddev < 10 ? 1.0 : (100 - stddev) / 100;
+
+    return (average * weight).clamp(0, 100).toInt();
   }
 
   /// Calculates confidence score for a price based on numeric similarity.
@@ -56,16 +84,16 @@ final class RecognizedGroup {
   /// Returns a score from 0-100 indicating confidence level.
   int calculatePriceConfidence(RecognizedPrice price) {
     if (_members.isEmpty) return 0;
-    final total = _members.fold(
-      0,
-      (a, b) =>
-          a +
-          (min(price.value.abs(), b.price.value.abs()) /
-                  max(price.value.abs(), b.price.value.abs()) *
-                  100)
-              .toInt(),
-    );
-    return (total / _members.length).toInt();
+
+    final scores =
+        _members.map((b) {
+          final minVal = min(price.value.abs(), b.price.value.abs());
+          final maxVal = max(price.value.abs(), b.price.value.abs());
+          return (minVal / maxVal * 100).toInt();
+        }).toList();
+
+    final average = scores.reduce((a, b) => a + b) / scores.length;
+    return average.toInt();
   }
 
   /// Gets all position members in this group.
