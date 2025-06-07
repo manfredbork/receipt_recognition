@@ -18,6 +18,15 @@ final class RecognizedPrice extends RecognizedEntity<num> {
     this.position,
   });
 
+  /// Creates a [RecognizedPrice] from a JSON map.
+  factory RecognizedPrice.fromJson(Map<String, dynamic> json) {
+    return RecognizedPrice(
+      value: (json['value'] as num),
+      confidence: json['confidence'] ?? 0,
+      line: DummyTextLine(),
+    );
+  }
+
   /// Creates a copy of this price with optionally updated properties.
   RecognizedPrice copyWith({
     num? value,

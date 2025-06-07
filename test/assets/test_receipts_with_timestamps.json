@@ -1,0 +1,60 @@
+{
+  "too_few_positions": {
+    "positions": [
+      {
+        "product": {
+          "value": "Haribo Colorado",
+          "confidence": 66
+        },
+        "price": {
+          "value": 2.49,
+          "confidence": 75
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Haribo Bumix",
+          "confidence": 83
+        },
+        "price": {
+          "value": 2.49,
+          "confidence": 68
+        },
+        "timestamp": "2024-01-01T12:00:00.001000Z"
+      }
+    ],
+    "sum": {
+      "value": 4.98
+    }
+  },
+  "too_many_positions": {
+    "positions": [
+      {
+        "product": {
+          "value": "Milk 3.8%",
+          "confidence": 95
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Mi lk #",
+          "confidence": 80
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00.001000Z"
+      }
+    ],
+    "sum": {
+      "value": 3.98
+    }
+  }
+}

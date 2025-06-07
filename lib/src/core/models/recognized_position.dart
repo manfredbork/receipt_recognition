@@ -27,6 +27,16 @@ final class RecognizedPosition {
     this.group,
   });
 
+  /// Creates a [RecognizedPosition] from a JSON map.
+  factory RecognizedPosition.fromJson(Map<String, dynamic> json) {
+    return RecognizedPosition(
+      product: RecognizedProduct.fromJson(json['product']),
+      price: RecognizedPrice.fromJson(json['price']),
+      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
+      operation: Operation.none,
+    );
+  }
+
   /// Creates a copy of this position with optionally updated properties.
   RecognizedPosition copyWith({
     RecognizedProduct? product,
