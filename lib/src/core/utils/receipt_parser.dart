@@ -99,8 +99,10 @@ final class ReceiptParser {
   static bool _tryParseSumLabel(TextLine line, List<RecognizedEntity> parsed) {
     final text = ReceiptFormatter.trim(line.text);
 
-    if (ReceiptPatterns.sumLabel.hasMatch(text)) {
-      parsed.add(RecognizedSumLabel(line: line, value: text));
+    final match = ReceiptPatterns.sumLabel.firstMatch(text);
+    if (match != null) {
+      final matchedValue = ReceiptFormatter.trim(match.group(0)!);
+      parsed.add(RecognizedSumLabel(line: line, value: matchedValue));
       return true;
     }
 

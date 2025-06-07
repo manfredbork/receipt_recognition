@@ -52,7 +52,7 @@ final class ReceiptOptimizer implements Optimizer {
   ReceiptOptimizer({
     int loopThreshold = 10,
     int sumConfirmationThreshold = 2,
-    int maxCacheSize = 25,
+    int maxCacheSize = 10,
     int confidenceThreshold = 75,
     int stabilityThreshold = 50,
     Duration invalidateInterval = const Duration(seconds: 1),
@@ -330,15 +330,21 @@ final class ReceiptOptimizer implements Optimizer {
 
     for (final group in stableGroups) {
       final best = maxBy(group.members, (p) => p.confidence);
-      if (best != null) {
-        mergedReceipt.positions.add(best);
-      }
+      final latest = maxBy(group.members, (p) => p.timestamp);
 
-      if (mergedReceipt.positions.length >= receipt.positions.length) break;
+      if (best != null && latest != null) {
+        final patched = best.copyWith(
+          product: best.product.copyWith(line: latest.product.line),
+          price: best.price.copyWith(line: latest.price.line),
+        )..operation = latest.operation;
+
+        mergedReceipt.positions.add(patched);
+      }
     }
 
-    mergedReceipt.company = receipt.company;
-    mergedReceipt.sum = receipt.sum;
+    mergedReceipt.company ??= receipt.company;
+    mergedReceipt.sum ??= receipt.sum;
+    mergedReceipt.sumLabel ??= receipt.sumLabel;
 
     _removeSingleOutlierToMatchSum(mergedReceipt);
 
