@@ -32,7 +32,9 @@ final class RecognizedPosition {
     return RecognizedPosition(
       product: RecognizedProduct.fromJson(json['product']),
       price: RecognizedPrice.fromJson(json['price']),
-      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
+      timestamp: DateTime.parse(
+        json['timestamp'] ?? DateTime.now().toIso8601String(),
+      ),
       operation: Operation.none,
     );
   }

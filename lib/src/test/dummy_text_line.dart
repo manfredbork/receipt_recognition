@@ -6,13 +6,14 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 ///
 /// Required because RecognizedEntity expects a real `TextLine`.
 class DummyTextLine extends TextLine {
-  DummyTextLine() : super(
-    text: '',
-    recognizedLanguages: [],
-    boundingBox: Rect.zero,
-    cornerPoints: [],
-    elements: [],
-    confidence: null,
-    angle: null,
-  );
+  DummyTextLine()
+    : super(
+        text: '',
+        recognizedLanguages: [],
+        boundingBox: Rect.zero,
+        cornerPoints: [],
+        elements: [],
+        confidence: null,
+        angle: null,
+      );
 }

@@ -38,15 +38,17 @@ class RecognizedReceipt {
   /// Creates a [RecognizedReceipt] from a JSON map for testing or deserialization.
   factory RecognizedReceipt.fromJson(Map<String, dynamic> json) {
     return RecognizedReceipt(
-      positions: (json['positions'] as List)
-          .map((p) => RecognizedPosition.fromJson(p))
-          .toList(),
-      sum: json['sum'] != null
-          ? RecognizedSum(
-        value: (json['sum']['value'] as num),
-        line: DummyTextLine(),
-      )
-          : null,
+      positions:
+          (json['positions'] as List)
+              .map((p) => RecognizedPosition.fromJson(p))
+              .toList(),
+      sum:
+          json['sum'] != null
+              ? RecognizedSum(
+                value: (json['sum']['value'] as num),
+                line: DummyTextLine(),
+              )
+              : null,
       timestamp: DateTime.now(),
       entities: [],
     );

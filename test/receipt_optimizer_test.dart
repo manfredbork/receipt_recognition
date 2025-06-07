@@ -16,7 +16,10 @@ void main() {
     final receipt = RecognizedReceipt.fromJson(
       testReceipts['too_few_positions'],
     );
-    final optimizer = ReceiptOptimizer(maxCacheSize: 2, confidenceThreshold: 60);
+    final optimizer = ReceiptOptimizer(
+      maxCacheSize: 2,
+      confidenceThreshold: 60,
+    );
 
     final result = optimizer.optimize(receipt, force: true);
 
@@ -27,7 +30,10 @@ void main() {
     final receipt = RecognizedReceipt.fromJson(
       testReceipts['too_many_positions'],
     );
-    final optimizer = ReceiptOptimizer(maxCacheSize: 2, confidenceThreshold: 90);
+    final optimizer = ReceiptOptimizer(
+      maxCacheSize: 2,
+      confidenceThreshold: 90,
+    );
 
     final result = optimizer.optimize(receipt, force: true);
 
