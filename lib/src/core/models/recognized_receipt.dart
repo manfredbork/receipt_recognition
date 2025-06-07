@@ -35,6 +35,25 @@ class RecognizedReceipt {
   factory RecognizedReceipt.empty() =>
       RecognizedReceipt(positions: [], timestamp: DateTime.now(), entities: []);
 
+  /// Creates a [RecognizedReceipt] from a JSON map for testing or deserialization.
+  factory RecognizedReceipt.fromJson(Map<String, dynamic> json) {
+    return RecognizedReceipt(
+      positions:
+          (json['positions'] as List)
+              .map((p) => RecognizedPosition.fromJson(p))
+              .toList(),
+      sum:
+          json['sum'] != null
+              ? RecognizedSum(
+                value: (json['sum']['value'] as num),
+                line: DummyTextLine(),
+              )
+              : null,
+      timestamp: DateTime.now(),
+      entities: [],
+    );
+  }
+
   /// Creates a copy of this receipt with optionally updated properties.
   RecognizedReceipt copyWith({
     RecognizedCompany? company,
@@ -126,7 +145,7 @@ class ValidationResult {
 /// Centralized constants shared between receipt parsing and optimization.
 class ReceiptConstants {
   /// Vertical tolerance (in pixels) for comparing bounding box alignment.
-  static const int boundingBoxBuffer = 50;
+  static const int boundingBoxBuffer = 30;
 }
 
 extension ReceiptHash on RecognizedReceipt {

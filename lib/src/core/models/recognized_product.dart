@@ -18,6 +18,15 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     this.position,
   });
 
+  /// Creates a [RecognizedProduct] from a JSON map.
+  factory RecognizedProduct.fromJson(Map<String, dynamic> json) {
+    return RecognizedProduct(
+      value: json['value'],
+      confidence: json['confidence'] ?? 0,
+      line: DummyTextLine(),
+    );
+  }
+
   /// Creates a copy of this product with optionally updated properties.
   RecognizedProduct copyWith({
     String? value,

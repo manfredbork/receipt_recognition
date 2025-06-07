@@ -29,37 +29,43 @@ final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedCompany> _companies = [];
   final List<RecognizedSum> _sums = [];
   final List<_SumCandidate> _sumCandidates = [];
-  final int _loopThreshold = 3;
+  final ReceiptThresholder _thresholder;
+  final int _loopThreshold;
   final int _sumConfirmationThreshold;
   final int _maxCacheSize;
-  final int _confidenceThreshold;
   final int _stabilityThreshold;
   final Duration _invalidateInterval;
 
   bool _shouldInitialize;
-  int _unchangedCount = 0;
+  bool _needsRegrouping;
+  int _unchangedCount;
   String? _lastFingerprint;
 
   /// Creates a new receipt optimizer with configurable thresholds.
   ///
   /// Parameters:
+  /// - [loopThreshold]: Number of identical consecutive results before optimization halts
   /// - [sumConfirmationThreshold]: Minimum number of matching detections to confirm a sum
   /// - [maxCacheSize]: Maximum number of items to keep in memory
   /// - [confidenceThreshold]: Minimum confidence score (0-100) for matching
   /// - [stabilityThreshold]: Minimum stability score (0-100) for groups
   /// - [invalidateInterval]: Time after which unstable groups are removed
   ReceiptOptimizer({
+    int loopThreshold = 10,
     int sumConfirmationThreshold = 2,
-    int maxCacheSize = 50,
+    int maxCacheSize = 10,
     int confidenceThreshold = 75,
     int stabilityThreshold = 50,
     Duration invalidateInterval = const Duration(seconds: 1),
-  }) : _sumConfirmationThreshold = sumConfirmationThreshold,
+  }) : _thresholder = ReceiptThresholder(baseThreshold: confidenceThreshold),
+       _loopThreshold = loopThreshold,
+       _sumConfirmationThreshold = sumConfirmationThreshold,
        _maxCacheSize = maxCacheSize,
-       _confidenceThreshold = confidenceThreshold,
        _stabilityThreshold = stabilityThreshold,
        _invalidateInterval = invalidateInterval,
-       _shouldInitialize = false;
+       _shouldInitialize = false,
+       _needsRegrouping = false,
+       _unchangedCount = 0;
 
   /// Marks the optimizer for reinitialization on next optimization.
   @override
@@ -74,7 +80,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// - Sum validation and correction
   /// - Position grouping and confidence scoring
   @override
-  RecognizedReceipt optimize(RecognizedReceipt receipt) {
+  RecognizedReceipt optimize(RecognizedReceipt receipt, {force = false}) {
     if (!_checkConvergence(receipt)) {
       return receipt;
     }
@@ -88,13 +94,9 @@ final class ReceiptOptimizer implements Optimizer {
     _resetOperations();
     _processPositions(receipt);
 
-    final newReceipt = _createOptimizedReceipt(receipt);
-
-    final isBetter =
-        newReceipt.isValid &&
-        newReceipt.positions.length >= receipt.positions.length;
-
-    return isBetter ? newReceipt : receipt;
+    return !force && receipt.isValid
+        ? receipt
+        : _createOptimizedReceipt(receipt);
   }
 
   void _initializeIfNeeded() {
@@ -104,6 +106,7 @@ final class ReceiptOptimizer implements Optimizer {
       _sums.clear();
       _sumCandidates.clear();
       _shouldInitialize = false;
+      _needsRegrouping = false;
       _unchangedCount = 0;
       _lastFingerprint = null;
     }
@@ -118,6 +121,9 @@ final class ReceiptOptimizer implements Optimizer {
 
     if (_lastFingerprint == fingerprint) {
       _unchangedCount++;
+      if (_unchangedCount == (_loopThreshold ~/ 2)) {
+        _needsRegrouping = true;
+      }
       if (_unchangedCount >= _loopThreshold) {
         return false;
       }
@@ -127,6 +133,14 @@ final class ReceiptOptimizer implements Optimizer {
 
     _lastFingerprint = fingerprint;
     return true;
+  }
+
+  void _forceRegroup() {
+    final allPositions = _groups.expand((g) => g.members).toList();
+    _groups.clear();
+    for (final position in allPositions) {
+      _processPosition(position);
+    }
   }
 
   void _updateCompanies(RecognizedReceipt receipt) {
@@ -246,6 +260,16 @@ final class ReceiptOptimizer implements Optimizer {
 
       _processPosition(position);
     }
+
+    _thresholder.update(
+      recognizedSum: receipt.sum?.value.toDouble(),
+      calculatedSum: receipt.calculatedSum.value.toDouble(),
+    );
+
+    if (_needsRegrouping) {
+      _forceRegroup();
+      _needsRegrouping = false;
+    }
   }
 
   void _processPosition(RecognizedPosition position) {
@@ -274,25 +298,31 @@ final class ReceiptOptimizer implements Optimizer {
     RecognizedGroup group,
     int currentBestConfidence,
   ) {
-    final int productConfidence = group.calculateProductConfidence(
+    final productConfidence = group.calculateProductConfidence(
       position.product,
     );
-    final int priceConfidence = group.calculatePriceConfidence(position.price);
-    final int confidence =
-        ((3 * productConfidence + priceConfidence) / 4).toInt();
+    final priceConfidence = group.calculatePriceConfidence(position.price);
+
+    final positionConfidence = position.copyWith(
+      product: position.product.copyWith(confidence: productConfidence),
+      price: position.price.copyWith(confidence: priceConfidence),
+    );
+
     final bool sameTimestamp = group.members.any(
       (p) => position.timestamp == p.timestamp,
     );
 
+    final effectiveThreshold = _thresholder.threshold;
+
     final shouldUseGroup =
         !sameTimestamp &&
-        confidence >= _confidenceThreshold &&
-        confidence > currentBestConfidence;
+        positionConfidence.confidence >= effectiveThreshold &&
+        positionConfidence.confidence > currentBestConfidence;
 
     return _ConfidenceResult(
-      productConfidence: productConfidence,
-      priceConfidence: priceConfidence,
-      confidence: confidence,
+      productConfidence: positionConfidence.product.confidence,
+      priceConfidence: positionConfidence.price.confidence,
+      confidence: positionConfidence.confidence,
       shouldUseGroup: shouldUseGroup,
     );
   }
@@ -312,37 +342,33 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   RecognizedReceipt _createOptimizedReceipt(RecognizedReceipt receipt) {
-    if (receipt.positions.isEmpty && receipt.isValid) {
-      return receipt;
-    }
-
     final stableGroups = _groups.where(
       (g) => g.stability >= _stabilityThreshold,
     );
-
-    if (stableGroups.isEmpty) return receipt;
 
     final mergedReceipt = RecognizedReceipt.empty();
 
     for (final group in stableGroups) {
       final best = maxBy(group.members, (p) => p.confidence);
-      if (best != null) {
-        mergedReceipt.positions.add(best);
-      }
+      final latest = maxBy(group.members, (p) => p.timestamp);
 
-      if (mergedReceipt.positions.length >= receipt.positions.length) break;
+      if (best != null && latest != null) {
+        final patched = best.copyWith(
+          product: best.product.copyWith(line: latest.product.line),
+          price: best.price.copyWith(line: latest.price.line),
+        )..operation = latest.operation;
+
+        mergedReceipt.positions.add(patched);
+      }
     }
 
-    mergedReceipt.company = receipt.company;
-    mergedReceipt.sum = receipt.sum;
+    mergedReceipt.company ??= receipt.company;
+    mergedReceipt.sum ??= receipt.sum;
+    mergedReceipt.sumLabel ??= receipt.sumLabel;
 
     _removeSingleOutlierToMatchSum(mergedReceipt);
 
-    final isBetter =
-        mergedReceipt.isValid ||
-        mergedReceipt.positions.length >= receipt.positions.length;
-
-    return isBetter ? mergedReceipt : receipt;
+    return mergedReceipt;
   }
 
   void _removeSingleOutlierToMatchSum(RecognizedReceipt receipt) {
