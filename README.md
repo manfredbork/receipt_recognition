@@ -200,10 +200,6 @@ The optimizer:
 | Line Item Recognition   | ✅ Complete    | Products with prices           |
 | Receipt Merging         | ✅ Complete    | For improved accuracy          |
 | Product Normalization   | ✅ Complete    | Standardizes product names     |
-| Multi-language Support  | ⚠️ Partial     | Focus on English and German    |
-| Original Item Ordering  | ❌ Planned     | Preserving receipt line order  |
-| TSE Detection           | 🔄 In Progress | Coming soon                    |
-| Tax/Discount Detection  | 🔄 In Progress | Coming soon                    |
 +-------------------------+----------------+--------------------------------+
 ```
 
@@ -262,7 +258,7 @@ Better for real-time scanning with a live preview:
 
 ### Receipt Validation and Manual Acceptance
 
-The package includes a robust validation system that verifies receipt completeness based on the match between calculated sum (from line items) and the detected total sum. Four validation states are possible:
+The package includes a robust validation system that verifies receipt completeness based on the match between the calculated sum (from line items) and the detected total sum. Four validation states are possible:
 
 ```
 +-------------------------+------------------------+-------------------------+
@@ -362,27 +358,6 @@ void acceptCurrentReceipt() {
 
 This workflow enables you to build UIs that show the user scanning progress and offer manual acceptance for receipts that don't achieve perfect validation but are still usable.
 
-### Upcoming: Spatial Position-Based Item Ordering
-
-A key upcoming feature is the preservation of original item ordered from receipts across multiple scans. The planned algorithm will:
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌───────────────────┐
-│ Vertical        │     │ Confidence-Based │     │ Consistent        │
-│ Position Mapping│────▶│ Order Resolution │────▶│ Order Preservation│
-└─────────────────┘     └──────────────────┘     └───────────────────┘
-```
-
-1. **Y-coordinate tracking**: Record precise vertical positions of items during OCR
-2. **Spatial relationship graph**: Build a directed graph representing item positions
-3. **Topological sorting**: Determine optimal ordering that preserves receipt structure
-4. **Confidence weighting**: Prioritize positions with higher recognition confidence
-5. **Order stabilization**: Maintain consistent ordering across multiple scans
-
-This enhancement will significantly improve the usability of expense tracking and financial applications that require precise item order preservation.
-
----
-
 ## 📦 Release Notes
 
 See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version history.
@@ -394,11 +369,6 @@ See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version 
 - [x] Product name normalization
 - [x] Long receipt support and merging mechanism
 - [x] Multi-language receipt support (English and German)
-- [ ] Original item ordering preservation
-- [ ] TSE detection and categorization
-- [ ] Tax and discount detection
-- [ ] Smart OCR region selection
-- [ ] Additional language support (French, Spanish, Italian)
 
 ---
 
