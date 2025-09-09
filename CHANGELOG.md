@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2025-09-09
+
+### 📚 Documentation
+- Streamlined README to reflect current capabilities and scope.
+- Removed outdated roadmap/status references and aligned wording with the present feature set.
+- Clarified Implementation Status and reorganized sections for better readability.
+- Minor copyedits for consistency (terminology, headings, and formatting).
+
+### 🧩 Notes
+- No API changes.
+- No functional changes to recognition logic.
+
+---
+
 ## [0.1.0] - 2025-06-06
 
 ### ✨ Added
