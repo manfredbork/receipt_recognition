@@ -96,6 +96,10 @@ final class ReceiptRecognizer {
       validation,
     );
 
+    if (_validScans < _minValidScans && !_singleScan) {
+      return null;
+    }
+
     if (validation.matchPercentage == 100) {
       return Future.delayed(_scanCompleteDelay, () => finalReceipt);
     }
@@ -157,9 +161,8 @@ final class ReceiptRecognizer {
   }
 
   double _calculateMatchPercentage(RecognizedReceipt receipt) {
-    final totalValidScans = _singleScan ? 1 : _minValidScans;
-    final calculatedNumerator = receipt.calculatedSum.value + _validScans;
-    final calculatedDenominator = receipt.sum!.value + totalValidScans;
+    final calculatedNumerator = receipt.calculatedSum.value;
+    final calculatedDenominator = receipt.sum!.value;
     return (calculatedNumerator < calculatedDenominator)
         ? (calculatedNumerator / calculatedDenominator * 100)
         : (calculatedDenominator / calculatedNumerator * 100);
@@ -206,7 +209,7 @@ final class ReceiptRecognizer {
         print('🏪 Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
         const int totalWidth = 40;
         for (final position in optimizedReceipt.positions) {
-          final product = position.product.text;
+          final product = position.product.normalizedText;
           final price = position.price.formattedValue;
           print('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
         }
