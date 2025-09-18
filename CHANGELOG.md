@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2025-09-18
+
+### 🐛 Fixed
+- **Scan Validation**: Fixed the issue where scans could complete prematurely before reaching the minimum valid scan count
+- **Match Percentage Calculation**: Corrected calculation logic for sum match percentage to use actual values instead of scan-weighted values
+- **Ignore Keywords**: Added "Subtotal" to the list of keywords to ignore during product recognition
+
+### 🛠️ Changed
+- **Product Display**: Updated debug output to use normalized product text for better consistency
+- **Recognition Accuracy**: Enhanced filtering of non-product lines to improve overall scan quality
+
+### 🧩 Notes
+- No API changes
+- Improved scanning reliability and accuracy
+
+---
+
 ## [0.1.1] - 2025-09-09
 
 ### 📚 Documentation
