@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2025-09-19
+
+### 🐛 Fixed
+- **ReceiptRecognizer**: Fixed scan counter reset issue that was preventing proper scan completion
+- **iOS Deployment**: Updated minimum iOS deployment target to 13.0 for compatibility
+
+### 🛠️ Changed
+- **ReceiptRecognizer**: Increased default `minValidScans` from 3 to 5 for more reliable scanning
+
+### 🧩 Notes
+- No breaking API changes
+- Improved scanning stability and iOS deployment compatibility
+
+---
+
 ## [0.1.2] - 2025-09-18
 
 ### 🐛 Fixed

@@ -43,7 +43,7 @@ final class ReceiptRecognizer {
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
     bool singleScan = false,
-    int minValidScans = 3,
+    int minValidScans = 5,
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 50),
     Duration scanTimeout = const Duration(seconds: 30),
@@ -233,7 +233,6 @@ final class ReceiptRecognizer {
     _initializedScan = null;
     _optimizer.init();
     _onScanComplete?.call(receipt);
-    _validScans = 0;
     return receipt;
   }
 
