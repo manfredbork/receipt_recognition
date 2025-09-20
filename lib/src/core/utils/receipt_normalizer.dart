@@ -10,16 +10,8 @@ final class ReceiptNormalizer {
   static String? normalizeByAlternativeTexts(List<String> alternativeTexts) {
     if (alternativeTexts.isEmpty) return null;
     final frequencyTexts = sortByFrequency(alternativeTexts);
-    final List<String> normalizedTexts = [];
-    for (final frequencyText in frequencyTexts) {
-      final text = normalizeTail(
-        normalizeSpecialSpaces(frequencyText, frequencyTexts),
-      );
-      normalizedTexts.add(text);
-    }
-    final normalizedText = normalizeSpecialChars(
-      normalizedTexts.last,
-      normalizedTexts,
+    final normalizedText = normalizeTail(
+      normalizeSpecialSpaces(frequencyTexts.last, frequencyTexts),
     );
     return normalizedText;
   }
@@ -45,44 +37,6 @@ final class ReceiptNormalizer {
       }
     }
     return shortenValue;
-  }
-
-  /// Normalizes special characters by comparing with alternative recognitions.
-  ///
-  /// Improves text quality by replacing problematic characters with more likely
-  /// alternatives based on comparisons with other recognized versions.
-  static String normalizeSpecialChars(
-    String bestText,
-    List<String> otherTexts,
-  ) {
-    String normalizedText = '';
-    for (int i = 0; i < otherTexts.length; i++) {
-      final differentValue = bestText != otherTexts[i];
-      final sameLength = bestText.length == otherTexts[i].length;
-      if (differentValue && sameLength) {
-        normalizedText = '';
-        for (int j = 0; j < bestText.length; j++) {
-          final char = bestText[j];
-          final compareChar = otherTexts[i][j];
-          if (RegExp(r'[@#^*()?":{}|<>]').hasMatch(char) &&
-              RegExp(r'[A-Za-z0-9]').hasMatch(compareChar)) {
-            normalizedText += compareChar;
-          } else if (RegExp(r'[^A-Za-z ]').hasMatch(char) &&
-              RegExp(
-                r'[A-Za-zßàâäèéêëîïôœùûüÿçÀÂÄÈÉÊËÎÏÔŒÙÛÜŸÇ]',
-              ).hasMatch(compareChar)) {
-            normalizedText += compareChar;
-          } else {
-            normalizedText += char;
-          }
-        }
-        bestText = normalizedText;
-      }
-    }
-    if (normalizedText.isEmpty) {
-      return bestText;
-    }
-    return normalizedText;
   }
 
   /// Normalizes spaces by analyzing word boundaries across multiple recognitions.
