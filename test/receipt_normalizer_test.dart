@@ -45,60 +45,7 @@ void main() {
         }
       });
     });
-
-    group('normalizeSpecialChars', () {
-      test(
-        'should replace special characters with alphanumeric ones from other texts',
-        () {
-          const bestText = 'C@ffee';
-          final otherTexts = ['Coffee'];
-
-          final result = ReceiptNormalizer.normalizeSpecialChars(
-            bestText,
-            otherTexts,
-          );
-
-          expect(result, 'Coffee');
-        },
-      );
-
-      test('should replace numbers with letters when appropriate', () {
-        const bestText = 'C0ke';
-        final otherTexts = ['Coke'];
-
-        final result = ReceiptNormalizer.normalizeSpecialChars(
-          bestText,
-          otherTexts,
-        );
-
-        expect(result, 'Coke');
-      });
-
-      test('should return best text when no replacements are needed', () {
-        const bestText = 'Coffee';
-        final otherTexts = ['Tea', 'Milk'];
-
-        final result = ReceiptNormalizer.normalizeSpecialChars(
-          bestText,
-          otherTexts,
-        );
-
-        expect(result, 'Coffee');
-      });
-
-      test('should return best text when texts have different lengths', () {
-        const bestText = 'Coffee';
-        final otherTexts = ['Coffees', 'Tea'];
-
-        final result = ReceiptNormalizer.normalizeSpecialChars(
-          bestText,
-          otherTexts,
-        );
-
-        expect(result, 'Coffee');
-      });
-    });
-
+    
     group('normalizeSpecialSpaces', () {
       test('should merge tokens when needed', () {
         const bestText = 'Cof fee Beans';

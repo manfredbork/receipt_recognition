@@ -78,7 +78,6 @@ final class ReceiptRecognizer {
     _lastScan = now;
 
     final receipt = await _recognizeReceipt(inputImage);
-    if (receipt == null) return null;
 
     final optimizedReceipt = _optimizer.optimize(receipt);
 
@@ -107,7 +106,7 @@ final class ReceiptRecognizer {
     return finalReceipt;
   }
 
-  Future<RecognizedReceipt?> _recognizeReceipt(InputImage inputImage) async {
+  Future<RecognizedReceipt> _recognizeReceipt(InputImage inputImage) async {
     final text = await _textRecognizer.processImage(inputImage);
     return await ReceiptTextProcessor.processText(text);
   }
@@ -230,8 +229,10 @@ final class ReceiptRecognizer {
   ) {
     _handleOnScanUpdate(receipt, validationResult);
 
-    _initializedScan = null;
-    _optimizer.init();
+    if (_validScans >= _minValidScans || _singleScan) {
+      _initializedScan = null;
+      _optimizer.init();
+    }
     _onScanComplete?.call(receipt);
     return receipt;
   }

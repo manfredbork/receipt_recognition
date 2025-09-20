@@ -15,7 +15,7 @@ final class ReceiptParser {
   /// Processes raw OCR text into a structured receipt.
   ///
   /// This is the main entry point for receipt parsing.
-  static RecognizedReceipt? processText(RecognizedText text) {
+  static RecognizedReceipt processText(RecognizedText text) {
     final lines = _convertText(text);
     final parsedEntities = _parseLines(lines);
     final filteredEntities = _filterIntermediaryEntities(parsedEntities);
@@ -157,7 +157,7 @@ final class ReceiptParser {
     return false;
   }
 
-  static RecognizedReceipt? _buildReceipt(List<RecognizedEntity> entities) {
+  static RecognizedReceipt _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
