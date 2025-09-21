@@ -37,6 +37,7 @@ dependencies:
   camera: ^0.10.5+9
   google_mlkit_text_recognition: ^0.15.0
   audioplayers: ^5.2.1
+  opencv_dart: ^1.2.1
   receipt_recognition:
     path: ../
 

@@ -10,12 +10,20 @@ class ReceiptTextProcessor {
   /// Processes recognized text into a receipt structure in a background isolate.
   ///
   /// Uses Dart's compute function to run the parsing on a separate thread.
-  static Future<RecognizedReceipt> processText(RecognizedText text) async {
-    return compute(_parseTextInBackground, text);
+  static Future<RecognizedReceipt> processText(
+    RecognizedText text,
+    Map<String, Map<String, String>> options,
+  ) async {
+    return compute(_parseTextInBackground, {'text': text, 'options': options});
   }
 
   /// Background processing function that runs in the isolate.
-  static RecognizedReceipt _parseTextInBackground(RecognizedText text) {
-    return ReceiptParser.processText(text);
+  static RecognizedReceipt _parseTextInBackground(
+    Map<String, dynamic> textAndOptions,
+  ) {
+    return ReceiptParser.processText(
+      textAndOptions['text'],
+      textAndOptions['options'],
+    );
   }
 }

@@ -15,9 +15,12 @@ final class ReceiptParser {
   /// Processes raw OCR text into a structured receipt.
   ///
   /// This is the main entry point for receipt parsing.
-  static RecognizedReceipt processText(RecognizedText text) {
+  static RecognizedReceipt processText(
+    RecognizedText text,
+    Map<String, Map<String, String>> options,
+  ) {
     final lines = _convertText(text);
-    final parsedEntities = _parseLines(lines);
+    final parsedEntities = _parseLines(lines, options);
     final filteredEntities = _filterIntermediaryEntities(parsedEntities);
     return _buildReceipt(filteredEntities);
   }
@@ -27,10 +30,32 @@ final class ReceiptParser {
       ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
-  static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
+  static Map<String, dynamic> _buildCustomCompanyDetection(
+    Map<String, Map<String, String>> options,
+  ) {
+    String regexp = '';
+    Map<String, String> mapping = {};
+    if (options.containsKey('stores')) {
+      final stores = options['stores'] ?? {};
+      for (final key in stores.keys) {
+        regexp += (regexp.isEmpty ? key : '|$key');
+        mapping[key.toLowerCase()] = stores[key]!;
+      }
+    }
+    return {
+      'regexp': RegExp('($regexp)', caseSensitive: false),
+      'mapping': mapping,
+    };
+  }
+
+  static List<RecognizedEntity> _parseLines(
+    List<TextLine> lines,
+    Map<String, Map<String, String>> options,
+  ) {
     final parsed = <RecognizedEntity>[];
     final bounds = RecognizedBounds.fromLines(lines);
     final receiptHalfWidth = (bounds.minLeft + bounds.maxRight) / 2;
+    final customCompanyDetection = _buildCustomCompanyDetection(options);
 
     RecognizedCompany? detectedCompany;
     RecognizedSumLabel? detectedSumLabel;
@@ -41,7 +66,13 @@ final class ReceiptParser {
         continue;
       }
 
-      if (_tryParseCompany(line, parsed, detectedCompany, detectedAmount)) {
+      if (_tryParseCompany(
+        line,
+        parsed,
+        detectedCompany,
+        detectedAmount,
+        customCompanyDetection,
+      )) {
         detectedCompany = parsed.last as RecognizedCompany;
         continue;
       }
@@ -85,8 +116,23 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     RecognizedCompany? detectedCompany,
     RecognizedAmount? detectedAmount,
+    Map<String, dynamic> customCompanyDetection,
   ) {
     if (detectedCompany == null && detectedAmount == null) {
+      final customCompanyRegExp = customCompanyDetection['regexp'];
+      if (customCompanyRegExp is RegExp) {
+        final customCompany = customCompanyRegExp.stringMatch(line.text);
+        if (customCompany != null) {
+          if (customCompanyDetection['mapping'] is Map<String, String>) {
+            final key = customCompany.toLowerCase();
+            final value = customCompanyDetection['mapping'][key];
+            if (value != null) {
+              parsed.add(RecognizedCompany(line: line, value: value));
+              return true;
+            }
+          }
+        }
+      }
       final company = ReceiptPatterns.company.stringMatch(line.text);
       if (company != null) {
         parsed.add(RecognizedCompany(line: line, value: company));

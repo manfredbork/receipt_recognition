@@ -1,6 +1,7 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:example/services/camera_handler_mixin.dart';
+import 'package:example/services/image_preprocessor.dart';
 import 'package:example/widgets/position_overlay.dart';
 import 'package:example/widgets/receipt_widget.dart';
 import 'package:example/widgets/scan_info_screen.dart';
@@ -55,6 +56,9 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     super.initState();
     _audioPlayer.setSource(AssetSource('sounds/checkout_beep.mp3'));
     _receiptRecognizer = ReceiptRecognizer(
+      options: {
+        'stores': {'supermarket-pattern-name': 'supermarket-display-name'},
+      },
       onScanUpdate: _onScanUpdate,
       onScanTimeout: _onScanTimeout,
     );
@@ -131,8 +135,35 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
       return;
     }
     _isBusy = true;
+
+    InputImage processedMlkitImage;
+
+    if (inputImage.bytes != null) {
+      try {
+        final preprocessedBytes = await ImagePreprocessor.preprocessForOCR(
+          inputImage.bytes!,
+        );
+
+        processedMlkitImage = InputImage.fromBytes(
+          bytes: preprocessedBytes,
+          metadata: InputImageMetadata(
+            size: inputImage.metadata!.size,
+            rotation: inputImage.metadata!.rotation,
+            format: inputImage.metadata!.format,
+            bytesPerRow: inputImage.metadata!.bytesPerRow,
+          ),
+        );
+      } catch (e) {
+        processedMlkitImage = inputImage;
+      }
+    } else {
+      processedMlkitImage = inputImage;
+    }
+
     try {
-      final receipt = await _receiptRecognizer?.processImage(inputImage);
+      final receipt = await _receiptRecognizer?.processImage(
+        processedMlkitImage,
+      );
       if (_isValidReceipt(receipt)) {
         _handleSuccessfulScan(receipt!);
       }
