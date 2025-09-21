@@ -9,6 +9,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 final class ReceiptRecognizer {
   final TextRecognizer _textRecognizer;
   final Optimizer _optimizer;
+  final Map<String, Map<String, String>> _options;
   final bool _singleScan;
   final int _minValidScans;
   final int _nearlyCompleteThreshold;
@@ -29,6 +30,7 @@ final class ReceiptRecognizer {
   /// - [textRecognizer]: Custom text recognizer (uses default if not provided)
   /// - [optimizer]: Custom optimizer (uses default if not provided)
   /// - [script]: Script type for text recognition
+  /// - [options]: Options to pass to receipt parser
   /// - [singleScan]: Whether to use single-scan mode or continuous scanning
   /// - [minValidScans]: Number of valid scans required for acceptance
   /// - [nearlyCompleteThreshold]: Percentage threshold for nearly complete receipts
@@ -42,10 +44,11 @@ final class ReceiptRecognizer {
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
+    Map<String, Map<String, String>> options = const {},
     bool singleScan = false,
     int minValidScans = 5,
     int nearlyCompleteThreshold = 95,
-    Duration scanInterval = const Duration(milliseconds: 50),
+    Duration scanInterval = const Duration(milliseconds: 100),
     Duration scanTimeout = const Duration(seconds: 30),
     Duration scanCompleteDelay = const Duration(milliseconds: 500),
     VoidCallback? onScanTimeout,
@@ -53,6 +56,7 @@ final class ReceiptRecognizer {
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(),
+       _options = options,
        _singleScan = singleScan,
        _minValidScans = minValidScans,
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
@@ -77,7 +81,7 @@ final class ReceiptRecognizer {
 
     _lastScan = now;
 
-    final receipt = await _recognizeReceipt(inputImage);
+    final receipt = await _recognizeReceipt(inputImage, _options);
 
     final optimizedReceipt = _optimizer.optimize(receipt);
 
@@ -106,9 +110,12 @@ final class ReceiptRecognizer {
     return finalReceipt;
   }
 
-  Future<RecognizedReceipt> _recognizeReceipt(InputImage inputImage) async {
+  Future<RecognizedReceipt> _recognizeReceipt(
+    InputImage inputImage,
+    Map<String, Map<String, String>> options,
+  ) async {
     final text = await _textRecognizer.processImage(inputImage);
-    return await ReceiptTextProcessor.processText(text);
+    return await ReceiptTextProcessor.processText(text, options);
   }
 
   RecognizedReceipt? _handleValidationResult(

@@ -3,6 +3,37 @@ PODS:
     - Flutter
   - camera_avfoundation (0.0.1):
     - Flutter
+  - DartCvIOS (4.12.0.0):
+    - DartCvIOS/calib3d (= 4.12.0.0)
+    - DartCvIOS/contrib (= 4.12.0.0)
+    - DartCvIOS/core (= 4.12.0.0)
+    - DartCvIOS/features2d (= 4.12.0.0)
+    - DartCvIOS/imgproc (= 4.12.0.0)
+    - DartCvIOS/objdetect (= 4.12.0.0)
+    - DartCvIOS/photo (= 4.12.0.0)
+    - DartCvIOS/stitching (= 4.12.0.0)
+    - DartCvIOS/video (= 4.12.0.0)
+  - DartCvIOS/calib3d (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/contrib (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/core (4.12.0.0)
+  - DartCvIOS/dnn (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/features2d (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/imgproc (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/objdetect (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/photo (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/stitching (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/video (4.12.0.0):
+    - DartCvIOS/core
+  - DartCvIOS/videoio (4.12.0.0):
+    - DartCvIOS/core
   - Flutter (1.0.0)
   - google_mlkit_commons (0.11.0):
     - Flutter
@@ -60,6 +91,11 @@ PODS:
     - nanopb/encode (= 3.30910.0)
   - nanopb/decode (3.30910.0)
   - nanopb/encode (3.30910.0)
+  - opencv_dart (0.0.1):
+    - DartCvIOS (= 4.12.0.0)
+    - DartCvIOS/dnn (= 4.12.0.0)
+    - DartCvIOS/videoio (= 4.12.0.0)
+    - Flutter
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -71,10 +107,12 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - google_mlkit_commons (from `.symlinks/plugins/google_mlkit_commons/ios`)
   - google_mlkit_text_recognition (from `.symlinks/plugins/google_mlkit_text_recognition/ios`)
+  - opencv_dart (from `.symlinks/plugins/opencv_dart/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
 
 SPEC REPOS:
   trunk:
+    - DartCvIOS
     - GoogleDataTransport
     - GoogleMLKit
     - GoogleToolboxForMac
@@ -99,12 +137,15 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/google_mlkit_commons/ios"
   google_mlkit_text_recognition:
     :path: ".symlinks/plugins/google_mlkit_text_recognition/ios"
+  opencv_dart:
+    :path: ".symlinks/plugins/opencv_dart/ios"
   path_provider_foundation:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
 
 SPEC CHECKSUMS:
   audioplayers_darwin: ccf9c770ee768abb07e26d90af093f7bab1c12ab
   camera_avfoundation: be3be85408cd4126f250386828e9b1dfa40ab436
+  DartCvIOS: 3b4638e0f24b5f48a25378815618b9f8c1e87ad4
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   google_mlkit_commons: 2abe6a70e1824e431d16a51085cb475b672c8aab
   google_mlkit_text_recognition: ec2122ec89bfe0d7200763336a6e4ef44810674c
@@ -119,6 +160,7 @@ SPEC CHECKSUMS:
   MLKitTextRecognitionCommon: cd44577a8c506fc6bba065096de03bec0d01a213
   MLKitVision: 45e79d68845a2de77e2dd4d7f07947f0ed157b0e
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
+  opencv_dart: 8557f576f2b8cf40854d36601432406dec990788
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
 
