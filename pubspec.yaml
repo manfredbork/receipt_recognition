@@ -1,6 +1,6 @@
 name: receipt_recognition
 description: "A Flutter package for scanning and extracting structured data from supermarket receipts using Google's ML Kit."
-version: 0.1.4
+version: 0.1.5
 homepage: https://github.com/manfredbork/receipt_recognition
 repository: https://github.com/manfredbork/receipt_recognition
 
