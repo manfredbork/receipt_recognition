@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6] - 2025-09-22
+
+### 🐛 Fixed
+- **RecognizedGroup**: Added type annotation to `maxGroupSize` property
+
+### Changed
+- Updated to the most recent linter to avoid server side linting issues
+
+---
+
 ## [0.1.5] - 2025-09-21
 
 ### Added

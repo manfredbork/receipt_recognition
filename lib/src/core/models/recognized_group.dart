@@ -15,7 +15,7 @@ final class RecognizedGroup {
   ///
   /// The [maxGroupSize] controls how many members can be in the group before
   /// older ones are removed (FIFO).
-  RecognizedGroup({maxGroupSize = 1})
+  RecognizedGroup({int maxGroupSize = 1})
     : _members = [],
       _maxGroupSize = max(1, maxGroupSize);
 
