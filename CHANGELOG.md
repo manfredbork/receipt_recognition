@@ -7,20 +7,20 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Fixed
 - **RecognizedGroup**: Added type annotation to `maxGroupSize` property
 
-### Changed
+### 🛠️ Changed
 - Updated to the most recent linter to avoid server side linting issues
 
 ---
 
 ## [0.1.5] - 2025-09-21
 
-### Added
+### ✨ Added
 - **Configurable stores** support in the parsing pipeline, recognizer now accepts an `options` map that is forwarded to the receipt parser
 
 - **Example app updates**:
     - Introduces `opencv_dart` in the example’s dependencies used for image preprocessing
 
-### Changed
+### 🛠️ Changed
 - `ReceiptRecognizer` constructor: new optional `options` parameter
 - Default scanning cadence: `scanInterval` increased from **50 ms → 100 ms**
 
