@@ -368,6 +368,22 @@ final class ReceiptOptimizer implements Optimizer {
 
     _removeSingleOutlierToMatchSum(mergedReceipt);
 
+    final products = mergedReceipt.positions.map((p) => p.product);
+    final prices = mergedReceipt.positions.map((p) => p.price);
+
+    mergedReceipt.entities?.clear();
+    if (mergedReceipt.company != null) {
+      mergedReceipt.entities?.add(mergedReceipt.company as RecognizedEntity);
+    }
+    mergedReceipt.entities?.addAll(products.cast<RecognizedEntity>());
+    mergedReceipt.entities?.addAll(prices.cast<RecognizedEntity>());
+    if (mergedReceipt.sum != null) {
+      mergedReceipt.entities?.add(mergedReceipt.sum as RecognizedEntity);
+    }
+    if (mergedReceipt.sumLabel != null) {
+      mergedReceipt.entities?.add(mergedReceipt.sumLabel as RecognizedEntity);
+    }
+
     return mergedReceipt;
   }
 
