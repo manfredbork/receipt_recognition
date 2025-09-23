@@ -1,7 +1,6 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:example/services/camera_handler_mixin.dart';
-import 'package:example/services/image_preprocessor.dart';
 import 'package:example/widgets/position_overlay.dart';
 import 'package:example/widgets/receipt_widget.dart';
 import 'package:example/widgets/scan_info_screen.dart';
@@ -140,12 +139,8 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
     if (inputImage.bytes != null) {
       try {
-        final preprocessedBytes = await ImagePreprocessor.preprocessForOCR(
-          inputImage.bytes!,
-        );
-
         processedMlkitImage = InputImage.fromBytes(
-          bytes: preprocessedBytes,
+          bytes: inputImage.bytes!,
           metadata: InputImageMetadata(
             size: inputImage.metadata!.size,
             rotation: inputImage.metadata!.rotation,
