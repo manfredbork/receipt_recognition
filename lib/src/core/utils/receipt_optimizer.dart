@@ -94,9 +94,9 @@ final class ReceiptOptimizer implements Optimizer {
     _cleanupGroups();
     _resetOperations();
     _processPositions(receipt);
+    _updateEntities(receipt);
 
     if (!force && receipt.isValid) {
-      _updateEntities(receipt);
       return receipt;
     } else {
       return _createOptimizedReceipt(receipt);

@@ -13,31 +13,39 @@ class ReceiptSkewEstimator {
     final rightPoints = <_WPoint>[];
 
     for (final pos in receipt.positions) {
-      final prodRect = pos.product.line.boundingBox;
-      final priceRect = pos.price.line.boundingBox;
+      final prodPts = pos.product.line.cornerPoints;
+      final pricePts = pos.price.line.cornerPoints;
 
-      leftPoints.add(
-        _WPoint(
-          x: prodRect.left.toDouble(),
-          y: prodRect.center.dy,
-          w: pos.confidence.toDouble().clamp(1, 100),
-        ),
-      );
+      if (prodPts.length < 4) {
+        leftPoints.add(
+          _WPoint(
+            x: prodPts.first.x.toDouble(),
+            y: prodPts.first.y.toDouble(),
+            w: pos.confidence.toDouble().clamp(1, 100),
+          ),
+        );
+      }
 
-      rightPoints.add(
-        _WPoint(
-          x: priceRect.right.toDouble(),
-          y: priceRect.center.dy,
-          w: pos.confidence.toDouble().clamp(1, 100),
-        ),
-      );
+      if (pricePts.length < 4) {
+        rightPoints.add(
+          _WPoint(
+            x: pricePts[3].x.toDouble(),
+            y: pricePts[3].y.toDouble(),
+            w: pos.confidence.toDouble().clamp(1, 100),
+          ),
+        );
+      }
     }
 
     final leftDeg = _fitAngleDegrees(leftPoints, minSamples);
     final rightDeg = _fitAngleDegrees(rightPoints, minSamples);
 
     if (leftDeg != null && rightDeg != null) {
-      return (leftDeg + rightDeg) / 2.0;
+      if (leftDeg < 0 && rightDeg < 0) {
+        return math.min(leftDeg, rightDeg);
+      } else {
+        return math.max(leftDeg, rightDeg);
+      }
     } else if (leftDeg != null) {
       return leftDeg;
     } else if (rightDeg != null) {
