@@ -1,4 +1,5 @@
 import 'package:collection/collection.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Interface for receipt optimization components.
@@ -94,9 +95,12 @@ final class ReceiptOptimizer implements Optimizer {
     _resetOperations();
     _processPositions(receipt);
 
-    return !force && receipt.isValid
-        ? receipt
-        : _createOptimizedReceipt(receipt);
+    if (!force && receipt.isValid) {
+      _updateEntities(receipt);
+      return receipt;
+    } else {
+      return _createOptimizedReceipt(receipt);
+    }
   }
 
   void _initializeIfNeeded() {
@@ -367,24 +371,69 @@ final class ReceiptOptimizer implements Optimizer {
     mergedReceipt.sumLabel ??= receipt.sumLabel;
 
     _removeSingleOutlierToMatchSum(mergedReceipt);
-
-    final products = mergedReceipt.positions.map((p) => p.product);
-    final prices = mergedReceipt.positions.map((p) => p.price);
-
-    mergedReceipt.entities?.clear();
-    if (mergedReceipt.company != null) {
-      mergedReceipt.entities?.add(mergedReceipt.company as RecognizedEntity);
-    }
-    mergedReceipt.entities?.addAll(products.cast<RecognizedEntity>());
-    mergedReceipt.entities?.addAll(prices.cast<RecognizedEntity>());
-    if (mergedReceipt.sum != null) {
-      mergedReceipt.entities?.add(mergedReceipt.sum as RecognizedEntity);
-    }
-    if (mergedReceipt.sumLabel != null) {
-      mergedReceipt.entities?.add(mergedReceipt.sumLabel as RecognizedEntity);
-    }
+    _updateEntities(mergedReceipt);
 
     return mergedReceipt;
+  }
+
+  void _updateEntities(RecognizedReceipt receipt) {
+    final angle = ReceiptSkewEstimator.estimateDegrees(receipt);
+    final products = receipt.positions.map((p) => p.product);
+    final prices = receipt.positions.map((p) => p.price);
+
+    receipt.entities?.clear();
+    if (receipt.company != null) {
+      receipt.entities?.add(
+        RecognizedCompany(
+          value: receipt.company!.value,
+          line: _copyTextLineWithAngle(receipt.company!.line, angle),
+        ),
+      );
+    }
+    receipt.entities?.addAll(
+      products.map(
+        (product) => RecognizedProduct(
+          value: product.value,
+          line: _copyTextLineWithAngle(product.line, angle),
+        ),
+      ),
+    );
+    receipt.entities?.addAll(
+      prices.map(
+        (price) => RecognizedPrice(
+          value: price.value,
+          line: _copyTextLineWithAngle(price.line, angle),
+        ),
+      ),
+    );
+    if (receipt.sum != null) {
+      receipt.entities?.add(
+        RecognizedSum(
+          value: receipt.sum!.value,
+          line: _copyTextLineWithAngle(receipt.sum!.line, angle),
+        ),
+      );
+    }
+    if (receipt.sumLabel != null) {
+      receipt.entities?.add(
+        RecognizedSumLabel(
+          value: receipt.sumLabel!.value,
+          line: _copyTextLineWithAngle(receipt.sumLabel!.line, angle),
+        ),
+      );
+    }
+  }
+
+  TextLine _copyTextLineWithAngle(TextLine line, double angle) {
+    return TextLine(
+      text: line.text,
+      elements: line.elements,
+      boundingBox: line.boundingBox,
+      recognizedLanguages: line.recognizedLanguages,
+      cornerPoints: line.cornerPoints,
+      confidence: line.confidence,
+      angle: angle,
+    );
   }
 
   void _removeSingleOutlierToMatchSum(RecognizedReceipt receipt) {
