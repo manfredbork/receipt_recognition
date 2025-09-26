@@ -16,7 +16,7 @@ class ReceiptSkewEstimator {
       final prodPts = pos.product.line.cornerPoints;
       final pricePts = pos.price.line.cornerPoints;
 
-      if (prodPts.length < 4) {
+      if (prodPts.length >= 4) {
         leftPoints.add(
           _WPoint(
             x: prodPts.first.x.toDouble(),
@@ -26,7 +26,7 @@ class ReceiptSkewEstimator {
         );
       }
 
-      if (pricePts.length < 4) {
+      if (pricePts.length >= 4) {
         rightPoints.add(
           _WPoint(
             x: pricePts[3].x.toDouble(),
