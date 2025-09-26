@@ -41,7 +41,10 @@ class ReceiptSkewEstimator {
     final rightDeg = _fitAngleDegrees(rightPoints, minSamples);
 
     if (leftDeg != null && rightDeg != null) {
-      return (leftDeg + rightDeg) / 2.0;
+      if (leftDeg > 0 && rightDeg > 0) {
+        return math.max(leftDeg, rightDeg);
+      }
+      return math.min(leftDeg, rightDeg);
     } else if (leftDeg != null) {
       return leftDeg;
     } else if (rightDeg != null) {
