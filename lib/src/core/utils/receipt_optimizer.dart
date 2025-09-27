@@ -280,7 +280,8 @@ final class ReceiptOptimizer implements Optimizer {
     for (final position in receipt.positions) {
       if (isStableSumConfirmed) {
         final matchesStableSum =
-            (position.price.value - stableSum.sum.value).abs() < 0.01;
+            (position.price.value - stableSum.sum.value).abs() <=
+            ReceiptPatterns.sumTolerance;
 
         if (matchesStableSum) continue;
       }
@@ -473,7 +474,8 @@ final class ReceiptOptimizer implements Optimizer {
     if (receipt.positions.length < 2) return false;
 
     final calculated = receipt.calculatedSum.value;
-    return (candidate.sum.value - calculated).abs() < 0.01;
+    return (candidate.sum.value - calculated).abs() <=
+        ReceiptPatterns.sumTolerance;
   }
 
   void _learnOrder(RecognizedReceipt receipt) {
@@ -633,7 +635,7 @@ class _SumCandidate {
 
   bool matches(_SumCandidate other) =>
       label.line.text == other.label.line.text &&
-      (sum.value - other.sum.value).abs() < 0.01;
+      (sum.value - other.sum.value).abs() <= ReceiptPatterns.sumTolerance;
 
   void confirm() => confirmations++;
 }

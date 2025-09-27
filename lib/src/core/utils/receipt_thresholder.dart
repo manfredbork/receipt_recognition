@@ -26,7 +26,8 @@ final class ReceiptThresholder {
   /// Updates the threshold based on the comparison of
   /// recognized (from OCR) and calculated (from positions) sums.
   void update({double? recognizedSum, required double calculatedSum}) {
-    if (recognizedSum == null || (recognizedSum - calculatedSum).abs() < 0.01) {
+    if (recognizedSum == null ||
+        (recognizedSum - calculatedSum).abs() <= 0.009) {
       _delta = 0;
       return;
     }

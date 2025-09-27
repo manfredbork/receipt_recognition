@@ -78,7 +78,9 @@ class RecognizedReceipt {
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
 
   /// Whether the receipt has a valid match between calculated and recognized sum.
-  bool get isValid => calculatedSum.formattedValue == sum?.formattedValue;
+  bool get isValid =>
+      calculatedSum.formattedValue == sum?.formattedValue &&
+      calculatedSum.value > 0.0;
 }
 
 /// Represents the progress of an ongoing receipt scan process.
