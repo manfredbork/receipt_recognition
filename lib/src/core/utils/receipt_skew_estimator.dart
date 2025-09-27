@@ -115,7 +115,7 @@ extension on Rect {
 ///   the **right edge** (prefer cornerPoints; fall back to boundingBox).
 /// - Fit x = a*y + b (weighted) for left and right sets separately.
 /// - Angle = atan(a) in degrees; return the average of left & right when both available.
-extension ReceiptSkewEstimatorFromLines on ReceiptSkewEstimator {
+class ReceiptSkewEstimatorFromLines {
   static double estimateDegreesFromLines(
     List<TextLine> lines, {
     int minSamples = 6,
