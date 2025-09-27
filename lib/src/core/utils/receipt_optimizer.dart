@@ -220,14 +220,11 @@ final class ReceiptOptimizer implements Optimizer {
 
   void _optimizeSum(RecognizedReceipt receipt) {
     if (receipt.sum == null && _sums.isNotEmpty) {
-      final sum = ReceiptNormalizer.sortByFrequency(
+      final sums = ReceiptNormalizer.sortByFrequency(
         _sums.map((c) => c.formattedValue).toList(),
       );
-      final parsed = ReceiptFormatter.parse(sum.last);
-
-      if ((parsed - receipt.calculatedSum.value).abs() < 0.01) {
-        receipt.sum = _sums.last.copyWith(value: parsed);
-      }
+      final parsed = ReceiptFormatter.parse(sums.last);
+      receipt.sum = _sums.last.copyWith(value: parsed);
     }
   }
 

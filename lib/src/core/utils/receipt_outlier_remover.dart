@@ -5,7 +5,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Static utility to remove outlier positions (wrong items, duplicates, metadata)
 /// so that the calculated sum matches the detected receipt sum.
 final class ReceiptOutlierRemover {
-  static const int _tau = 2;
+  static const int _tau = 1;
   static const int _maxCandidates = 12;
   static const int _lowConfidenceTake = 8;
   static const int _suspectExtraCap = 4;

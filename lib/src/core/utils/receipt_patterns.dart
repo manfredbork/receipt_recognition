@@ -56,4 +56,7 @@ abstract class ReceiptPatterns {
     r'\bx\s?\d+',
     caseSensitive: false,
   );
+
+  /// Sum tolerance tight and more precise below 1 cent.
+  static const double sumTolerance = 0.009;
 }

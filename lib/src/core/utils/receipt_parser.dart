@@ -350,18 +350,27 @@ final class ReceiptParser {
     double Function(TextLine) yOf,
   ) {
     if (sumLabel == null) return;
-    final yAmounts = entities.whereType<RecognizedAmount>().toList();
-    if (yAmounts.isEmpty) return;
 
-    yAmounts.sort((a, b) {
-      final da = (yOf(a.line) - yOf(sumLabel.line)).abs();
-      final db = (yOf(b.line) - yOf(sumLabel.line)).abs();
-      return da.compareTo(db);
-    });
+    final amountEntities = entities.whereType<RecognizedAmount>().toList();
+    if (amountEntities.isEmpty) return;
 
-    final closest = yAmounts.first;
-    if (_isNearbyAmount(sumLabel.line.boundingBox, closest, yOf)) {
-      receipt.sum = RecognizedSum(value: closest.value, line: closest.line);
+    final sumLabelBounds = sumLabel.line.boundingBox;
+
+    final scoredAmounts =
+        amountEntities.map((amount) {
+          final score = _distanceScore(sumLabelBounds, amount.line.boundingBox);
+          return MapEntry(amount, score);
+        }).toList();
+
+    scoredAmounts.sort((a, b) => a.value.compareTo(b.value));
+
+    for (final entry in scoredAmounts) {
+      final amount = entry.key;
+      if (yOf(amount.line) >=
+          yOf(sumLabel.line) - ReceiptConstants.boundingBoxBuffer) {
+        receipt.sum = RecognizedSum(value: amount.value, line: amount.line);
+        break;
+      }
     }
   }
 
@@ -391,15 +400,14 @@ final class ReceiptParser {
     return 80;
   }
 
-  static bool _isNearbyAmount(
-    Rect sumLabelBounds,
-    RecognizedAmount amount,
-    double Function(TextLine) yOf,
-  ) {
-    final dy =
-        (yOf(amount.line) - ((sumLabelBounds.top + sumLabelBounds.bottom) / 2))
-            .abs();
-    return dy <= ReceiptConstants.boundingBoxBuffer;
+  static double _distanceScore(Rect sumLabelBounds, Rect amountBounds) {
+    final sumCenterY = (sumLabelBounds.top + sumLabelBounds.bottom) / 2;
+    final amountCenterY = (amountBounds.top + amountBounds.bottom) / 2;
+
+    final dy = (sumCenterY - amountCenterY).abs();
+    final dx = (amountBounds.left - sumLabelBounds.right).abs();
+
+    return dy + (dx * 0.3);
   }
 
   static String? _detectsLocale(String text) {
@@ -423,6 +431,29 @@ final class ReceiptParser {
     });
   }
 
+  static RecognizedAmount? _findClosestSumAmount(
+    RecognizedSumLabel sumLabel,
+    List<RecognizedAmount> amounts,
+  ) {
+    if (amounts.isEmpty) return null;
+
+    final sumLabelBounds = sumLabel.line.boundingBox;
+
+    final scored =
+        amounts
+            .map(
+              (a) => MapEntry(
+                a,
+                _distanceScore(sumLabelBounds, a.line.boundingBox),
+              ),
+            )
+            .toList();
+
+    scored.sort((a, b) => a.value.compareTo(b.value));
+
+    return scored.first.key;
+  }
+
   static List<RecognizedEntity> _filterIntermediaryEntities(
     List<RecognizedEntity> entities,
     double Function(TextLine) yOf,
@@ -444,12 +475,9 @@ final class ReceiptParser {
     final sumLabel = entities.whereType<RecognizedSumLabel>().firstOrNull;
 
     RecognizedAmount? sum;
-    for (final a in entities.whereType<RecognizedAmount>()) {
-      if (sumLabel != null &&
-          _isNearbyAmount(sumLabel.line.boundingBox, a, yOf)) {
-        sum = a;
-        break;
-      }
+    if (sumLabel != null) {
+      final amounts = entities.whereType<RecognizedAmount>().toList();
+      sum = _findClosestSumAmount(sumLabel, amounts);
     }
 
     for (final entity in entities) {
@@ -507,7 +535,8 @@ final class ReceiptParser {
     receipt.positions.removeWhere(
       (pos) =>
           receipt.sum != null &&
-          (pos.price.value - receipt.sum!.value).abs() < 0.01 &&
+          (pos.price.value - receipt.sum!.value).abs() <
+              ReceiptPatterns.sumTolerance &&
           ReceiptPatterns.sumLabel.hasMatch(pos.product.value),
     );
 
@@ -516,7 +545,7 @@ final class ReceiptParser {
     num currentSum = receipt.calculatedSum.value;
 
     for (final pos in positions) {
-      if (currentSum <= target) break;
+      if ((currentSum - target).abs() <= ReceiptPatterns.sumTolerance) break;
 
       final newSum = currentSum - pos.price.value;
       final improvement = (currentSum - target).abs() - (newSum - target).abs();
