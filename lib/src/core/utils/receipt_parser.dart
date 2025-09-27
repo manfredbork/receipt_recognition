@@ -344,9 +344,7 @@ final class ReceiptParser {
   static bool _isLikelyMetadataLine(TextLine line) {
     final text = line.text;
 
-    return ReceiptPatterns.likelyNotProduct.hasMatch(text) ||
-        ReceiptPatterns.quantityMetadata.hasMatch(text) ||
-        ReceiptPatterns.unitPrice.hasMatch(text) ||
+    return ReceiptPatterns.unitPrice.hasMatch(text) ||
         ReceiptPatterns.standaloneInteger.hasMatch(text) ||
         ReceiptPatterns.standalonePrice.hasMatch(text) ||
         ReceiptPatterns.misleadingPriceLikeLeft.hasMatch(text);

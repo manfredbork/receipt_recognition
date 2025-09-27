@@ -33,21 +33,9 @@ abstract class ReceiptPatterns {
   /// Pattern to match strings likely to be product descriptions.
   static final RegExp unknown = RegExp(r'[\D\S]{4,}');
 
-  /// Pattern to exclude lines with likely metadata or quantity info.
-  static final RegExp likelyNotProduct = RegExp(
-    r'(\bx\s?\d+)|(\d+[,.]\d{2}/\w+)|(\d+\s*(Pcs|Stk|kg|g))|(^\s*\d+[,.]\d{2}\s*$)',
-    caseSensitive: false,
-  );
-
   /// Pattern to detect unit prices like "2,99/kg" or "0,89/100g".
   static final RegExp unitPrice = RegExp(
     r'\d+[,.]\d{2}/\w+',
-    caseSensitive: false,
-  );
-
-  /// Pattern to detect quantity-like words (e.g. "2 Pcs", "0,3kg").
-  static final RegExp quantityMetadata = RegExp(
-    r'\d+\s*(Pcs|Stk|kg|g)',
     caseSensitive: false,
   );
 

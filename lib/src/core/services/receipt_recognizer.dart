@@ -46,7 +46,7 @@ final class ReceiptRecognizer {
     TextRecognitionScript script = TextRecognitionScript.latin,
     Map<String, Map<String, String>> options = const {},
     bool singleScan = false,
-    int minValidScans = 5,
+    int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 100),
     Duration scanTimeout = const Duration(seconds: 30),
