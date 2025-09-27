@@ -45,7 +45,7 @@ void main() {
         }
       });
     });
-    
+
     group('normalizeSpecialSpaces', () {
       test('should merge tokens when needed', () {
         const bestText = 'Cof fee Beans';

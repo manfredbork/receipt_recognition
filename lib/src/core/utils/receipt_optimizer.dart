@@ -370,7 +370,7 @@ final class ReceiptOptimizer implements Optimizer {
     mergedReceipt.sum ??= receipt.sum;
     mergedReceipt.sumLabel ??= receipt.sumLabel;
 
-    _removeSingleOutlierToMatchSum(mergedReceipt);
+    _removeOutliersToMatchSum(mergedReceipt);
     _updateEntities(mergedReceipt);
 
     return mergedReceipt;
@@ -436,28 +436,8 @@ final class ReceiptOptimizer implements Optimizer {
     );
   }
 
-  void _removeSingleOutlierToMatchSum(RecognizedReceipt receipt) {
-    final target = receipt.sum?.value;
-    if (target == null || receipt.positions.length <= 1) return;
-
-    final originalLength = receipt.positions.length;
-
-    for (final position in receipt.positions) {
-      final testSum = receipt.positions
-          .where((p) => p != position)
-          .fold<double>(0.0, (sum, p) => sum + p.price.value);
-
-      if ((testSum - target).abs() < 0.01) {
-        final group = position.group;
-        if (group != null) {
-          group.members.remove(position);
-        }
-        receipt.positions.remove(position);
-
-        if (receipt.positions.length == originalLength) break;
-        return;
-      }
-    }
+  void _removeOutliersToMatchSum(RecognizedReceipt receipt) {
+    ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
   }
 
   bool _isConfirmedSumValid(

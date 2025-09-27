@@ -50,7 +50,7 @@ final class ReceiptRecognizer {
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 100),
     Duration scanTimeout = const Duration(seconds: 30),
-    Duration scanCompleteDelay = const Duration(milliseconds: 500),
+    Duration scanCompleteDelay = const Duration(milliseconds: 100),
     VoidCallback? onScanTimeout,
     Function(ScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
