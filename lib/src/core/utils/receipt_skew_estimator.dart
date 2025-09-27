@@ -55,7 +55,6 @@ class ReceiptSkewEstimator {
     return resultDeg.abs() < 0.5 ? 0.0 : resultDeg;
   }
 
-  /// Weighted least squares fit of x = a*y + b, then angle = atan(a) in degrees.
   static double? _fitAngleDegrees(List<_WPoint> pts, int minSamples) {
     if (pts.length < minSamples) return null;
     final fit = _fitSlope(pts);
@@ -125,8 +124,6 @@ class ReceiptSkewEstimatorFromLines {
 
     for (final line in lines) {
       if (line.cornerPoints.length >= 4) {
-        // ML Kit ordering is usually top-left, top-right, bottom-right, bottom-left
-        // but we guard by selecting minX and maxX points to be safe.
         final pts =
             line.cornerPoints
                 .map((p) => math.Point<double>(p.x.toDouble(), p.y.toDouble()))
@@ -140,7 +137,6 @@ class ReceiptSkewEstimatorFromLines {
       } else {
         final bb = line.boundingBox;
         final wy = _safeWeight(line);
-        // Use the box edges at the vertical center as representative points
         left.add(_WPoint(x: bb.left.toDouble(), y: bb.centerY, w: wy));
         right.add(_WPoint(x: bb.right.toDouble(), y: bb.centerY, w: wy));
       }
@@ -163,10 +159,8 @@ class ReceiptSkewEstimatorFromLines {
   }
 }
 
-// Helper: turn TextLine confidence/geometry into a sane weight (1..100).
 double _safeWeight(TextLine line) {
   final c = (line.confidence ?? 50).toDouble();
-  // As a tiny stabilizer, blend in line height (clipped) so taller lines carry a bit more weight.
   final h = (line.boundingBox.height.toDouble()).clamp(8.0, 80.0);
   final blended = 0.85 * c + 0.15 * (h * 100.0 / 80.0);
   return blended.clamp(1.0, 100.0);

@@ -33,17 +33,13 @@ final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedSum> _sums = [];
   final List<_SumCandidate> _sumCandidates = [];
   final ReceiptThresholder _thresholder;
+  final double _ewmaAlpha = 0.3;
   final int _loopThreshold;
   final int _sumConfirmationThreshold;
   final int _maxCacheSize;
   final int _stabilityThreshold;
   final Duration _invalidateInterval;
-
-  // Add to ReceiptOptimizer fields:
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
-
-  // Tunables
-  static const double _ewmaAlpha = 0.3; // how quickly orderY adapts
 
   bool _shouldInitialize;
   bool _needsRegrouping;
@@ -246,10 +242,9 @@ final class ReceiptOptimizer implements Optimizer {
         if (kill) removed.add(g);
         return kill;
       });
-      // prune order stats for removed groups
+
       for (final g in removed) {
         _orderStats.remove(g);
-        // also remove g from other groups' aboveCounts maps
         for (final s in _orderStats.values) {
           s.aboveCounts.remove(g);
         }
@@ -485,30 +480,26 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   void _learnOrder(RecognizedReceipt receipt) {
-    // 1) Estimate skew
     final angleDeg = ReceiptSkewEstimator.estimateDegrees(receipt);
 
-    // 2) Deadband: treat tiny angles as "no skew"
     if (angleDeg.abs() < 0.5) {
       _lastAngleDeg = 0.0;
-      _lastAngleRad = null; // mark as "no projection"
+      _lastAngleRad = null;
     } else {
       _lastAngleDeg = angleDeg;
       _lastAngleRad = angleDeg * math.pi / 180.0;
     }
 
-    final angleRad = _lastAngleRad; // might be null if near-flat
+    final angleRad = _lastAngleRad;
     final cosA = angleRad != null ? math.cos(-angleRad) : null;
     final sinA = angleRad != null ? math.sin(-angleRad) : null;
 
-    // 3) Helper that projects only if needed
     double projectedY(TextLine line) {
       final center = line.boundingBox.center;
-      if (angleRad == null) return center.dy.toDouble(); // raw Y if near-flat
+      if (angleRad == null) return center.dy.toDouble();
       return center.dx * sinA! + center.dy * cosA!;
     }
 
-    // 4) Collect observed positions with projected Y
     final observed = <_Obs>[];
     for (final p in receipt.positions) {
       final g = p.group;
@@ -518,7 +509,6 @@ final class ReceiptOptimizer implements Optimizer {
     }
     if (observed.isEmpty) return;
 
-    // 5) Sort by projected Y
     observed.sort((a, b) => a.y.compareTo(b.y));
 
     final now = DateTime.now();
@@ -534,7 +524,6 @@ final class ReceiptOptimizer implements Optimizer {
       }
     }
 
-    // 6) Pairwise votes
     for (int i = 0; i < observed.length; i++) {
       for (int j = i + 1; j < observed.length; j++) {
         final a = observed[i].group;
@@ -544,7 +533,6 @@ final class ReceiptOptimizer implements Optimizer {
       }
     }
 
-    // decay/clamp vote totals once per scan
     for (final s in _orderStats.values) {
       final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
       if (total > 50) {
@@ -574,7 +562,6 @@ final class ReceiptOptimizer implements Optimizer {
       if (t != 0) return t;
     }
 
-    // Fallbacks (unchanged)
     final angleRad = _lastAngleRad;
     double medianProjectedY(RecognizedGroup g) {
       if (g.members.isEmpty) return double.infinity;
@@ -604,7 +591,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   double _projectedYFromLine(TextLine line, double? angleRad) {
     final c = line.boundingBox.center;
-    if (angleRad == null) return c.dy.toDouble(); // no projection
+    if (angleRad == null) return c.dy.toDouble();
     final cosA = math.cos(-angleRad), sinA = math.sin(-angleRad);
     return c.dx * sinA + c.dy * cosA;
   }

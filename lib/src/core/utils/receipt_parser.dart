@@ -25,7 +25,6 @@ final class ReceiptParser {
       lines,
     );
     if (angleDeg.abs() < 0.5) {
-      // No projection; use raw y (faster, avoids needless trig noise)
       double yOf(TextLine line) => line.boundingBox.center.dy.toDouble();
       lines.sort((a, b) => yOf(a).compareTo(yOf(b)));
       final parsed = _parseLines(lines, options, yOf);
@@ -293,7 +292,6 @@ final class ReceiptParser {
   ) {
     if (entity == receipt.sum) return;
 
-    // Sort unknowns by vertical proximity to amount
     _sortByDistance(entity.line.boundingBox, yUnknowns, yOf);
 
     for (final yUnknown in yUnknowns) {
@@ -321,7 +319,6 @@ final class ReceiptParser {
 
     final isLeftOfAmount = unknownBox.left < amountBox.left;
 
-    // Use projected center Y difference with your existing tolerance
     final dy = (yOf(amount.line) - yOf(unknown.line)).abs();
     final alignedVertically = dy <= ReceiptConstants.boundingBoxBuffer;
 
@@ -356,7 +353,6 @@ final class ReceiptParser {
     final yAmounts = entities.whereType<RecognizedAmount>().toList();
     if (yAmounts.isEmpty) return;
 
-    // Sort by vertical distance to the label
     yAmounts.sort((a, b) {
       final da = (yOf(a.line) - yOf(sumLabel.line)).abs();
       final db = (yOf(b.line) - yOf(sumLabel.line)).abs();
@@ -400,18 +396,9 @@ final class ReceiptParser {
     RecognizedAmount amount,
     double Function(TextLine) yOf,
   ) {
-    // Compare projected centers only (simpler and robust)
     final dy =
         (yOf(amount.line) - ((sumLabelBounds.top + sumLabelBounds.bottom) / 2))
             .abs();
-    // NOTE: yOf expects a TextLine, so compute label center Y directly without projection:
-    // To project the label center too, use a small helper to build a faux TextLine-like center.
-    // Simpler: approximate by projecting the sum label line via yOf(sumLabel line).
-
-    // Better version (if you have the line): yOf(sumLabel.line)
-    // Here we assume you've passed the label's line into yOf when sorting above.
-
-    // Threshold: keep your existing tolerance
     return dy <= ReceiptConstants.boundingBoxBuffer;
   }
 
