@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:collection/collection.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
@@ -37,10 +39,18 @@ final class ReceiptOptimizer implements Optimizer {
   final int _stabilityThreshold;
   final Duration _invalidateInterval;
 
+  // Add to ReceiptOptimizer fields:
+  final Map<RecognizedGroup, _OrderStats> _orderStats = {};
+
+  // Tunables
+  static const double _ewmaAlpha = 0.3; // how quickly orderY adapts
+
   bool _shouldInitialize;
   bool _needsRegrouping;
   int _unchangedCount;
   String? _lastFingerprint;
+  double? _lastAngleRad;
+  double? _lastAngleDeg;
 
   /// Creates a new receipt optimizer with configurable thresholds.
   ///
@@ -109,6 +119,9 @@ final class ReceiptOptimizer implements Optimizer {
       _companies.clear();
       _sums.clear();
       _sumCandidates.clear();
+      _orderStats.clear();
+      _lastAngleRad = null;
+      _lastAngleDeg = null;
       _shouldInitialize = false;
       _needsRegrouping = false;
       _unchangedCount = 0;
@@ -224,14 +237,32 @@ final class ReceiptOptimizer implements Optimizer {
 
   void _cleanupGroups() {
     if (_groups.length >= _maxCacheSize) {
-      DateTime now = DateTime.now();
-      _groups.removeWhere(
-        (g) =>
+      final now = DateTime.now();
+      final removed = <RecognizedGroup>{};
+      _groups.removeWhere((g) {
+        final kill =
             now.difference(g.timestamp) >= _invalidateInterval &&
-            g.stability < _stabilityThreshold,
-      );
+            g.stability < _stabilityThreshold;
+        if (kill) removed.add(g);
+        return kill;
+      });
+      // prune order stats for removed groups
+      for (final g in removed) {
+        _orderStats.remove(g);
+        // also remove g from other groups' aboveCounts maps
+        for (final s in _orderStats.values) {
+          s.aboveCounts.remove(g);
+        }
+      }
     }
+    final emptied = _groups.where((g) => g.members.isEmpty).toList();
     _groups.removeWhere((g) => g.members.isEmpty);
+    for (final g in emptied) {
+      _orderStats.remove(g);
+      for (final s in _orderStats.values) {
+        s.aboveCounts.remove(g);
+      }
+    }
   }
 
   void _resetOperations() {
@@ -346,9 +377,12 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   RecognizedReceipt _createOptimizedReceipt(RecognizedReceipt receipt) {
-    final stableGroups = _groups.where(
-      (g) => g.stability >= _stabilityThreshold,
-    );
+    final stableGroups =
+        _groups.where((g) => g.stability >= _stabilityThreshold).toList();
+
+    _learnOrder(receipt);
+
+    stableGroups.sort(_compareGroupsForOrder);
 
     final mergedReceipt = RecognizedReceipt.empty();
 
@@ -450,6 +484,131 @@ final class ReceiptOptimizer implements Optimizer {
     return (candidate.sum.value - calculated).abs() < 0.01;
   }
 
+  void _learnOrder(RecognizedReceipt receipt) {
+    // 1) Estimate skew
+    final angleDeg = ReceiptSkewEstimator.estimateDegrees(receipt);
+
+    // 2) Deadband: treat tiny angles as "no skew"
+    if (angleDeg.abs() < 0.5) {
+      _lastAngleDeg = 0.0;
+      _lastAngleRad = null; // mark as "no projection"
+    } else {
+      _lastAngleDeg = angleDeg;
+      _lastAngleRad = angleDeg * math.pi / 180.0;
+    }
+
+    final angleRad = _lastAngleRad; // might be null if near-flat
+    final cosA = angleRad != null ? math.cos(-angleRad) : null;
+    final sinA = angleRad != null ? math.sin(-angleRad) : null;
+
+    // 3) Helper that projects only if needed
+    double projectedY(TextLine line) {
+      final center = line.boundingBox.center;
+      if (angleRad == null) return center.dy.toDouble(); // raw Y if near-flat
+      return center.dx * sinA! + center.dy * cosA!;
+    }
+
+    // 4) Collect observed positions with projected Y
+    final observed = <_Obs>[];
+    for (final p in receipt.positions) {
+      final g = p.group;
+      if (g == null) continue;
+      final y = projectedY(p.product.line);
+      observed.add(_Obs(group: g, y: y, ts: p.timestamp));
+    }
+    if (observed.isEmpty) return;
+
+    // 5) Sort by projected Y
+    observed.sort((a, b) => a.y.compareTo(b.y));
+
+    final now = DateTime.now();
+    for (final o in observed) {
+      final s = _orderStats.putIfAbsent(
+        o.group,
+        () => _OrderStats(firstSeen: now),
+      );
+      s.orderY = s.hasY ? (1 - _ewmaAlpha) * s.orderY + _ewmaAlpha * o.y : o.y;
+      s.hasY = true;
+      if (s.firstSeen.isAfter(o.ts)) {
+        s.firstSeen = o.ts;
+      }
+    }
+
+    // 6) Pairwise votes
+    for (int i = 0; i < observed.length; i++) {
+      for (int j = i + 1; j < observed.length; j++) {
+        final a = observed[i].group;
+        final b = observed[j].group;
+        final sa = _orderStats[a]!;
+        sa.aboveCounts[b] = (sa.aboveCounts[b] ?? 0) + 1;
+      }
+    }
+
+    // decay/clamp vote totals once per scan
+    for (final s in _orderStats.values) {
+      final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
+      if (total > 50) {
+        s.aboveCounts.updateAll((_, v) => math.max(1, v ~/ 2));
+      }
+    }
+  }
+
+  int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
+    final tiePx =
+        (_lastAngleDeg?.abs() ?? 0) < 0.5
+            ? (ReceiptConstants.boundingBoxBuffer * 0.8).round()
+            : ReceiptConstants.boundingBoxBuffer;
+
+    final sa = _orderStats[a];
+    final sb = _orderStats[b];
+
+    if (sa != null && sb != null && sa.hasY && sb.hasY) {
+      final dy = (sa.orderY - sb.orderY).abs();
+      if (dy > tiePx) return sa.orderY.compareTo(sb.orderY);
+
+      final ab = sa.aboveCounts[b] ?? 0;
+      final ba = sb.aboveCounts[a] ?? 0;
+      if (ab != ba) return (ab > ba) ? -1 : 1;
+
+      final t = sa.firstSeen.compareTo(sb.firstSeen);
+      if (t != 0) return t;
+    }
+
+    // Fallbacks (unchanged)
+    final angleRad = _lastAngleRad;
+    double medianProjectedY(RecognizedGroup g) {
+      if (g.members.isEmpty) return double.infinity;
+      final ys =
+          g.members
+              .map((p) => _projectedYFromLine(p.product.line, angleRad))
+              .toList()
+            ..sort();
+      return ys[ys.length ~/ 2];
+    }
+
+    final ay = medianProjectedY(a);
+    final by = medianProjectedY(b);
+    if (ay != by) return ay.compareTo(by);
+
+    DateTime earliest(List<RecognizedPosition> ps) =>
+        ps.isEmpty
+            ? DateTime.fromMillisecondsSinceEpoch(0)
+            : ps
+                .map((p) => p.timestamp)
+                .reduce((x, y) => x.isBefore(y) ? x : y);
+
+    final at = earliest(a.members);
+    final bt = earliest(b.members);
+    return at.compareTo(bt);
+  }
+
+  double _projectedYFromLine(TextLine line, double? angleRad) {
+    final c = line.boundingBox.center;
+    if (angleRad == null) return c.dy.toDouble(); // no projection
+    final cosA = math.cos(-angleRad), sinA = math.sin(-angleRad);
+    return c.dx * sinA + c.dy * cosA;
+  }
+
   /// Releases all resources used by the optimizer.
   ///
   /// Clears all cached groups, companies, and sums.
@@ -493,4 +652,21 @@ class _SumCandidate {
       (sum.value - other.sum.value).abs() < 0.01;
 
   void confirm() => confirmations++;
+}
+
+class _Obs {
+  final RecognizedGroup group;
+  final double y;
+  final DateTime ts;
+
+  _Obs({required this.group, required this.y, required this.ts});
+}
+
+class _OrderStats {
+  double orderY = 0;
+  bool hasY = false;
+  DateTime firstSeen;
+  final Map<RecognizedGroup, int> aboveCounts = {};
+
+  _OrderStats({required this.firstSeen});
 }

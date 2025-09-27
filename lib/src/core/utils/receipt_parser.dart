@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:collection/collection.dart';
@@ -20,9 +20,30 @@ final class ReceiptParser {
     Map<String, Map<String, String>> options,
   ) {
     final lines = _convertText(text);
-    final parsedEntities = _parseLines(lines, options);
-    final filteredEntities = _filterIntermediaryEntities(parsedEntities);
-    return _buildReceipt(filteredEntities);
+
+    final angleDeg = ReceiptSkewEstimatorFromLines.estimateDegreesFromLines(
+      lines,
+    );
+    if (angleDeg.abs() < 0.5) {
+      // No projection; use raw y (faster, avoids needless trig noise)
+      double yOf(TextLine line) => line.boundingBox.center.dy.toDouble();
+      lines.sort((a, b) => yOf(a).compareTo(yOf(b)));
+      final parsed = _parseLines(lines, options, yOf);
+      final filtered = _filterIntermediaryEntities(parsed, yOf);
+      return _buildReceipt(filtered, yOf);
+    } else {
+      final angleRad = angleDeg * math.pi / 180.0;
+      final cosA = math.cos(-angleRad), sinA = math.sin(-angleRad);
+      double yOf(TextLine line) {
+        final c = line.boundingBox.center;
+        return c.dx * sinA + c.dy * cosA;
+      }
+
+      lines.sort((a, b) => yOf(a).compareTo(yOf(b)));
+      final parsed = _parseLines(lines, options, yOf);
+      final filtered = _filterIntermediaryEntities(parsed, yOf);
+      return _buildReceipt(filtered, yOf);
+    }
   }
 
   static List<TextLine> _convertText(RecognizedText text) {
@@ -51,6 +72,7 @@ final class ReceiptParser {
   static List<RecognizedEntity> _parseLines(
     List<TextLine> lines,
     Map<String, Map<String, String>> options,
+    double Function(TextLine) yOf,
   ) {
     final parsed = <RecognizedEntity>[];
     final bounds = RecognizedBounds.fromLines(lines);
@@ -62,7 +84,7 @@ final class ReceiptParser {
     RecognizedAmount? detectedAmount;
 
     for (final line in lines) {
-      if (_shouldSkipLine(line, detectedSumLabel)) {
+      if (_shouldSkipLine(line, detectedSumLabel, yOf)) {
         continue;
       }
 
@@ -90,12 +112,12 @@ final class ReceiptParser {
         continue;
       }
 
-      if (_tryParseAmount(line, parsed, receiptHalfWidth)) {
+      if (_tryParseAmount(line, parsed, receiptHalfWidth, yOf)) {
         detectedAmount = parsed.last as RecognizedAmount;
         continue;
       }
 
-      if (_tryParseUnknown(line, parsed, receiptHalfWidth)) {
+      if (_tryParseUnknown(line, parsed, receiptHalfWidth, yOf)) {
         continue;
       }
     }
@@ -106,9 +128,9 @@ final class ReceiptParser {
   static bool _shouldSkipLine(
     TextLine line,
     RecognizedSumLabel? detectedSumLabel,
+    double Function(TextLine) yOf,
   ) {
-    return detectedSumLabel != null &&
-        line.boundingBox.top > detectedSumLabel.line.boundingBox.bottom;
+    return detectedSumLabel != null && yOf(line) > yOf(detectedSumLabel.line);
   }
 
   static bool _tryParseCompany(
@@ -175,6 +197,7 @@ final class ReceiptParser {
     TextLine line,
     List<RecognizedEntity> parsed,
     double receiptHalfWidth,
+    double Function(TextLine) yOf,
   ) {
     final amount = ReceiptPatterns.amount.stringMatch(line.text);
     if (amount != null && line.boundingBox.left > receiptHalfWidth) {
@@ -191,27 +214,29 @@ final class ReceiptParser {
     TextLine line,
     List<RecognizedEntity> parsed,
     double receiptHalfWidth,
+    double Function(TextLine) yOf,
   ) {
     if (_isLikelyMetadataLine(line)) return false;
-
     final unknown = ReceiptPatterns.unknown.stringMatch(line.text);
     if (unknown != null && line.boundingBox.left < receiptHalfWidth) {
       parsed.add(RecognizedUnknown(line: line, value: line.text));
       return true;
     }
-
     return false;
   }
 
-  static RecognizedReceipt _buildReceipt(List<RecognizedEntity> entities) {
+  static RecognizedReceipt _buildReceipt(
+    List<RecognizedEntity> entities,
+    double Function(TextLine) yOf,
+  ) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
     final company = _findCompany(entities);
     final sumLabel = _findSumLabel(entities);
 
-    _setReceiptSum(entities, sumLabel, receipt);
-    _processAmounts(entities, yUnknowns, receipt, forbidden);
+    _setReceiptSum(entities, sumLabel, receipt, yOf);
+    _processAmounts(entities, yUnknowns, receipt, forbidden, yOf);
     _processCompany(company, receipt);
     _filterSuspiciousProducts(receipt);
     _trimToMatchSum(receipt);
@@ -249,11 +274,12 @@ final class ReceiptParser {
     List<RecognizedUnknown> yUnknowns,
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
+    double Function(TextLine) yOf,
   ) {
     for (final entity in entities) {
       if (entity is RecognizedAmount) {
         if (receipt.sum?.line == entity.line) continue;
-        _createPositionForAmount(entity, yUnknowns, receipt, forbidden);
+        _createPositionForAmount(entity, yUnknowns, receipt, forbidden, yOf);
       }
     }
   }
@@ -263,14 +289,15 @@ final class ReceiptParser {
     List<RecognizedUnknown> yUnknowns,
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
+    double Function(TextLine) yOf,
   ) {
     if (entity == receipt.sum) return;
 
-    final yAmount = entity.line.boundingBox;
-    _sortByDistance(yAmount, yUnknowns);
+    // Sort unknowns by vertical proximity to amount
+    _sortByDistance(entity.line.boundingBox, yUnknowns, yOf);
 
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(yAmount, yUnknown, forbidden)) {
+      if (_isMatchingUnknown(entity, yUnknown, forbidden, yOf)) {
         final position = _createPosition(yUnknown, entity, receipt.timestamp);
         receipt.positions.add(position);
         forbidden.add(yUnknown);
@@ -280,24 +307,25 @@ final class ReceiptParser {
   }
 
   static bool _isMatchingUnknown(
-    Rect amountBounds,
+    RecognizedAmount amount,
     RecognizedUnknown unknown,
     List<RecognizedUnknown> forbidden,
+    double Function(TextLine) yOf,
   ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
+    final isLikelyLabel = ReceiptPatterns.sumLabel.hasMatch(unknownText);
+    if (forbidden.contains(unknown) || isLikelyLabel) return false;
+
+    final amountBox = amount.line.boundingBox;
     final unknownBox = unknown.line.boundingBox;
 
-    final yT = (amountBounds.top - unknownBox.top).abs();
-    final yB = (amountBounds.bottom - unknownBox.bottom).abs();
-    final yCompare = min(yT, yB);
+    final isLeftOfAmount = unknownBox.left < amountBox.left;
 
-    final isLeftOfAmount = unknownBox.left < amountBounds.left;
-    final isLikelyLabel = ReceiptPatterns.sumLabel.hasMatch(unknownText);
+    // Use projected center Y difference with your existing tolerance
+    final dy = (yOf(amount.line) - yOf(unknown.line)).abs();
+    final alignedVertically = dy <= ReceiptConstants.boundingBoxBuffer;
 
-    return !forbidden.contains(unknown) &&
-        yCompare <= ReceiptConstants.boundingBoxBuffer &&
-        isLeftOfAmount &&
-        !isLikelyLabel;
+    return isLeftOfAmount && alignedVertically;
   }
 
   static RecognizedPosition _createPosition(
@@ -322,22 +350,22 @@ final class ReceiptParser {
     List<RecognizedEntity> entities,
     RecognizedSumLabel? sumLabel,
     RecognizedReceipt receipt,
+    double Function(TextLine) yOf,
   ) {
     if (sumLabel == null) return;
-
     final yAmounts = entities.whereType<RecognizedAmount>().toList();
     if (yAmounts.isEmpty) return;
 
-    final ySumLabel = sumLabel.line.boundingBox;
-    _sortByDistance(ySumLabel, yAmounts);
+    // Sort by vertical distance to the label
+    yAmounts.sort((a, b) {
+      final da = (yOf(a.line) - yOf(sumLabel.line)).abs();
+      final db = (yOf(b.line) - yOf(sumLabel.line)).abs();
+      return da.compareTo(db);
+    });
 
-    final closestAmount = yAmounts.first;
-
-    if (_isNearbyAmount(ySumLabel, closestAmount)) {
-      receipt.sum = RecognizedSum(
-        value: closestAmount.value,
-        line: closestAmount.line,
-      );
+    final closest = yAmounts.first;
+    if (_isNearbyAmount(sumLabel.line.boundingBox, closest, yOf)) {
+      receipt.sum = RecognizedSum(value: closest.value, line: closest.line);
     }
   }
 
@@ -367,19 +395,24 @@ final class ReceiptParser {
     return 80;
   }
 
-  static bool _isNearbyAmount(Rect sumLabelBounds, RecognizedAmount amount) {
-    final amountBox = amount.line.boundingBox;
+  static bool _isNearbyAmount(
+    Rect sumLabelBounds,
+    RecognizedAmount amount,
+    double Function(TextLine) yOf,
+  ) {
+    // Compare projected centers only (simpler and robust)
+    final dy =
+        (yOf(amount.line) - ((sumLabelBounds.top + sumLabelBounds.bottom) / 2))
+            .abs();
+    // NOTE: yOf expects a TextLine, so compute label center Y directly without projection:
+    // To project the label center too, use a small helper to build a faux TextLine-like center.
+    // Simpler: approximate by projecting the sum label line via yOf(sumLabel line).
 
-    final yT = (sumLabelBounds.top - amountBox.top).abs();
-    final yB = (sumLabelBounds.bottom - amountBox.bottom).abs();
-    final yCenter = (sumLabelBounds.top + sumLabelBounds.bottom) / 2;
+    // Better version (if you have the line): yOf(sumLabel.line)
+    // Here we assume you've passed the label's line into yOf when sorting above.
 
-    final amountCenter = (amountBox.top + amountBox.bottom) / 2;
-    final isAboveOrAligned =
-        amountCenter <= yCenter + ReceiptConstants.boundingBoxBuffer / 2;
-
-    final yCompare = min(yT, yB);
-    return isAboveOrAligned && yCompare <= ReceiptConstants.boundingBoxBuffer;
+    // Threshold: keep your existing tolerance
+    return dy <= ReceiptConstants.boundingBoxBuffer;
   }
 
   static String? _detectsLocale(String text) {
@@ -388,25 +421,24 @@ final class ReceiptParser {
     return Intl.defaultLocale;
   }
 
-  static void _sortByDistance(Rect amountBox, List<RecognizedEntity> entities) {
+  static void _sortByDistance(
+    Rect amountBox,
+    List<RecognizedEntity> entities,
+    double Function(TextLine) yOf,
+  ) {
     entities.sort((a, b) {
-      int verticalCompare(Rect aBox, Rect bBox) {
-        final aT = (amountBox.top - aBox.top).abs();
-        final bT = (amountBox.top - bBox.top).abs();
-        final aB = (amountBox.bottom - aBox.bottom).abs();
-        final bB = (amountBox.bottom - bBox.bottom).abs();
-        return min(aT, aB).compareTo(min(bT, bB));
-      }
-
-      final result = verticalCompare(a.line.boundingBox, b.line.boundingBox);
-      return result != 0
-          ? result
+      final dyA = (yOf(a.line) - (amountBox.top + amountBox.bottom) / 2).abs();
+      final dyB = (yOf(b.line) - (amountBox.top + amountBox.bottom) / 2).abs();
+      final vc = dyA.compareTo(dyB);
+      return vc != 0
+          ? vc
           : a.line.boundingBox.left.compareTo(b.line.boundingBox.left);
     });
   }
 
   static List<RecognizedEntity> _filterIntermediaryEntities(
     List<RecognizedEntity> entities,
+    double Function(TextLine) yOf,
   ) {
     final filtered = <RecognizedEntity>[];
     const verticalTolerance = ReceiptConstants.boundingBoxBuffer;
@@ -415,7 +447,6 @@ final class ReceiptParser {
       entities.whereType<RecognizedUnknown>(),
       (e) => e.line.boundingBox.left,
     );
-
     final rightAmount = maxBy(
       entities.whereType<RecognizedAmount>(),
       (e) => e.line.boundingBox.right,
@@ -427,16 +458,15 @@ final class ReceiptParser {
 
     RecognizedAmount? sum;
     for (final a in entities.whereType<RecognizedAmount>()) {
-      if (sumLabel != null && _isNearbyAmount(sumLabel.line.boundingBox, a)) {
+      if (sumLabel != null &&
+          _isNearbyAmount(sumLabel.line.boundingBox, a, yOf)) {
         sum = a;
         break;
       }
     }
 
     for (final entity in entities) {
-      final type = entity.runtimeType;
-
-      if (type == RecognizedCompany) {
+      if (entity is RecognizedCompany) {
         filtered.add(entity);
         continue;
       }
@@ -447,19 +477,19 @@ final class ReceiptParser {
             leftUnknown,
             rightAmount,
             verticalTolerance,
+            yOf,
           );
 
       final betweenSumLabelAndSum =
           sumLabel != null &&
           sum != null &&
-          entity.line.boundingBox.top > sumLabel.line.boundingBox.bottom &&
-          entity.line.boundingBox.bottom < sum.line.boundingBox.top;
+          yOf(entity.line) > yOf(sumLabel.line) &&
+          yOf(entity.line) < yOf(sum.line);
 
       if (!betweenUnknownAndAmount && !betweenSumLabelAndSum) {
         filtered.add(entity);
       }
     }
-
     return filtered;
   }
 
@@ -468,26 +498,17 @@ final class ReceiptParser {
     RecognizedUnknown leftUnknown,
     RecognizedAmount rightAmount,
     int verticalTolerance,
+    double Function(TextLine) yOf,
   ) {
     final box = entity.line.boundingBox;
-
     final horizontallyBetween =
         box.left > leftUnknown.line.boundingBox.right &&
         box.right < rightAmount.line.boundingBox.left;
 
-    final topDeltaUnknown = (box.top - leftUnknown.line.boundingBox.top).abs();
-    final bottomDeltaUnknown =
-        (box.bottom - leftUnknown.line.boundingBox.bottom).abs();
-
-    final topDeltaAmount = (box.top - rightAmount.line.boundingBox.top).abs();
-    final bottomDeltaAmount =
-        (box.bottom - rightAmount.line.boundingBox.bottom).abs();
-
+    final dyU = (yOf(entity.line) - yOf(leftUnknown.line)).abs();
+    final dyA = (yOf(entity.line) - yOf(rightAmount.line)).abs();
     final verticallyAligned =
-        topDeltaUnknown < verticalTolerance ||
-        bottomDeltaUnknown < verticalTolerance ||
-        topDeltaAmount < verticalTolerance ||
-        bottomDeltaAmount < verticalTolerance;
+        dyU < verticalTolerance || dyA < verticalTolerance;
 
     return horizontallyBetween && verticallyAligned;
   }

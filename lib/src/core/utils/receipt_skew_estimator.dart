@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Estimates the skew angle (degrees) of a receipt from its product/price columns.
@@ -39,15 +41,18 @@ class ReceiptSkewEstimator {
 
     final leftDeg = _fitAngleDegrees(leftPoints, minSamples);
     final rightDeg = _fitAngleDegrees(rightPoints, minSamples);
+    final double resultDeg;
 
     if (leftDeg != null && rightDeg != null) {
-      return (leftDeg + rightDeg) / 2.0;
+      resultDeg = (leftDeg + rightDeg) / 2.0;
     } else if (leftDeg != null) {
-      return leftDeg;
+      resultDeg = leftDeg;
     } else if (rightDeg != null) {
-      return rightDeg;
+      resultDeg = rightDeg;
+    } else {
+      resultDeg = 0.0;
     }
-    return 0.0;
+    return resultDeg.abs() < 0.5 ? 0.0 : resultDeg;
   }
 
   /// Weighted least squares fit of x = a*y + b, then angle = atan(a) in degrees.
@@ -98,4 +103,71 @@ class _LineFit {
   final double b;
 
   _LineFit({required this.a, required this.b});
+}
+
+extension on Rect {
+  double get centerY => (top + bottom) / 2.0;
+}
+
+/// Estimates the skew angle (degrees) from raw OCR lines (no positions needed).
+/// Strategy:
+/// - For each line, take a representative point on the **left edge** and one on
+///   the **right edge** (prefer cornerPoints; fall back to boundingBox).
+/// - Fit x = a*y + b (weighted) for left and right sets separately.
+/// - Angle = atan(a) in degrees; return the average of left & right when both available.
+extension ReceiptSkewEstimatorFromLines on ReceiptSkewEstimator {
+  static double estimateDegreesFromLines(
+    List<TextLine> lines, {
+    int minSamples = 6,
+  }) {
+    final left = <_WPoint>[];
+    final right = <_WPoint>[];
+
+    for (final line in lines) {
+      if (line.cornerPoints.length >= 4) {
+        // ML Kit ordering is usually top-left, top-right, bottom-right, bottom-left
+        // but we guard by selecting minX and maxX points to be safe.
+        final pts =
+            line.cornerPoints
+                .map((p) => math.Point<double>(p.x.toDouble(), p.y.toDouble()))
+                .toList();
+
+        final leftMost = pts.reduce((a, b) => (a.x < b.x) ? a : b);
+        final rightMost = pts.reduce((a, b) => (a.x > b.x) ? a : b);
+        final wy = _safeWeight(line);
+        left.add(_WPoint(x: leftMost.x, y: leftMost.y, w: wy));
+        right.add(_WPoint(x: rightMost.x, y: rightMost.y, w: wy));
+      } else {
+        final bb = line.boundingBox;
+        final wy = _safeWeight(line);
+        // Use the box edges at the vertical center as representative points
+        left.add(_WPoint(x: bb.left.toDouble(), y: bb.centerY, w: wy));
+        right.add(_WPoint(x: bb.right.toDouble(), y: bb.centerY, w: wy));
+      }
+    }
+
+    final leftDeg = ReceiptSkewEstimator._fitAngleDegrees(left, minSamples);
+    final rightDeg = ReceiptSkewEstimator._fitAngleDegrees(right, minSamples);
+    final double resultDeg;
+
+    if (leftDeg != null && rightDeg != null) {
+      resultDeg = (leftDeg + rightDeg) / 2.0;
+    } else if (leftDeg != null) {
+      resultDeg = leftDeg;
+    } else if (rightDeg != null) {
+      resultDeg = rightDeg;
+    } else {
+      resultDeg = 0.0;
+    }
+    return resultDeg.abs() < 0.5 ? 0.0 : resultDeg;
+  }
+}
+
+// Helper: turn TextLine confidence/geometry into a sane weight (1..100).
+double _safeWeight(TextLine line) {
+  final c = (line.confidence ?? 50).toDouble();
+  // As a tiny stabilizer, blend in line height (clipped) so taller lines carry a bit more weight.
+  final h = (line.boundingBox.height.toDouble()).clamp(8.0, 80.0);
+  final blended = 0.85 * c + 0.15 * (h * 100.0 / 80.0);
+  return blended.clamp(1.0, 100.0);
 }
