@@ -536,7 +536,7 @@ final class ReceiptParser {
       (pos) =>
           receipt.sum != null &&
           (pos.price.value - receipt.sum!.value).abs() <
-              ReceiptPatterns.sumTolerance &&
+              ReceiptConstants.sumTolerance &&
           ReceiptPatterns.sumLabel.hasMatch(pos.product.value),
     );
 
@@ -545,7 +545,7 @@ final class ReceiptParser {
     num currentSum = receipt.calculatedSum.value;
 
     for (final pos in positions) {
-      if ((currentSum - target).abs() <= ReceiptPatterns.sumTolerance) break;
+      if ((currentSum - target).abs() <= ReceiptConstants.sumTolerance) break;
 
       final newSum = currentSum - pos.price.value;
       final improvement = (currentSum - target).abs() - (newSum - target).abs();

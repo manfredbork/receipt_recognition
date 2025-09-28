@@ -148,6 +148,9 @@ class ValidationResult {
 class ReceiptConstants {
   /// Vertical tolerance (in pixels) for comparing bounding box alignment.
   static const int boundingBoxBuffer = 30;
+
+  /// Sum tolerance tight and more precise below 1 cent.
+  static const double sumTolerance = 0.009;
 }
 
 extension ReceiptHash on RecognizedReceipt {
