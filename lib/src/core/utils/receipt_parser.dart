@@ -23,7 +23,7 @@ final class ReceiptParser {
   ) {
     final lines = _convertText(text);
 
-    final angleDeg = ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
+    final angleDeg = 0.0; // ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
     final rot = _Rotator(angleDeg);
 
     lines.sort((a, b) => rot.yOf(a).compareTo(rot.yOf(b)));
