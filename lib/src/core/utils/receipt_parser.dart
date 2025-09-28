@@ -23,7 +23,7 @@ final class ReceiptParser {
   ) {
     final lines = _convertText(text);
 
-    final angleDeg = 0.0; // ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
+    final angleDeg = ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
     final rot = _Rotator(angleDeg);
 
     lines.sort((a, b) => rot.yOf(a).compareTo(rot.yOf(b)));
@@ -601,7 +601,7 @@ final class ReceiptParser {
     required double Function(RecognizedEntity e, _Rotator rot) xMetric,
     required bool dropRightTail,
     int minSamples = 3,
-    double k = 2.5,
+    double k = 5.0,
   }) {
     final targets = entities.where(isTarget).toList();
     if (targets.length < minSamples) return entities;
