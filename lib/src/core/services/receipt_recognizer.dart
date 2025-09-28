@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
@@ -143,10 +145,12 @@ final class ReceiptRecognizer {
       );
     }
 
-    final percentage =
-        _calculateMatchPercentage(receipt).clamp(0, 100) -
-        _minValidScans +
-        _validScans;
+    final percentage = max(
+      0,
+      max(_calculateMatchPercentage(receipt), 100) -
+          _minValidScans +
+          _validScans,
+    );
 
     if (percentage.round() == 100) {
       return ValidationResult(

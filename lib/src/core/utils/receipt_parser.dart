@@ -29,8 +29,9 @@ final class ReceiptParser {
     lines.sort((a, b) => rot.yOf(a).compareTo(rot.yOf(b)));
 
     final parsed = _parseLines(lines, options, rot);
-    final pruned = _filterAmountXOutliers(parsed, rot);
-    final filtered = _filterIntermediaryEntities(pruned, rot);
+    final prunedU = _filterUnknownLeftAlignmentOutliers(parsed, rot);
+    final prunedA = _filterAmountXOutliers(prunedU, rot);
+    final filtered = _filterIntermediaryEntities(prunedA, rot);
 
     _lastReceipt = _buildReceipt(filtered, rot);
 
@@ -589,36 +590,71 @@ final class ReceiptParser {
     }
   }
 
-  static List<RecognizedEntity> _filterAmountXOutliers(
+  // Generic one-sided MAD outlier filter in rotated X-space.
+  // - isTarget: which entities to consider (e.g., Unknowns or Amounts)
+  // - xMetric:  how to measure alignment (e.g., xLeftOf(box) for Unknowns, xOf(line) for Amounts)
+  // - dropRightTail: true => drop x > upperBound; false => drop x < lowerBound
+  static List<RecognizedEntity> _filterOneSidedXOutliers(
     List<RecognizedEntity> entities,
-    _Rotator rot,
-  ) {
-    final amounts = entities.whereType<RecognizedAmount>().toList();
-    if (amounts.length < 3) return entities;
+    _Rotator rot, {
+    required bool Function(RecognizedEntity e) isTarget,
+    required double Function(RecognizedEntity e, _Rotator rot) xMetric,
+    required bool dropRightTail,
+    int minSamples = 3,
+    double k = 2.5,
+  }) {
+    final targets = entities.where(isTarget).toList();
+    if (targets.length < minSamples) return entities;
 
-    final xs = amounts.map((a) => rot.xOf(a.line)).toList();
+    final xs = targets.map((e) => xMetric(e, rot)).toList();
 
     final med = _median(xs);
     if (med.isNaN) return entities;
 
     final madRaw = _mad(xs, med);
     final madScaled = (madRaw == 0.0) ? 1.0 : (1.4826 * madRaw);
-
-    const k = 2.5;
     final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
-    final lowerBound = med - k * madScaled - tol;
 
-    final outlierSet = <TextLine>{
-      for (var i = 0; i < amounts.length; i++)
-        if (xs[i] < lowerBound) amounts[i].line,
-    };
+    double lowerBound = med - k * madScaled - tol;
+    double upperBound = med + k * madScaled + tol;
 
-    if (outlierSet.isEmpty) return entities;
+    final outlierLines = <TextLine>{};
+    for (var i = 0; i < targets.length; i++) {
+      final x = xs[i];
+      final isOutlier = dropRightTail ? (x > upperBound) : (x < lowerBound);
+      if (isOutlier) outlierLines.add(targets[i].line);
+    }
+    if (outlierLines.isEmpty) return entities;
 
-    return entities.where((e) {
-      if (e is RecognizedAmount) return !outlierSet.contains(e.line);
-      return true;
-    }).toList();
+    return entities
+        .where((e) => !(isTarget(e) && outlierLines.contains(e.line)))
+        .toList();
+  }
+
+  static List<RecognizedEntity> _filterUnknownLeftAlignmentOutliers(
+    List<RecognizedEntity> entities,
+    _Rotator rot,
+  ) {
+    return _filterOneSidedXOutliers(
+      entities,
+      rot,
+      isTarget: (e) => e is RecognizedUnknown,
+      xMetric: (e, r) => r.xLeftOf(e.line.boundingBox),
+      dropRightTail: true,
+    );
+  }
+
+  static List<RecognizedEntity> _filterAmountXOutliers(
+    List<RecognizedEntity> entities,
+    _Rotator rot,
+  ) {
+    return _filterOneSidedXOutliers(
+      entities,
+      rot,
+      isTarget: (e) => e is RecognizedAmount,
+      xMetric: (e, r) => r.xOf(e.line),
+      dropRightTail: false,
+    );
   }
 
   static double _median(List<double> xs) {

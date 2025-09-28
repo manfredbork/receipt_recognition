@@ -7,12 +7,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 final class ReceiptOutlierRemover {
   static const int _tau = 1;
   static const int _maxCandidates = 12;
-  static const int _lowConfidenceTake = 8;
-  static const int _suspectExtraCap = 4;
   static const int _maxRemovals = 5;
-  static const int _maxConfidenceForRemoval = 30;
-  static const int _oppositeSignPenalty = 35;
-  static const int _maxOppositeSignTake = 1;
 
   /// Entry point: modifies [receipt.positions] in-place when a valid outlier
   /// subset is found that fits the detected sum within [_tau] cents.
@@ -36,17 +31,61 @@ final class ReceiptOutlierRemover {
 
     final detectedCents = _toCents(detectedSum);
     final calculatedCents = _toCents(calculatedSum);
-    final delta = calculatedCents - detectedCents;
-    if (delta == 0) return;
-
-    final candidates = _buildCandidates(receipt);
+    final deltaCents = calculatedCents - detectedCents;
+    final candidates = _buildCandidates(receipt, deltaCents);
     if (candidates.isEmpty) return;
+
+    final Map<int, List<_Cand>> byPrice = {};
+    for (final c in candidates) {
+      (byPrice[c.cents] ??= <_Cand>[]).add(c);
+    }
+
+    int inGroupCmp(_Cand a, _Cand b) {
+      final byConf = a.confidence.compareTo(b.confidence); // lower first
+      if (byConf != 0) return byConf;
+      if (a.suspect != b.suspect) return a.suspect ? -1 : 1; // suspect first
+      return b.cents.abs().compareTo(a.cents.abs()); // larger |price| first
+    }
+
+    for (final g in byPrice.values) {
+      g.sort(inGroupCmp);
+    }
+
+    final groupKeys =
+        byPrice.keys.toList()..sort((x, y) {
+          final ax = byPrice[x]!.first;
+          final ay = byPrice[y]!.first;
+          final byConf = ax.confidence.compareTo(ay.confidence);
+          if (byConf != 0) return byConf;
+          if (ax.suspect != ay.suspect) return ax.suspect ? -1 : 1;
+          return ay.cents.abs().compareTo(ax.cents.abs());
+        });
+
+    final ranked = <_Cand>[];
+    int depth = 0;
+    while (ranked.length < _maxCandidates) {
+      bool progressed = false;
+      for (final k in groupKeys) {
+        final g = byPrice[k]!;
+        if (depth < g.length) {
+          ranked.add(g[depth]);
+          progressed = true;
+          if (ranked.length >= _maxCandidates) break;
+        }
+      }
+      if (!progressed) break;
+      depth++;
+    }
+
+    candidates
+      ..clear()
+      ..addAll(ranked);
 
     int? bestMask;
     _Best best = const _Best.none();
     for (var i = 0; i < candidates.length; i++) {
       final s = candidates[i].cents;
-      final diff = (s - delta).abs();
+      final diff = (s - deltaCents).abs();
       if (diff <= _tau) {
         best = _Best(count: 1, score: candidates[i].score, diffAbs: diff);
         bestMask = (1 << i);
@@ -58,7 +97,7 @@ final class ReceiptOutlierRemover {
       for (var i = 0; i < candidates.length; i++) {
         for (var j = i + 1; j < candidates.length; j++) {
           final s = candidates[i].cents + candidates[j].cents;
-          final diff = (s - delta).abs();
+          final diff = (s - deltaCents).abs();
           if (diff <= _tau) {
             final sc = candidates[i].score + candidates[j].score;
             final cur = _Best(count: 2, score: sc, diffAbs: diff);
@@ -91,9 +130,9 @@ final class ReceiptOutlierRemover {
 
       final minReach = removedSum + tailMinNeg[i];
       final maxReach = removedSum + tailMaxPos[i];
-      if (delta < minReach - _tau || delta > maxReach + _tau) return;
+      if (deltaCents < minReach - _tau || deltaCents > maxReach + _tau) return;
 
-      final curDiff = (removedSum - delta).abs();
+      final curDiff = (removedSum - deltaCents).abs();
       if (curDiff <= _tau) {
         final cur = _Best(
           count: removedCount,
@@ -153,103 +192,93 @@ final class ReceiptOutlierRemover {
 
   static int _toCents(num v) => (v * 100).round();
 
-  static int _signInt(int x) => x == 0 ? 0 : (x > 0 ? 1 : -1);
+  static List<_Cand> _buildCandidates(
+    RecognizedReceipt receipt,
+    int deltaCents,
+  ) {
+    if (receipt.sum == null) return const <_Cand>[];
 
-  static List<_Cand> _buildCandidates(RecognizedReceipt receipt) {
-    final int deltaCents =
-        _toCents(receipt.calculatedSum.value) - _toCents(receipt.sum!.value);
+    // Tunables for this selector (local to keep the function self-contained).
+    const int lowConfThreshold = 35; // only touch items we don't trust much
+    const int minSamples = 3; // need enough probes/observations
+    final int tau = _tau; // cents tolerance (existing constant)
 
-    final n = receipt.positions.length;
-    if (n == 0) return const <_Cand>[];
-
-    final need = _signInt(deltaCents);
-
-    final preferred = <_Cand>[];
-    final opposite = <_Cand>[];
-
-    for (var i = 0; i < n; i++) {
+    // Gather positive-price, low-confidence, well-probed positions.
+    final candidatesRaw = <_Cand>[];
+    for (var i = 0; i < receipt.positions.length; i++) {
       final pos = receipt.positions[i];
       final cents = _toCents(pos.price.value);
-      final sgn = _signInt(cents);
 
-      final conf = pos.confidence.clamp(0, 100);
-      if (conf > _maxConfidenceForRemoval) continue;
+      // Effective confidence = max(position, product) to be conservative.
+      final effConf = math.max(pos.confidence, pos.product.confidence);
+
+      // Probe count / consensus from alternative texts in the position's group.
+      final alts = pos.product.alternativeTexts;
+
+      if (effConf > lowConfThreshold && alts.length > minSamples) continue;
+
+      // Optional delta-size gate: prefer items not wildly bigger than the gap.
+      if (cents > deltaCents + tau) {
+        // We'll allow falling back later if this gate becomes too restrictive.
+        continue;
+      }
 
       final suspect = _isSuspectKeyword(_safeProductText(pos));
-      final baseScore = 100 - conf;
-      var score = suspect ? baseScore + 50 : baseScore;
+      final score = (100 - effConf) + (suspect ? 50 : 0); // simple, monotone
 
-      if (need == 0 || sgn == need) {
-        preferred.add(
-          _Cand(
-            index: i,
-            cents: cents,
-            confidence: conf,
-            suspect: suspect,
-            score: score,
-          ),
-        );
-      } else {
-        score -= _oppositeSignPenalty;
-        opposite.add(
-          _Cand(
-            index: i,
-            cents: cents,
-            confidence: conf,
-            suspect: suspect,
-            score: score,
-          ),
-        );
-      }
-    }
-
-    if (preferred.isEmpty && opposite.isEmpty) return const <_Cand>[];
-
-    int takeFrom(List<_Cand> src, int limit, List<_Cand> out) {
-      final byConf = [...src]
-        ..sort((a, b) => a.confidence.compareTo(b.confidence));
-      for (final r in byConf) {
-        if (out.length >= limit) break;
-        out.add(r);
-      }
-      final suspects =
-          src
-              .where((r) => r.suspect && !out.any((c) => c.index == r.index))
-              .toList()
-            ..sort((a, b) => b.score.compareTo(a.score));
-
-      for (final r in suspects) {
-        if (out.length >= limit + _suspectExtraCap) break;
-        out.add(r);
-      }
-      return out.length;
-    }
-
-    final candidates = <_Cand>[];
-
-    takeFrom(preferred, _lowConfidenceTake, candidates);
-
-    if (_maxOppositeSignTake > 0 && candidates.length < _maxCandidates) {
-      final room = math.min(
-        _maxOppositeSignTake,
-        _maxCandidates - candidates.length,
+      candidatesRaw.add(
+        _Cand(
+          index: i,
+          cents: cents,
+          confidence: effConf,
+          suspect: suspect,
+          score: score,
+        ),
       );
-      final added = <_Cand>[];
-      takeFrom(opposite, room, added);
-      candidates.addAll(added);
     }
 
-    candidates.sort((a, b) {
-      final byConf = a.confidence.compareTo(b.confidence);
+    // If the delta-size gate filtered everything, retry without that gate.
+    List<_Cand> pool = candidatesRaw;
+    if (pool.isEmpty) {
+      for (var i = 0; i < receipt.positions.length; i++) {
+        final pos = receipt.positions[i];
+        final cents = _toCents(pos.price.value);
+        if (cents <= 0) continue;
+
+        final prodConf = pos.product.confidence;
+        final effConf = (pos.confidence > prodConf) ? pos.confidence : prodConf;
+        if (effConf > lowConfThreshold) continue;
+
+        final suspect = _isSuspectKeyword(_safeProductText(pos));
+        final score = (100 - effConf) + (suspect ? 50 : 0);
+
+        pool.add(
+          _Cand(
+            index: i,
+            cents: cents,
+            confidence: effConf,
+            suspect: suspect,
+            score: score,
+          ),
+        );
+      }
+    }
+
+    if (pool.isEmpty) return const <_Cand>[];
+
+    // Rank: lowest confidence first, then suspects, then larger impact.
+    pool.sort((a, b) {
+      final byConf = a.confidence.compareTo(b.confidence); // lower is weaker
       if (byConf != 0) return byConf;
       if (a.suspect != b.suspect) return a.suspect ? -1 : 1;
-      return b.cents.abs().compareTo(a.cents.abs());
+      return b.cents.abs().compareTo(a.cents.abs()); // bigger helps reach delta
     });
 
-    if (candidates.length > _maxCandidates) {
-      candidates.removeRange(_maxCandidates, candidates.length);
+    // Cap total number of candidates.
+    if (pool.length > _maxCandidates) {
+      pool = pool.sublist(0, _maxCandidates);
     }
-    return candidates;
+    return pool;
   }
 
   static bool _isSuspectKeyword(String s) {
