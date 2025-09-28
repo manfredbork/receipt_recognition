@@ -24,32 +24,11 @@ abstract class ReceiptPatterns {
     caseSensitive: false,
   );
 
-  /// Pattern to match invalid number formats (e.g., 1.234,00).
-  static final RegExp invalidAmount = RegExp(r'\d+\s*[.,]\s*\d{3,}');
-
   /// Pattern to match monetary values (e.g., 1,99 or -5.00).
   static final RegExp amount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 
   /// Pattern to match strings likely to be product descriptions.
   static final RegExp unknown = RegExp(r'[\D\S]{4,}');
-
-  /// Pattern to detect unit prices like "2,99/kg" or "0,89/100g".
-  static final RegExp unitPrice = RegExp(
-    r'\d+[,.]\d{2}/\w+',
-    caseSensitive: false,
-  );
-
-  /// Pattern to detect price-like numbers not paired with labels.
-  static final RegExp standalonePrice = RegExp(r'^\s*\d+[,.]\d{2}\s*$');
-
-  /// Pattern to match integers that look like product metadata (e.g., 1, 189).
-  static final RegExp standaloneInteger = RegExp(r'^\s*\d+\s*$');
-
-  /// Price-like patterns that might appear on the left but are not product names.
-  static final RegExp misleadingPriceLikeLeft = RegExp(
-    r'^\s*-?\d+\s*[.,]\s*\d{2}\s*([€$¢£]?\s*(x\s*\d*)?)?$',
-    caseSensitive: false,
-  );
 
   /// Pattern to filter out suspicious or metadata-like product names.
   static final RegExp suspiciousProductName = RegExp(

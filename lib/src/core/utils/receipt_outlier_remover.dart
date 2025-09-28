@@ -10,6 +10,9 @@ final class ReceiptOutlierRemover {
   static const int _lowConfidenceTake = 8;
   static const int _suspectExtraCap = 4;
   static const int _maxRemovals = 5;
+  static const int _maxConfidenceForRemoval = 30;
+  static const int _oppositeSignPenalty = 35;
+  static const int _maxOppositeSignTake = 1;
 
   /// Entry point: modifies [receipt.positions] in-place when a valid outlier
   /// subset is found that fits the detected sum within [_tau] cents.
@@ -150,46 +153,90 @@ final class ReceiptOutlierRemover {
 
   static int _toCents(num v) => (v * 100).round();
 
+  static int _signInt(int x) => x == 0 ? 0 : (x > 0 ? 1 : -1);
+
   static List<_Cand> _buildCandidates(RecognizedReceipt receipt) {
+    final int deltaCents =
+        _toCents(receipt.calculatedSum.value) - _toCents(receipt.sum!.value);
+
     final n = receipt.positions.length;
-    final records = <_Cand>[];
+    if (n == 0) return const <_Cand>[];
+
+    final need = _signInt(deltaCents);
+
+    final preferred = <_Cand>[];
+    final opposite = <_Cand>[];
 
     for (var i = 0; i < n; i++) {
       final pos = receipt.positions[i];
       final cents = _toCents(pos.price.value);
+      final sgn = _signInt(cents);
+
       final conf = pos.confidence.clamp(0, 100);
+      if (conf > _maxConfidenceForRemoval) continue;
+
       final suspect = _isSuspectKeyword(_safeProductText(pos));
       final baseScore = 100 - conf;
-      final score = suspect ? baseScore + 50 : baseScore;
-      records.add(
-        _Cand(
-          index: i,
-          cents: cents,
-          confidence: conf,
-          suspect: suspect,
-          score: score,
-        ),
-      );
+      var score = suspect ? baseScore + 50 : baseScore;
+
+      if (need == 0 || sgn == need) {
+        preferred.add(
+          _Cand(
+            index: i,
+            cents: cents,
+            confidence: conf,
+            suspect: suspect,
+            score: score,
+          ),
+        );
+      } else {
+        score -= _oppositeSignPenalty;
+        opposite.add(
+          _Cand(
+            index: i,
+            cents: cents,
+            confidence: conf,
+            suspect: suspect,
+            score: score,
+          ),
+        );
+      }
     }
 
-    final byConf = [...records]
-      ..sort((a, b) => a.confidence.compareTo(b.confidence));
+    if (preferred.isEmpty && opposite.isEmpty) return const <_Cand>[];
+
+    int takeFrom(List<_Cand> src, int limit, List<_Cand> out) {
+      final byConf = [...src]
+        ..sort((a, b) => a.confidence.compareTo(b.confidence));
+      for (final r in byConf) {
+        if (out.length >= limit) break;
+        out.add(r);
+      }
+      final suspects =
+          src
+              .where((r) => r.suspect && !out.any((c) => c.index == r.index))
+              .toList()
+            ..sort((a, b) => b.score.compareTo(a.score));
+
+      for (final r in suspects) {
+        if (out.length >= limit + _suspectExtraCap) break;
+        out.add(r);
+      }
+      return out.length;
+    }
+
     final candidates = <_Cand>[];
-    for (final r in byConf) {
-      if (candidates.length >= _lowConfidenceTake) break;
-      candidates.add(r);
-    }
 
-    final suspects =
-        records
-            .where(
-              (r) => r.suspect && !candidates.any((c) => c.index == r.index),
-            )
-            .toList()
-          ..sort((a, b) => b.score.compareTo(a.score));
-    for (final r in suspects) {
-      if (candidates.length >= _lowConfidenceTake + _suspectExtraCap) break;
-      candidates.add(r);
+    takeFrom(preferred, _lowConfidenceTake, candidates);
+
+    if (_maxOppositeSignTake > 0 && candidates.length < _maxCandidates) {
+      final room = math.min(
+        _maxOppositeSignTake,
+        _maxCandidates - candidates.length,
+      );
+      final added = <_Cand>[];
+      takeFrom(opposite, room, added);
+      candidates.addAll(added);
     }
 
     candidates.sort((a, b) {
@@ -198,6 +245,7 @@ final class ReceiptOutlierRemover {
       if (a.suspect != b.suspect) return a.suspect ? -1 : 1;
       return b.cents.abs().compareTo(a.cents.abs());
     });
+
     if (candidates.length > _maxCandidates) {
       candidates.removeRange(_maxCandidates, candidates.length);
     }

@@ -29,7 +29,8 @@ final class ReceiptParser {
     lines.sort((a, b) => rot.yOf(a).compareTo(rot.yOf(b)));
 
     final parsed = _parseLines(lines, options, rot);
-    final filtered = _filterIntermediaryEntities(parsed, rot);
+    final pruned = _filterAmountXOutliers(parsed, rot);
+    final filtered = _filterIntermediaryEntities(pruned, rot);
 
     _lastReceipt = _buildReceipt(filtered, rot);
 
@@ -192,7 +193,6 @@ final class ReceiptParser {
     final amount = ReceiptPatterns.amount.stringMatch(line.text);
     if (amount != null) {
       final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
-      // "Right column" test in rotated space
       if (rot.xOf(line) > receiptHalfX - tol) {
         final locale = _detectsLocale(amount);
         final trimmedAmount = ReceiptFormatter.trim(amount)
@@ -212,7 +212,6 @@ final class ReceiptParser {
     double receiptHalfX,
     _Rotator rot,
   ) {
-    if (_isLikelyMetadataLine(line)) return false;
     final unknown = ReceiptPatterns.unknown.stringMatch(line.text);
     if (unknown != null && rot.xOf(line) < receiptHalfX) {
       parsed.add(RecognizedUnknown(line: line, value: line.text));
@@ -374,15 +373,6 @@ final class ReceiptParser {
     }
 
     receipt.sum = RecognizedSum(value: pick.value, line: pick.line);
-  }
-
-  static bool _isLikelyMetadataLine(TextLine line) {
-    final text = line.text;
-
-    return ReceiptPatterns.unitPrice.hasMatch(text) ||
-        ReceiptPatterns.standaloneInteger.hasMatch(text) ||
-        ReceiptPatterns.standalonePrice.hasMatch(text) ||
-        ReceiptPatterns.misleadingPriceLikeLeft.hasMatch(text);
   }
 
   static List<String> _knownSumLabels() {
@@ -597,6 +587,51 @@ final class ReceiptParser {
         receipt.positions.removeWhere((p) => p.group == pos.group);
       }
     }
+  }
+
+  static List<RecognizedEntity> _filterAmountXOutliers(
+    List<RecognizedEntity> entities,
+    _Rotator rot,
+  ) {
+    final amounts = entities.whereType<RecognizedAmount>().toList();
+    if (amounts.length < 3) return entities;
+
+    final xs = amounts.map((a) => rot.xOf(a.line)).toList();
+
+    final med = _median(xs);
+    if (med.isNaN) return entities;
+
+    final madRaw = _mad(xs, med);
+    final madScaled = (madRaw == 0.0) ? 1.0 : (1.4826 * madRaw);
+
+    const k = 2.5;
+    final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
+    final lowerBound = med - k * madScaled - tol;
+
+    final outlierSet = <TextLine>{
+      for (var i = 0; i < amounts.length; i++)
+        if (xs[i] < lowerBound) amounts[i].line,
+    };
+
+    if (outlierSet.isEmpty) return entities;
+
+    return entities.where((e) {
+      if (e is RecognizedAmount) return !outlierSet.contains(e.line);
+      return true;
+    }).toList();
+  }
+
+  static double _median(List<double> xs) {
+    if (xs.isEmpty) return double.nan;
+    final a = [...xs]..sort();
+    final n = a.length;
+    final mid = n >> 1;
+    return (n & 1) == 1 ? a[mid] : (a[mid - 1] + a[mid]) / 2.0;
+  }
+
+  static double _mad(List<double> xs, double med) {
+    final dev = xs.map((x) => (x - med).abs()).toList()..sort();
+    return _median(dev);
   }
 }
 
