@@ -12,6 +12,8 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Uses pattern matching and spatial analysis to identify receipt components
 /// like company names, prices, products, and the total sum.
 final class ReceiptParser {
+  static RecognizedReceipt _lastReceipt = RecognizedReceipt.empty();
+
   /// Processes raw OCR text into a structured receipt.
   ///
   /// This is the main entry point for receipt parsing.
@@ -21,17 +23,17 @@ final class ReceiptParser {
   ) {
     final lines = _convertText(text);
 
-    final angleDeg = ReceiptSkewEstimatorFromLines.estimateDegreesFromLines(
-      lines,
-    );
+    final angleDeg = ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
     final rot = _Rotator(angleDeg);
 
-    // Sort by rotated Y so rows are consistent
     lines.sort((a, b) => rot.yOf(a).compareTo(rot.yOf(b)));
 
     final parsed = _parseLines(lines, options, rot);
     final filtered = _filterIntermediaryEntities(parsed, rot);
-    return _buildReceipt(filtered, rot);
+
+    _lastReceipt = _buildReceipt(filtered, rot);
+
+    return _lastReceipt;
   }
 
   static List<TextLine> _convertText(RecognizedText text) {
