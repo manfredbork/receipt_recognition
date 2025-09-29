@@ -42,7 +42,7 @@ class ReceiptSkewEstimator {
     final double resultDeg;
 
     if (leftDeg != null && rightDeg != null) {
-      resultDeg = (leftDeg + rightDeg) / 2.0;
+      resultDeg = math.min(leftDeg, rightDeg);
     } else if (leftDeg != null) {
       resultDeg = leftDeg;
     } else if (rightDeg != null) {
