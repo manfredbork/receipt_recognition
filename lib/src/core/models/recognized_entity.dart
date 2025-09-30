@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
@@ -52,6 +54,20 @@ final class RecognizedUnknown extends RecognizedEntity<String> {
 
   @override
   String format(String value) => value;
+}
+
+/// Represents the outer bounds of the receipt.
+final class RecognizedBoundingBox extends RecognizedEntity<Rect> {
+  RecognizedBoundingBox({required super.value, required super.line});
+
+  Rect get boundingBox => value;
+
+  Rect get deskewedBoundingBox => line.boundingBox;
+
+  double? get skewAngle => line.angle;
+
+  @override
+  String format(Rect value) => value.toString();
 }
 
 /// Represents a label for the sum/total (e.g., "Total", "Summe", etc.)

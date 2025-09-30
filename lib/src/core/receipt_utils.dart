@@ -4,5 +4,6 @@ export 'utils/receipt_optimizer.dart';
 export 'utils/receipt_outlier_remover.dart';
 export 'utils/receipt_parser.dart';
 export 'utils/receipt_patterns.dart';
+export 'utils/receipt_rotator.dart';
 export 'utils/receipt_skew_estimator.dart';
 export 'utils/receipt_thresholder.dart';

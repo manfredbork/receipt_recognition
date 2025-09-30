@@ -19,6 +19,9 @@ class RecognizedReceipt {
   /// The company/store name recognized from the receipt, if any.
   RecognizedCompany? company;
 
+  /// The bounding box of the receipt including skew angle and skew bounding box.
+  RecognizedBoundingBox? boundingBox;
+
   /// All intermediate OCR entities parsed from the receipt (lines, labels, amounts, etc.).
   final List<RecognizedEntity>? entities;
 
@@ -29,6 +32,7 @@ class RecognizedReceipt {
     this.sumLabel,
     this.company,
     this.entities,
+    this.boundingBox,
   });
 
   /// Creates an empty receipt with the current timestamp.

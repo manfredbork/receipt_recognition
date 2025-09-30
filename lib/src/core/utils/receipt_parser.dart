@@ -24,7 +24,7 @@ final class ReceiptParser {
     final lines = _convertText(text);
 
     final angleDeg = ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
-    final rot = _Rotator(angleDeg);
+    final rot = ReceiptRotator(angleDeg);
 
     lines.sort((a, b) => rot.yOf(a).compareTo(rot.yOf(b)));
 
@@ -64,13 +64,33 @@ final class ReceiptParser {
   static List<RecognizedEntity> _parseLines(
     List<TextLine> lines,
     Map<String, Map<String, String>> options,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final parsed = <RecognizedEntity>[];
 
-    final minX = lines.map((l) => rot.xOf(l)).reduce(math.min);
-    final maxX = lines.map((l) => rot.xOf(l)).reduce(math.max);
+    final minX = lines.map((l) => rot.xCenterLeftOf(l)).reduce(math.min);
+    final maxX = lines.map((l) => rot.xCenterRightOf(l)).reduce(math.max);
+
     final receiptHalfX = (minX + maxX) / 2;
+
+    final minY = lines.map((l) => rot.yTopCenterOf(l)).reduce(math.min);
+    final maxY = lines.map((l) => rot.yBottomCenterOf(l)).reduce(math.max);
+
+    final boundingBox = Rect.fromLTRB(minX, minY, maxX, maxY);
+
+    _applyBoundingBox(
+      TextLine(
+        text: '',
+        elements: [],
+        boundingBox: boundingBox,
+        recognizedLanguages: [],
+        cornerPoints: [],
+        confidence: null,
+        angle: rot.angleDeg,
+      ),
+      parsed,
+      rot,
+    );
 
     final customCompanyDetection = _buildCustomCompanyDetection(options);
 
@@ -105,6 +125,7 @@ final class ReceiptParser {
       }
 
       if (_shouldStopParsing(line)) break;
+
       if (_shouldIgnoreLine(line)) continue;
 
       if (_tryParseUnknown(line, parsed, receiptHalfX, rot)) {
@@ -118,11 +139,24 @@ final class ReceiptParser {
   static bool _shouldSkipLine(
     TextLine line,
     RecognizedSumLabel? detectedSumLabel,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     if (detectedSumLabel == null) return false;
     final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
     return rot.yOf(line) > rot.yOf(detectedSumLabel.line) + tol;
+  }
+
+  static bool _applyBoundingBox(
+    TextLine line,
+    List<RecognizedEntity> parsed,
+    ReceiptRotator rot,
+  ) {
+    if (line.boundingBox == Rect.zero) {
+      return false;
+    }
+    final deskewedBoundingBox = line.boundingBox; // TODO: Apply rotation
+    parsed.add(RecognizedBoundingBox(line: line, value: deskewedBoundingBox));
+    return true;
   }
 
   static bool _tryParseCompany(
@@ -173,7 +207,6 @@ final class ReceiptParser {
         return true;
       }
     }
-
     return false;
   }
 
@@ -189,7 +222,7 @@ final class ReceiptParser {
     TextLine line,
     List<RecognizedEntity> parsed,
     double receiptHalfX,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final amount = ReceiptPatterns.amount.stringMatch(line.text);
     if (amount != null) {
@@ -211,7 +244,7 @@ final class ReceiptParser {
     TextLine line,
     List<RecognizedEntity> parsed,
     double receiptHalfX,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final unknown = ReceiptPatterns.unknown.stringMatch(line.text);
     if (unknown != null && rot.xOf(line) < receiptHalfX) {
@@ -223,7 +256,7 @@ final class ReceiptParser {
 
   static RecognizedReceipt _buildReceipt(
     List<RecognizedEntity> entities,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
@@ -270,7 +303,7 @@ final class ReceiptParser {
     List<RecognizedUnknown> yUnknowns,
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     for (final entity in entities) {
       if (entity is RecognizedAmount) {
@@ -285,7 +318,7 @@ final class ReceiptParser {
     List<RecognizedUnknown> yUnknowns,
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     if (entity == receipt.sum) return;
 
@@ -305,7 +338,7 @@ final class ReceiptParser {
     RecognizedAmount amount,
     RecognizedUnknown unknown,
     List<RecognizedUnknown> forbidden,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
     final isLikelyLabel = ReceiptPatterns.sumLabel.hasMatch(unknownText);
@@ -344,7 +377,7 @@ final class ReceiptParser {
     List<RecognizedEntity> entities,
     RecognizedSumLabel? sumLabel,
     RecognizedReceipt receipt,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     if (sumLabel == null) return;
 
@@ -396,7 +429,7 @@ final class ReceiptParser {
   static double _distanceScoreRot(
     TextLine sumLabel,
     TextLine amount,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final dy = (rot.yOf(sumLabel) - rot.yOf(amount)).abs();
 
@@ -418,7 +451,7 @@ final class ReceiptParser {
   static void _sortByDistance(
     Rect amountBox,
     List<RecognizedEntity> entities,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final amountYCtr =
         rot.hasRotation
@@ -436,7 +469,7 @@ final class ReceiptParser {
   static RecognizedAmount? _findClosestSumAmount(
     RecognizedSumLabel sumLabel,
     List<RecognizedAmount> amounts,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     if (amounts.isEmpty) return null;
 
@@ -453,7 +486,7 @@ final class ReceiptParser {
 
   static List<RecognizedEntity> _filterIntermediaryEntities(
     List<RecognizedEntity> entities,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final filtered = <RecognizedEntity>[];
     const verticalTolerance = ReceiptConstants.boundingBoxBuffer;
@@ -514,7 +547,7 @@ final class ReceiptParser {
     RecognizedUnknown leftUnknown,
     RecognizedAmount rightAmount,
     int verticalTolerance,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     final box = entity.line.boundingBox;
 
@@ -596,9 +629,9 @@ final class ReceiptParser {
   // - dropRightTail: true => drop x > upperBound; false => drop x < lowerBound
   static List<RecognizedEntity> _filterOneSidedXOutliers(
     List<RecognizedEntity> entities,
-    _Rotator rot, {
+    ReceiptRotator rot, {
     required bool Function(RecognizedEntity e) isTarget,
-    required double Function(RecognizedEntity e, _Rotator rot) xMetric,
+    required double Function(RecognizedEntity e, ReceiptRotator rot) xMetric,
     required bool dropRightTail,
     int minSamples = 3,
     double k = 5.0,
@@ -633,7 +666,7 @@ final class ReceiptParser {
 
   static List<RecognizedEntity> _filterUnknownLeftAlignmentOutliers(
     List<RecognizedEntity> entities,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     return _filterOneSidedXOutliers(
       entities,
@@ -646,7 +679,7 @@ final class ReceiptParser {
 
   static List<RecognizedEntity> _filterAmountXOutliers(
     List<RecognizedEntity> entities,
-    _Rotator rot,
+    ReceiptRotator rot,
   ) {
     return _filterOneSidedXOutliers(
       entities,
@@ -668,56 +701,5 @@ final class ReceiptParser {
   static double _mad(List<double> xs, double med) {
     final dev = xs.map((x) => (x - med).abs()).toList()..sort();
     return _median(dev);
-  }
-}
-
-class _Rotator {
-  final double sinA;
-  final double cosA;
-  final bool hasRotation;
-
-  _Rotator(double angleDeg)
-    : hasRotation = angleDeg.abs() >= 0.5,
-      sinA = math.sin(-angleDeg * math.pi / 180.0),
-      cosA = math.cos(-angleDeg * math.pi / 180.0);
-
-  double yOf(TextLine l) {
-    final c = l.boundingBox.center;
-    if (!hasRotation) return c.dy.toDouble();
-    return c.dx * sinA + c.dy * cosA;
-  }
-
-  double xOf(TextLine l) {
-    final c = l.boundingBox.center;
-    if (!hasRotation) return c.dx.toDouble();
-    return c.dx * cosA - c.dy * sinA;
-  }
-
-  double xLeftOf(Rect r) {
-    if (!hasRotation) return r.left.toDouble();
-    final pts = [
-      Offset(r.left, r.top),
-      Offset(r.right, r.top),
-      Offset(r.left, r.bottom),
-      Offset(r.right, r.bottom),
-    ];
-    return pts.map((p) => p.dx * cosA - p.dy * sinA).reduce(math.min);
-  }
-
-  double xRightOf(Rect r) {
-    if (!hasRotation) return r.right.toDouble();
-    final pts = [
-      Offset(r.left, r.top),
-      Offset(r.right, r.top),
-      Offset(r.left, r.bottom),
-      Offset(r.right, r.bottom),
-    ];
-    return pts.map((p) => p.dx * cosA - p.dy * sinA).reduce(math.max);
-  }
-
-  double yOfCenter(Rect r) {
-    final c = r.center;
-    if (!hasRotation) return c.dy.toDouble();
-    return c.dx * sinA + c.dy * cosA;
   }
 }
