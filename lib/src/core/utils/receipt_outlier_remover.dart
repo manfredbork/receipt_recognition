@@ -7,13 +7,13 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 final class ReceiptOutlierRemover {
   static const int _tau = 1;
   static const int _maxCandidates = 12;
-  static const int _maxRemovals = 5;
 
   /// Entry point: modifies [receipt.positions] in-place when a valid outlier
   /// subset is found that fits the detected sum within [_tau] cents.
   static void removeOutliersToMatchSum(RecognizedReceipt receipt) {
     if (receipt.sum == null || receipt.positions.length <= 1) return;
 
+    final maxRemovals = receipt.positions.length / 4;
     final detectedSum = receipt.sum!.value.toDouble();
     final calculatedSum = receipt.calculatedSum.value.toDouble();
     final prices =
@@ -126,7 +126,7 @@ final class ReceiptOutlierRemover {
       int removedScore,
       int mask,
     ) {
-      if (removedCount > _maxRemovals) return;
+      if (removedCount > maxRemovals) return;
 
       final minReach = removedSum + tailMinNeg[i];
       final maxReach = removedSum + tailMaxPos[i];

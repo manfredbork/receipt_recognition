@@ -1,20 +1,14 @@
 /// Contains reusable regex patterns for receipt parsing.
 abstract class ReceiptPatterns {
   /// Pattern to match known supermarket or store names.
-  static final RegExp company = RegExp(
+  static final RegExp companyNames = RegExp(
     r'(Aldi|Rewe|Edeka|Penny|Lidl|Kaufland|Netto|Akzenta)',
     caseSensitive: false,
   );
 
   /// Pattern to detect common total sum labels on receipts.
-  static final RegExp sumLabel = RegExp(
+  static final RegExp sumLabels = RegExp(
     r'(Zu zahlen|Gesamt|Summe|Total)',
-    caseSensitive: false,
-  );
-
-  /// Pattern indicating where parsing should stop (e.g., refunds or change lines).
-  static final RegExp stopKeywords = RegExp(
-    r'(Geg.|Rückgeld|Bar)',
     caseSensitive: false,
   );
 

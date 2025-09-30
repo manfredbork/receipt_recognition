@@ -7,16 +7,9 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
-/// Parses raw OCR text into structured receipt data.
-///
-/// Uses pattern matching and spatial analysis to identify receipt components
-/// like company names, prices, products, and the total sum.
 final class ReceiptParser {
   static RecognizedReceipt _lastReceipt = RecognizedReceipt.empty();
 
-  /// Processes raw OCR text into a structured receipt.
-  ///
-  /// This is the main entry point for receipt parsing.
   static RecognizedReceipt processText(
     RecognizedText text,
     Map<String, Map<String, String>> options,
@@ -26,7 +19,8 @@ final class ReceiptParser {
     final angleDeg = ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
     final rot = ReceiptRotator(angleDeg);
 
-    lines.sort((a, b) => rot.yOf(a).compareTo(rot.yOf(b)));
+    // sort by deskewed vertical center
+    lines.sort((a, b) => rot.yCenter(a).compareTo(rot.yCenter(b)));
 
     final parsed = _parseLines(lines, options, rot);
     final prunedU = _filterUnknownLeftAlignmentOutliers(parsed, rot);
@@ -34,7 +28,6 @@ final class ReceiptParser {
     final filtered = _filterIntermediaryEntities(prunedA, rot);
 
     _lastReceipt = _buildReceipt(filtered, rot);
-
     return _lastReceipt;
   }
 
@@ -43,17 +36,12 @@ final class ReceiptParser {
       ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
-  static Map<String, dynamic> _buildCustomCompanyDetection(
-    Map<String, Map<String, String>> options,
-  ) {
+  static Map<String, dynamic> _buildCustomMap(Map<String, String> map) {
     String regexp = '';
     Map<String, String> mapping = {};
-    if (options.containsKey('stores')) {
-      final stores = options['stores'] ?? {};
-      for (final key in stores.keys) {
-        regexp += (regexp.isEmpty ? key : '|$key');
-        mapping[key.toLowerCase()] = stores[key]!;
-      }
+    for (final key in map.keys) {
+      regexp += (regexp.isEmpty ? key : '|$key');
+      mapping[key.toLowerCase()] = map[key]!;
     }
     return {
       'regexp': RegExp('($regexp)', caseSensitive: false),
@@ -68,23 +56,24 @@ final class ReceiptParser {
   ) {
     final parsed = <RecognizedEntity>[];
 
-    final minX = lines.map((l) => rot.xCenterLeftOf(l)).reduce(math.min);
-    final maxX = lines.map((l) => rot.xCenterRightOf(l)).reduce(math.max);
-
+    // overall bounds (coarse), using deskewed anchors
+    final minX = lines.map((l) => rot.xAtCenterLeft(l)).reduce(math.min);
+    final maxX = lines.map((l) => rot.xAtCenterRight(l)).reduce(math.max);
     final receiptHalfX = (minX + maxX) / 2;
 
-    final minY = lines.map((l) => rot.yTopCenterOf(l)).reduce(math.min);
-    final maxY = lines.map((l) => rot.yBottomCenterOf(l)).reduce(math.max);
+    // Build overall deskewed receipt box from lines (best fit).
+    final Rect overallDeskewed = lines
+        .map(rot.deskewLineBox) // rotate 4 corners -> AABB
+        .reduce((a, b) => a.expandToInclude(b)); // union
 
-    final boundingBox = Rect.fromLTRB(minX, minY, maxX, maxY);
-
+    // Store this as the receipt-level bounding box
     _applyBoundingBox(
       TextLine(
         text: '',
         elements: [],
-        boundingBox: boundingBox,
-        recognizedLanguages: [],
-        cornerPoints: [],
+        boundingBox: overallDeskewed,
+        recognizedLanguages: const [],
+        cornerPoints: const [],
         confidence: null,
         angle: rot.angleDeg,
       ),
@@ -92,7 +81,10 @@ final class ReceiptParser {
       rot,
     );
 
-    final customCompanyDetection = _buildCustomCompanyDetection(options);
+    final customCompanyDetection = _buildCustomMap(options['storeNames'] ?? {});
+    final customSumLabelDetection = _buildCustomMap(
+      options['totalLabels'] ?? {},
+    );
 
     RecognizedCompany? detectedCompany;
     RecognizedSumLabel? detectedSumLabel;
@@ -110,7 +102,7 @@ final class ReceiptParser {
         continue;
       }
 
-      if (_tryParseSumLabel(line, parsed)) {
+      if (_tryParseSumLabel(line, parsed, customSumLabelDetection)) {
         detectedSumLabel = parsed.last as RecognizedSumLabel;
         continue;
       }
@@ -120,17 +112,9 @@ final class ReceiptParser {
         continue;
       }
 
-      if (_shouldSkipLine(line, detectedSumLabel, rot)) {
-        continue;
-      }
-
-      if (_shouldStopParsing(line)) break;
-
+      if (_shouldSkipLine(line, detectedSumLabel, rot)) continue;
       if (_shouldIgnoreLine(line)) continue;
-
-      if (_tryParseUnknown(line, parsed, receiptHalfX, rot)) {
-        continue;
-      }
+      if (_tryParseUnknown(line, parsed, receiptHalfX, rot)) continue;
     }
 
     return parsed.toList();
@@ -143,7 +127,7 @@ final class ReceiptParser {
   ) {
     if (detectedSumLabel == null) return false;
     final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
-    return rot.yOf(line) > rot.yOf(detectedSumLabel.line) + tol;
+    return rot.yCenter(line) > rot.yCenter(detectedSumLabel.line) + tol;
   }
 
   static bool _applyBoundingBox(
@@ -151,12 +135,29 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     ReceiptRotator rot,
   ) {
-    if (line.boundingBox == Rect.zero) {
-      return false;
-    }
-    final deskewedBoundingBox = line.boundingBox; // TODO: Apply rotation
+    if (line.boundingBox == Rect.zero) return false;
+    // keep deskewed AABB in the entity
+    final deskewedBoundingBox = rot.deskewRect(line.boundingBox);
     parsed.add(RecognizedBoundingBox(line: line, value: deskewedBoundingBox));
     return true;
+  }
+
+  static String? _customDetection(
+    String text,
+    Map<String, dynamic> customDetection,
+  ) {
+    final customRegExp = customDetection['regexp'];
+    if (customRegExp is RegExp) {
+      final customEntity = customRegExp.stringMatch(text);
+      if (customEntity != null) {
+        if (customDetection['mapping'] is Map<String, String>) {
+          final key = customEntity.toLowerCase();
+          final value = customDetection['mapping'][key];
+          if (value != null) return value;
+        }
+      }
+    }
+    return null;
   }
 
   static bool _tryParseCompany(
@@ -164,24 +165,18 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     RecognizedCompany? detectedCompany,
     RecognizedAmount? detectedAmount,
-    Map<String, dynamic> customCompanyDetection,
+    Map<String, dynamic> customDetection,
   ) {
     if (detectedCompany == null && detectedAmount == null) {
-      final customCompanyRegExp = customCompanyDetection['regexp'];
-      if (customCompanyRegExp is RegExp) {
-        final customCompany = customCompanyRegExp.stringMatch(line.text);
-        if (customCompany != null) {
-          if (customCompanyDetection['mapping'] is Map<String, String>) {
-            final key = customCompany.toLowerCase();
-            final value = customCompanyDetection['mapping'][key];
-            if (value != null) {
-              parsed.add(RecognizedCompany(line: line, value: value));
-              return true;
-            }
-          }
-        }
+      final text = ReceiptFormatter.trim(line.text);
+
+      final customCompany = _customDetection(text, customDetection);
+      if (customCompany != null) {
+        parsed.add(RecognizedCompany(line: line, value: customCompany));
+        return true;
       }
-      final company = ReceiptPatterns.company.stringMatch(line.text);
+
+      final company = ReceiptPatterns.companyNames.stringMatch(text);
       if (company != null) {
         parsed.add(RecognizedCompany(line: line, value: company));
         return true;
@@ -190,17 +185,38 @@ final class ReceiptParser {
     return false;
   }
 
-  static bool _tryParseSumLabel(TextLine line, List<RecognizedEntity> parsed) {
+  static bool _tryParseSumLabel(
+    TextLine line,
+    List<RecognizedEntity> parsed,
+    Map<String, dynamic> customSumLabelDetection,
+  ) {
     final text = ReceiptFormatter.trim(line.text);
 
-    final match = ReceiptPatterns.sumLabel.firstMatch(text);
+    final customSumLabel = _customDetection(text, customSumLabelDetection);
+    if (customSumLabel != null) {
+      parsed.add(RecognizedSumLabel(line: line, value: customSumLabel));
+      return true;
+    }
+
+    final customRegExp = customSumLabelDetection['regexp'];
+    if (customRegExp is RegExp) {
+      for (final label in _knownSumLabels(customRegExp.pattern)) {
+        final threshold = _adaptiveThreshold(label);
+        if (ratio(text, label) >= threshold) {
+          parsed.add(RecognizedSumLabel(line: line, value: label));
+          return true;
+        }
+      }
+    }
+
+    final match = ReceiptPatterns.sumLabels.firstMatch(text);
     if (match != null) {
       final matchedValue = ReceiptFormatter.trim(match.group(0)!);
       parsed.add(RecognizedSumLabel(line: line, value: matchedValue));
       return true;
     }
 
-    for (final label in _knownSumLabels()) {
+    for (final label in _knownSumLabels(ReceiptPatterns.sumLabels.pattern)) {
       final threshold = _adaptiveThreshold(label);
       if (ratio(text, label) >= threshold) {
         parsed.add(RecognizedSumLabel(line: line, value: label));
@@ -208,10 +224,6 @@ final class ReceiptParser {
       }
     }
     return false;
-  }
-
-  static bool _shouldStopParsing(TextLine line) {
-    return ReceiptPatterns.stopKeywords.hasMatch(line.text);
   }
 
   static bool _shouldIgnoreLine(TextLine line) {
@@ -227,11 +239,11 @@ final class ReceiptParser {
     final amount = ReceiptPatterns.amount.stringMatch(line.text);
     if (amount != null) {
       final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
-      if (rot.xOf(line) > receiptHalfX - tol) {
+      if (rot.xCenter(line) > receiptHalfX - tol) {
         final locale = _detectsLocale(amount);
-        final trimmedAmount = ReceiptFormatter.trim(amount)
-            .replaceAll('\u00A0', ' ') // hard spaces to normal
-            .replaceAll(RegExp(r'[^\d,.\-]'), ''); // strip currency etc.
+        final trimmedAmount = ReceiptFormatter.trim(
+          amount,
+        ).replaceAll(RegExp(r'[^\d,.\-]'), '');
         final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
         parsed.add(RecognizedAmount(line: line, value: value));
         return true;
@@ -247,7 +259,7 @@ final class ReceiptParser {
     ReceiptRotator rot,
   ) {
     final unknown = ReceiptPatterns.unknown.stringMatch(line.text);
-    if (unknown != null && rot.xOf(line) < receiptHalfX) {
+    if (unknown != null && rot.xCenter(line) < receiptHalfX) {
       parsed.add(RecognizedUnknown(line: line, value: line.text));
       return true;
     }
@@ -263,10 +275,12 @@ final class ReceiptParser {
     final List<RecognizedUnknown> forbidden = [];
     final company = _findCompany(entities);
     final sumLabel = _findSumLabel(entities);
+    final boundingBox = _findBoundingBox(entities);
 
-    _setReceiptSum(entities, sumLabel, receipt, rot);
+    _setSum(entities, sumLabel, receipt, rot);
     _processAmounts(entities, yUnknowns, receipt, forbidden, rot);
     _processCompany(company, receipt);
+    _processBoundingBox(boundingBox, receipt);
     _filterSuspiciousProducts(receipt);
     _trimToMatchSum(receipt);
 
@@ -275,20 +289,32 @@ final class ReceiptParser {
 
   static RecognizedCompany? _findCompany(List<RecognizedEntity> entities) {
     for (final entity in entities) {
-      if (entity is RecognizedCompany) {
-        return entity;
-      }
+      if (entity is RecognizedCompany) return entity;
     }
     return null;
   }
 
   static RecognizedSumLabel? _findSumLabel(List<RecognizedEntity> entities) {
     for (final entity in entities) {
-      if (entity is RecognizedSumLabel) {
-        return entity;
-      }
+      if (entity is RecognizedSumLabel) return entity;
     }
     return null;
+  }
+
+  static RecognizedBoundingBox? _findBoundingBox(
+    List<RecognizedEntity> entities,
+  ) {
+    for (final entity in entities) {
+      if (entity is RecognizedBoundingBox) return entity;
+    }
+    return null;
+  }
+
+  static void _processBoundingBox(
+    RecognizedBoundingBox? boundingBox,
+    RecognizedReceipt receipt,
+  ) {
+    receipt.boundingBox = boundingBox;
   }
 
   static void _processCompany(
@@ -341,15 +367,15 @@ final class ReceiptParser {
     ReceiptRotator rot,
   ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
-    final isLikelyLabel = ReceiptPatterns.sumLabel.hasMatch(unknownText);
+    final isLikelyLabel = ReceiptPatterns.sumLabels.hasMatch(unknownText);
     if (forbidden.contains(unknown) || isLikelyLabel) return false;
 
     final amountBox = amount.line.boundingBox;
     final unknownBox = unknown.line.boundingBox;
 
-    final isLeftOfAmount = rot.xRightOf(unknownBox) <= rot.xLeftOf(amountBox);
+    final isLeftOfAmount = rot.maxXOf(unknownBox) <= rot.minXOf(amountBox);
 
-    final dy = (rot.yOf(amount.line) - rot.yOf(unknown.line)).abs();
+    final dy = (rot.yCenter(amount.line) - rot.yCenter(unknown.line)).abs();
     final alignedVertically = dy <= ReceiptConstants.boundingBoxBuffer;
 
     return isLeftOfAmount && alignedVertically;
@@ -373,7 +399,7 @@ final class ReceiptParser {
     return position;
   }
 
-  static void _setReceiptSum(
+  static void _setSum(
     List<RecognizedEntity> entities,
     RecognizedSumLabel? sumLabel,
     RecognizedReceipt receipt,
@@ -390,15 +416,18 @@ final class ReceiptParser {
         amounts
             .where(
               (a) =>
-                  (rot.yOf(a.line) - rot.yOf(sumLabel.line)).abs() <= tol &&
-                  rot.xOf(a.line) >=
-                      rot.xRightOf(sumLabel.line.boundingBox) - tol,
+                  (rot.yCenter(a.line) - rot.yCenter(sumLabel.line)).abs() <=
+                      tol &&
+                  rot.xCenter(a.line) >=
+                      rot.maxXOf(sumLabel.line.boundingBox) - tol,
             )
             .toList();
 
     RecognizedAmount pick;
     if (sameRow.isNotEmpty) {
-      sameRow.sort((a, b) => rot.xOf(b.line).compareTo(rot.xOf(a.line)));
+      sameRow.sort(
+        (a, b) => rot.xCenter(b.line).compareTo(rot.xCenter(a.line)),
+      );
       pick = sameRow.first;
     } else {
       final closest = _findClosestSumAmount(sumLabel, amounts, rot);
@@ -409,17 +438,14 @@ final class ReceiptParser {
     receipt.sum = RecognizedSum(value: pick.value, line: pick.line);
   }
 
-  static List<String> _knownSumLabels() {
-    final source = ReceiptPatterns.sumLabel.pattern;
+  static List<String> _knownSumLabels(String source) {
     final match = RegExp(r'\((.*?)\)').firstMatch(source);
     if (match == null) return [];
-
     return match.group(1)!.split('|').map((s) => s.trim()).toList();
   }
 
   static int _adaptiveThreshold(String label) {
     final length = label.length;
-
     if (length <= 3) return 95;
     if (length <= 6) return 90;
     if (length <= 12) return 85;
@@ -431,14 +457,13 @@ final class ReceiptParser {
     TextLine amount,
     ReceiptRotator rot,
   ) {
-    final dy = (rot.yOf(sumLabel) - rot.yOf(amount)).abs();
+    final dy = (rot.yCenter(sumLabel) - rot.yCenter(amount)).abs();
 
-    final labelRightX = rot.xRightOf(sumLabel.boundingBox);
-    final amtX = rot.xOf(amount);
+    final labelRightX = rot.maxXOf(sumLabel.boundingBox);
+    final amtX = rot.xCenter(amount);
     final dx = amtX - labelRightX;
 
     final dxPenalty = dx >= 0 ? dx : (dx.abs() * 3);
-
     return dy + (dxPenalty * 0.3);
   }
 
@@ -453,16 +478,13 @@ final class ReceiptParser {
     List<RecognizedEntity> entities,
     ReceiptRotator rot,
   ) {
-    final amountYCtr =
-        rot.hasRotation
-            ? (rot.yOfCenter(amountBox))
-            : (amountBox.top + amountBox.bottom) / 2;
+    final amountYCtr = rot.yOfCenter(amountBox);
 
     entities.sort((a, b) {
-      final dyA = (rot.yOf(a.line) - amountYCtr).abs();
-      final dyB = (rot.yOf(b.line) - amountYCtr).abs();
+      final dyA = (rot.yCenter(a.line) - amountYCtr).abs();
+      final dyB = (rot.yCenter(b.line) - amountYCtr).abs();
       final vc = dyA.compareTo(dyB);
-      return vc != 0 ? vc : rot.xOf(a.line).compareTo(rot.xOf(b.line));
+      return vc != 0 ? vc : rot.xCenter(a.line).compareTo(rot.xCenter(b.line));
     });
   }
 
@@ -493,11 +515,11 @@ final class ReceiptParser {
 
     final leftUnknown = minBy(
       entities.whereType<RecognizedUnknown>(),
-      (e) => rot.xLeftOf(e.line.boundingBox),
+      (e) => rot.minXOf(e.line.boundingBox),
     );
     final rightAmount = maxBy(
       entities.whereType<RecognizedAmount>(),
-      (e) => rot.xRightOf(e.line.boundingBox),
+      (e) => rot.maxXOf(e.line.boundingBox),
     );
 
     if (leftUnknown == null || rightAmount == null) return entities;
@@ -532,8 +554,8 @@ final class ReceiptParser {
       final betweenSumLabelAndSum =
           sumLabel != null &&
           protectedSumAmount != null &&
-          rot.yOf(entity.line) > rot.yOf(sumLabel.line) &&
-          rot.yOf(entity.line) < rot.yOf(protectedSumAmount.line);
+          rot.yCenter(entity.line) > rot.yCenter(sumLabel.line) &&
+          rot.yCenter(entity.line) < rot.yCenter(protectedSumAmount.line);
 
       if (!betweenUnknownAndAmount && !betweenSumLabelAndSum) {
         filtered.add(entity);
@@ -552,11 +574,13 @@ final class ReceiptParser {
     final box = entity.line.boundingBox;
 
     final horizontallyBetween =
-        rot.xLeftOf(box) > rot.xRightOf(leftUnknown.line.boundingBox) &&
-        rot.xRightOf(box) < rot.xLeftOf(rightAmount.line.boundingBox);
+        rot.minXOf(box) > rot.maxXOf(leftUnknown.line.boundingBox) &&
+        rot.maxXOf(box) < rot.minXOf(rightAmount.line.boundingBox);
 
-    final dyU = (rot.yOf(entity.line) - rot.yOf(leftUnknown.line)).abs();
-    final dyA = (rot.yOf(entity.line) - rot.yOf(rightAmount.line)).abs();
+    final dyU =
+        (rot.yCenter(entity.line) - rot.yCenter(leftUnknown.line)).abs();
+    final dyA =
+        (rot.yCenter(entity.line) - rot.yCenter(rightAmount.line)).abs();
     final verticallyAligned =
         dyU < verticalTolerance || dyA < verticalTolerance;
 
@@ -572,7 +596,7 @@ final class ReceiptParser {
           receipt.sum != null &&
           (pos.price.value - receipt.sum!.value).abs() <
               ReceiptConstants.sumTolerance &&
-          ReceiptPatterns.sumLabel.hasMatch(pos.product.value),
+          ReceiptPatterns.sumLabels.hasMatch(pos.product.value),
     );
 
     final positions = [...receipt.positions]
@@ -603,14 +627,10 @@ final class ReceiptParser {
 
     for (final pos in receipt.positions) {
       final productText = ReceiptFormatter.trim(pos.product.value);
-
       final isSuspicious = ReceiptPatterns.suspiciousProductName.hasMatch(
         productText,
       );
-
-      if (isSuspicious) {
-        toRemove.add(pos);
-      }
+      if (isSuspicious) toRemove.add(pos);
     }
 
     for (final pos in toRemove) {
@@ -623,10 +643,8 @@ final class ReceiptParser {
     }
   }
 
-  // Generic one-sided MAD outlier filter in rotated X-space.
-  // - isTarget: which entities to consider (e.g., Unknowns or Amounts)
-  // - xMetric:  how to measure alignment (e.g., xLeftOf(box) for Unknowns, xOf(line) for Amounts)
-  // - dropRightTail: true => drop x > upperBound; false => drop x < lowerBound
+  // --- Outlier filters in deskewed X-space ---
+
   static List<RecognizedEntity> _filterOneSidedXOutliers(
     List<RecognizedEntity> entities,
     ReceiptRotator rot, {
@@ -672,7 +690,7 @@ final class ReceiptParser {
       entities,
       rot,
       isTarget: (e) => e is RecognizedUnknown,
-      xMetric: (e, r) => r.xLeftOf(e.line.boundingBox),
+      xMetric: (e, r) => r.minXOf(e.line.boundingBox),
       dropRightTail: true,
     );
   }
@@ -685,7 +703,7 @@ final class ReceiptParser {
       entities,
       rot,
       isTarget: (e) => e is RecognizedAmount,
-      xMetric: (e, r) => r.xOf(e.line),
+      xMetric: (e, r) => r.xCenter(e.line),
       dropRightTail: false,
     );
   }

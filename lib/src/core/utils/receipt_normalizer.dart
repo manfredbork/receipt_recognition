@@ -39,37 +39,32 @@ final class ReceiptNormalizer {
     return shortenValue;
   }
 
-  /// Normalizes spaces by analyzing word boundaries across multiple recognitions.
+  /// Normalizes spaces by analyzing multiple recognitions.
   ///
-  /// Addresses issues with inconsistent spacing by comparing token patterns
+  /// Addresses issues with inconsistent spacing by comparing
   /// across multiple versions of the same text.
   static String normalizeSpecialSpaces(
     String bestText,
     List<String> otherTexts,
   ) {
-    const separator = ' ';
-    final bestTokens = bestText.split(separator);
-    for (int i = 0; i < otherTexts.length; i++) {
-      final otherTokens = otherTexts[i].split(separator);
-      if (bestTokens.length > otherTokens.length) {
-        for (int j = 1; j < bestTokens.length; j++) {
-          if (j <= otherTokens.length) {
-            final firstToken = bestTokens[j - 1];
-            final secondToken =
-                bestTokens[j] == bestTokens[j].toUpperCase()
-                    ? bestTokens[j].toUpperCase()
-                    : bestTokens[j].toLowerCase();
-            final mergedToken = firstToken + secondToken;
-            if (mergedToken == otherTokens[j - 1]) {
-              bestTokens[j - 1] = mergedToken;
-              bestTokens.removeAt(j);
-              j--;
-            }
-          }
-        }
-      }
+    const sep = ' ';
+    final searchText = bestText.split(sep).join();
+    final sameTexts =
+        otherTexts
+            .where(
+              (t) =>
+                  t.split(sep).join() == searchText &&
+                  t.length < bestText.length,
+            )
+            .toList();
+    if (sameTexts.isNotEmpty) {
+      final minLen = sameTexts.fold<int>(
+        sameTexts.first.length,
+        (m, s) => s.length < m ? s.length : m,
+      );
+      return sameTexts.firstWhere((s) => s.length == minLen);
     }
-    return bestTokens.join(separator);
+    return bestText;
   }
 
   /// Sorts a list of strings by their frequency of occurrence.

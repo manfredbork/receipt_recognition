@@ -72,10 +72,10 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 // Create a receipt recognizer
 final receiptRecognizer = ReceiptRecognizer(
   options: {
-    // The 'stores' map lets you normalize store/company names detected by OCR.
+    // The 'storeNames' map lets you normalize store/company names detected by OCR.
     // Keys: possible OCR outputs or store name variants (case-insensitive).
     // Values: the canonical store name you want in the final RecognizedReceipt.
-    'stores': {
+    'storeNames': {
       // Normalize multiple variations of Aldi:
       'aldi nord': 'Aldi Nord',
       'aldi süd': 'Aldi Süd',

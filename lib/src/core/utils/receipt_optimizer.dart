@@ -396,6 +396,7 @@ final class ReceiptOptimizer implements Optimizer {
     mergedReceipt.company ??= receipt.company;
     mergedReceipt.sum ??= receipt.sum;
     mergedReceipt.sumLabel ??= receipt.sumLabel;
+    mergedReceipt.boundingBox ??= receipt.boundingBox;
 
     _removeOutliersToMatchSum(mergedReceipt);
     _updateEntities(mergedReceipt);
@@ -404,7 +405,6 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   void _updateEntities(RecognizedReceipt receipt) {
-    final angle = ReceiptSkewEstimator.estimateDegrees(receipt);
     final products = receipt.positions.map((p) => p.product);
     final prices = receipt.positions.map((p) => p.price);
 
@@ -413,54 +413,42 @@ final class ReceiptOptimizer implements Optimizer {
       receipt.entities?.add(
         RecognizedCompany(
           value: receipt.company!.value,
-          line: _copyTextLineWithAngle(receipt.company!.line, angle),
+          line: receipt.company!.line,
         ),
       );
     }
     receipt.entities?.addAll(
       products.map(
-        (product) => RecognizedProduct(
-          value: product.value,
-          line: _copyTextLineWithAngle(product.line, angle),
-        ),
+        (product) =>
+            RecognizedProduct(value: product.value, line: product.line),
       ),
     );
     receipt.entities?.addAll(
       prices.map(
-        (price) => RecognizedPrice(
-          value: price.value,
-          line: _copyTextLineWithAngle(price.line, angle),
-        ),
+        (price) => RecognizedPrice(value: price.value, line: price.line),
       ),
     );
     if (receipt.sum != null) {
       receipt.entities?.add(
-        RecognizedSum(
-          value: receipt.sum!.value,
-          line: _copyTextLineWithAngle(receipt.sum!.line, angle),
-        ),
+        RecognizedSum(value: receipt.sum!.value, line: receipt.sum!.line),
       );
     }
     if (receipt.sumLabel != null) {
       receipt.entities?.add(
         RecognizedSumLabel(
           value: receipt.sumLabel!.value,
-          line: _copyTextLineWithAngle(receipt.sumLabel!.line, angle),
+          line: receipt.sumLabel!.line,
         ),
       );
     }
-  }
-
-  TextLine _copyTextLineWithAngle(TextLine line, double angle) {
-    return TextLine(
-      text: line.text,
-      elements: line.elements,
-      boundingBox: line.boundingBox,
-      recognizedLanguages: line.recognizedLanguages,
-      cornerPoints: line.cornerPoints,
-      confidence: line.confidence,
-      angle: angle,
-    );
+    if (receipt.boundingBox != null) {
+      receipt.entities?.add(
+        RecognizedBoundingBox(
+          value: receipt.boundingBox!.value,
+          line: receipt.boundingBox!.line,
+        ),
+      );
+    }
   }
 
   void _removeOutliersToMatchSum(RecognizedReceipt receipt) {
