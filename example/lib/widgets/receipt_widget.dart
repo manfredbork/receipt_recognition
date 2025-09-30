@@ -81,8 +81,10 @@ class ReceiptWidget extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Total',
+                            Text(
+                              receipt.sumLabel != null
+                                  ? receipt.sumLabel!.formattedValue
+                                  : 'Total',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
