@@ -83,7 +83,7 @@ class _PositionPainter extends CustomPainter {
 
     final paintTotalLabel =
         Paint()
-          ..color = Colors.red.withAlpha(192)
+          ..color = Colors.deepPurpleAccent.withAlpha(192)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
