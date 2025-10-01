@@ -96,12 +96,25 @@ final class RecognizedGroup {
     return average.toInt();
   }
 
+  String convertToPostfixText(String postfixText) {
+    if (postfixText.isEmpty) return postfixText;
+    final amountMatch = ReceiptPatterns.amount.matchAsPrefix(
+      postfixText.trim(),
+    );
+    if (amountMatch == null) return '';
+    return postfixText.substring(amountMatch.end).trim();
+  }
+
   /// Gets all position members in this group.
   List<RecognizedPosition> get members => _members;
 
   /// Gets all product texts from group members for normalization.
   List<String> get alternativeTexts =>
       _members.map((p) => p.product.text).toList();
+
+  /// Gets all product postfix texts from group members to categorize.
+  List<String> get alternativePostfixTexts =>
+      _members.map((p) => convertToPostfixText(p.price.line.text)).toList();
 
   /// Gets the average confidence score across all members.
   int get confidence {

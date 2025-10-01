@@ -12,14 +12,13 @@ final class ReceiptParser {
 
   static RecognizedReceipt processText(
     RecognizedText text,
-    Map<String, Map<String, String>> options,
+    ReceiptOptions options,
   ) {
     final lines = _convertText(text);
 
     final angleDeg = ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
     final rot = ReceiptRotator(angleDeg);
 
-    // sort by deskewed vertical center
     lines.sort((a, b) => rot.yCenter(a).compareTo(rot.yCenter(b)));
 
     final parsed = _parseLines(lines, options, rot);
@@ -27,7 +26,7 @@ final class ReceiptParser {
     final prunedA = _filterAmountXOutliers(prunedU, rot);
     final filtered = _filterIntermediaryEntities(prunedA, rot);
 
-    _lastReceipt = _buildReceipt(filtered, rot);
+    _lastReceipt = _buildReceipt(filtered, rot, options);
     return _lastReceipt;
   }
 
@@ -36,37 +35,21 @@ final class ReceiptParser {
       ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
   }
 
-  static Map<String, dynamic> _buildCustomMap(Map<String, String> map) {
-    String regexp = '';
-    Map<String, String> mapping = {};
-    for (final key in map.keys) {
-      regexp += (regexp.isEmpty ? key : '|$key');
-      mapping[key.toLowerCase()] = map[key]!;
-    }
-    return {
-      'regexp': RegExp('($regexp)', caseSensitive: false),
-      'mapping': mapping,
-    };
-  }
-
   static List<RecognizedEntity> _parseLines(
     List<TextLine> lines,
-    Map<String, Map<String, String>> options,
+    ReceiptOptions options,
     ReceiptRotator rot,
   ) {
     final parsed = <RecognizedEntity>[];
 
-    // overall bounds (coarse), using deskewed anchors
     final minX = lines.map((l) => rot.xAtCenterLeft(l)).reduce(math.min);
     final maxX = lines.map((l) => rot.xAtCenterRight(l)).reduce(math.max);
     final receiptHalfX = (minX + maxX) / 2;
 
-    // Build overall deskewed receipt box from lines (best fit).
     final Rect overallDeskewed = lines
-        .map(rot.deskewLineBox) // rotate 4 corners -> AABB
-        .reduce((a, b) => a.expandToInclude(b)); // union
+        .map(rot.deskewLineBox)
+        .reduce((a, b) => a.expandToInclude(b));
 
-    // Store this as the receipt-level bounding box
     _applyBoundingBox(
       TextLine(
         text: '',
@@ -81,10 +64,8 @@ final class ReceiptParser {
       rot,
     );
 
-    final customCompanyDetection = _buildCustomMap(options['storeNames'] ?? {});
-    final customSumLabelDetection = _buildCustomMap(
-      options['totalLabels'] ?? {},
-    );
+    final customCompanyDetection = options.storeNames;
+    final customSumLabelDetection = options.totalLabels;
 
     RecognizedCompany? detectedCompany;
     RecognizedSumLabel? detectedSumLabel;
@@ -113,7 +94,7 @@ final class ReceiptParser {
       }
 
       if (_shouldSkipLine(line, detectedSumLabel, rot)) continue;
-      if (_shouldIgnoreLine(line)) continue;
+      if (_shouldIgnoreLine(line, options)) continue; // <-- updated
       if (_tryParseUnknown(line, parsed, receiptHalfX, rot)) continue;
     }
 
@@ -142,35 +123,17 @@ final class ReceiptParser {
     return true;
   }
 
-  static String? _customDetection(
-    String text,
-    Map<String, dynamic> customDetection,
-  ) {
-    final customRegExp = customDetection['regexp'];
-    if (customRegExp is RegExp) {
-      final customEntity = customRegExp.stringMatch(text);
-      if (customEntity != null) {
-        if (customDetection['mapping'] is Map<String, String>) {
-          final key = customEntity.toLowerCase();
-          final value = customDetection['mapping'][key];
-          if (value != null) return value;
-        }
-      }
-    }
-    return null;
-  }
-
   static bool _tryParseCompany(
     TextLine line,
     List<RecognizedEntity> parsed,
     RecognizedCompany? detectedCompany,
     RecognizedAmount? detectedAmount,
-    Map<String, dynamic> customDetection,
+    DetectionMap customDetection,
   ) {
     if (detectedCompany == null && detectedAmount == null) {
       final text = ReceiptFormatter.trim(line.text);
 
-      final customCompany = _customDetection(text, customDetection);
+      final customCompany = customDetection.detect(text);
       if (customCompany != null) {
         parsed.add(RecognizedCompany(line: line, value: customCompany));
         return true;
@@ -188,24 +151,21 @@ final class ReceiptParser {
   static bool _tryParseSumLabel(
     TextLine line,
     List<RecognizedEntity> parsed,
-    Map<String, dynamic> customSumLabelDetection,
+    DetectionMap customSumLabelDetection,
   ) {
     final text = ReceiptFormatter.trim(line.text);
 
-    final customSumLabel = _customDetection(text, customSumLabelDetection);
+    final customSumLabel = customSumLabelDetection.detect(text);
     if (customSumLabel != null) {
       parsed.add(RecognizedSumLabel(line: line, value: customSumLabel));
       return true;
     }
 
-    final customRegExp = customSumLabelDetection['regexp'];
-    if (customRegExp is RegExp) {
-      for (final label in _knownSumLabels(customRegExp.pattern)) {
-        final threshold = _adaptiveThreshold(label);
-        if (ratio(text, label) >= threshold) {
-          parsed.add(RecognizedSumLabel(line: line, value: label));
-          return true;
-        }
+    for (final label in _knownSumLabels(customSumLabelDetection.pattern)) {
+      final threshold = _adaptiveThreshold(label);
+      if (ratio(text, label) >= threshold) {
+        parsed.add(RecognizedSumLabel(line: line, value: label));
+        return true;
       }
     }
 
@@ -226,8 +186,10 @@ final class ReceiptParser {
     return false;
   }
 
-  static bool _shouldIgnoreLine(TextLine line) {
-    return ReceiptPatterns.ignoreKeywords.hasMatch(line.text);
+  static bool _shouldIgnoreLine(TextLine line, ReceiptOptions options) {
+    final t = line.text;
+    return options.ignoreKeywords.hasMatch(t) ||
+        ReceiptPatterns.ignoreKeywords.hasMatch(t);
   }
 
   static bool _tryParseAmount(
@@ -269,6 +231,7 @@ final class ReceiptParser {
   static RecognizedReceipt _buildReceipt(
     List<RecognizedEntity> entities,
     ReceiptRotator rot,
+    ReceiptOptions options,
   ) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
@@ -278,7 +241,14 @@ final class ReceiptParser {
     final boundingBox = _findBoundingBox(entities);
 
     _setSum(entities, sumLabel, receipt, rot);
-    _processAmounts(entities, yUnknowns, receipt, forbidden, rot);
+    _processAmounts(
+      entities,
+      yUnknowns,
+      receipt,
+      forbidden,
+      rot,
+      options,
+    ); // <-- pass
     _processCompany(company, receipt);
     _processBoundingBox(boundingBox, receipt);
     _filterSuspiciousProducts(receipt);
@@ -330,11 +300,19 @@ final class ReceiptParser {
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
     ReceiptRotator rot,
+    ReceiptOptions options, // <-- added
   ) {
     for (final entity in entities) {
       if (entity is RecognizedAmount) {
         if (receipt.sum?.line == entity.line) continue;
-        _createPositionForAmount(entity, yUnknowns, receipt, forbidden, rot);
+        _createPositionForAmount(
+          entity,
+          yUnknowns,
+          receipt,
+          forbidden,
+          rot,
+          options,
+        ); // <-- pass
       }
     }
   }
@@ -345,6 +323,7 @@ final class ReceiptParser {
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
     ReceiptRotator rot,
+    ReceiptOptions options, // <-- added
   ) {
     if (entity == receipt.sum) return;
 
@@ -352,7 +331,12 @@ final class ReceiptParser {
 
     for (final yUnknown in yUnknowns) {
       if (_isMatchingUnknown(entity, yUnknown, forbidden, rot)) {
-        final position = _createPosition(yUnknown, entity, receipt.timestamp);
+        final position = _createPosition(
+          yUnknown,
+          entity,
+          receipt.timestamp,
+          options,
+        ); // <-- pass
         receipt.positions.add(position);
         forbidden.add(yUnknown);
         break;
@@ -385,8 +369,13 @@ final class ReceiptParser {
     RecognizedUnknown unknown,
     RecognizedAmount amount,
     DateTime timestamp,
+    ReceiptOptions options, // <-- added
   ) {
-    final product = RecognizedProduct(value: unknown.value, line: unknown.line);
+    final product = RecognizedProduct(
+      value: unknown.value,
+      line: unknown.line,
+      options: options, // <-- inject here
+    );
     final price = RecognizedPrice(line: amount.line, value: amount.value);
     final position = RecognizedPosition(
       product: product,

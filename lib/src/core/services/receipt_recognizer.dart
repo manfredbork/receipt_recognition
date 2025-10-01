@@ -11,7 +11,10 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 final class ReceiptRecognizer {
   final TextRecognizer _textRecognizer;
   final Optimizer _optimizer;
-  final Map<String, Map<String, String>> _options;
+
+  /// Typed options used by the parser.
+  final ReceiptOptions _options;
+
   final bool _singleScan;
   final int _minValidScans;
   final int _nearlyCompleteThreshold;
@@ -29,36 +32,41 @@ final class ReceiptRecognizer {
   /// Creates a receipt recognizer with configurable parameters and callbacks.
   ///
   /// Parameters:
-  /// - [textRecognizer]: Custom text recognizer (uses default if not provided)
-  /// - [optimizer]: Custom optimizer (uses default if not provided)
-  /// - [script]: Script type for text recognition
-  /// - [options]: Options to pass to receipt parser
-  /// - [singleScan]: Whether to use single-scan mode or continuous scanning
-  /// - [minValidScans]: Number of valid scans required for acceptance
-  /// - [nearlyCompleteThreshold]: Percentage threshold for nearly complete receipts
-  /// - [scanInterval]: Minimum time between scans
-  /// - [scanTimeout]: Maximum time for a scanning session
-  /// - [scanCompleteDelay]: Delay time when scan is completed
-  /// - [onScanTimeout]: Called when scanning times out
-  /// - [onScanUpdate]: Called with updates during scanning
-  /// - [onScanComplete]: Called when a valid receipt is recognized
+  /// - [textRecognizer]: Optional custom text recognizer (defaults to ML Kit Latin script).
+  /// - [optimizer]: Optional custom optimizer (defaults to [ReceiptOptimizer]).
+  /// - [script]: Script type for text recognition.
+  /// - [options]: Optional parsing options. If omitted, [ReceiptOptions.empty()]
+  ///   is used and built-in defaults ([ReceiptPatterns]) will apply.
+  /// - [singleScan]: Whether to perform only a single scan or keep scanning until valid.
+  /// - [minValidScans]: Number of valid scans required before a receipt is accepted.
+  /// - [nearlyCompleteThreshold]: Percentage threshold for considering a receipt nearly complete.
+  /// - [scanInterval]: Minimum time between scans.
+  /// - [scanTimeout]: Maximum duration for a scanning session before timeout.
+  /// - [scanCompleteDelay]: Delay before returning the final recognized receipt.
+  /// - [onScanTimeout]: Callback invoked when scanning times out.
+  /// - [onScanUpdate]: Callback invoked with scan progress updates.
+  /// - [onScanComplete]: Callback invoked when a valid receipt is recognized.
   ReceiptRecognizer({
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
-    Map<String, Map<String, String>> options = const {},
+
+    /// Optional user-defined parsing options.
+    /// Falls back to [ReceiptOptions.empty()] if not provided.
+    ReceiptOptions? options,
+
     bool singleScan = false,
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 100),
-    Duration scanTimeout = const Duration(seconds: 30),
+    Duration scanTimeout = const Duration(seconds: 20),
     Duration scanCompleteDelay = const Duration(milliseconds: 100),
     VoidCallback? onScanTimeout,
     Function(ScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(),
-       _options = options,
+       _options = options ?? ReceiptOptions.empty(),
        _singleScan = singleScan,
        _minValidScans = minValidScans,
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
@@ -83,6 +91,7 @@ final class ReceiptRecognizer {
 
     _lastScan = now;
 
+    // Use the typed options-path; parser was updated to accept ReceiptOptions.
     final receipt = await _recognizeReceipt(inputImage, _options);
 
     final optimizedReceipt = _optimizer.optimize(receipt);
@@ -114,9 +123,10 @@ final class ReceiptRecognizer {
 
   Future<RecognizedReceipt> _recognizeReceipt(
     InputImage inputImage,
-    Map<String, Map<String, String>> options,
+    ReceiptOptions options,
   ) async {
     final text = await _textRecognizer.processImage(inputImage);
+    // Parser updated to use typed options:
     return await ReceiptTextProcessor.processText(text, options);
   }
 
@@ -224,7 +234,9 @@ final class ReceiptRecognizer {
         for (final position in optimizedReceipt.positions) {
           final product = position.product.normalizedText;
           final price = position.price.formattedValue;
-          print('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
+          print(
+            '${'🛍️  $product'.padRight(totalWidth)}💰 $price ${position.confidence}',
+          );
         }
         print(
           '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',

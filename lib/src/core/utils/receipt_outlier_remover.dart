@@ -282,21 +282,8 @@ final class ReceiptOutlierRemover {
   }
 
   static bool _isSuspectKeyword(String s) {
-    final t = s.toLowerCase();
-    return t.contains('summe') ||
-        t.contains('gesamt') ||
-        t.contains('mwst') ||
-        t.contains('ust') ||
-        t.contains('steuer') ||
-        t.contains('bar') ||
-        t.contains('ec') ||
-        t.contains('karte') ||
-        t.contains('zahlung') ||
-        t.contains('wechsel') ||
-        t.contains('iban') ||
-        t.contains('gutschein') ||
-        t.contains('rabatt') ||
-        t.contains('rückgeld');
+    return ReceiptPatterns.sumLabels.hasMatch(s) ||
+        ReceiptPatterns.ignoreKeywords.hasMatch(s);
   }
 
   static String _safeProductText(RecognizedPosition p) {

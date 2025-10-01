@@ -12,7 +12,7 @@ class ReceiptTextProcessor {
   /// Uses Dart's compute function to run the parsing on a separate thread.
   static Future<RecognizedReceipt> processText(
     RecognizedText text,
-    Map<String, Map<String, String>> options,
+    ReceiptOptions options,
   ) async {
     return compute(_parseTextInBackground, {'text': text, 'options': options});
   }

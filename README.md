@@ -69,26 +69,46 @@ import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+// Example configuration for customizing parsing behavior.
+//
+// ⚡ Note: This is OPTIONAL. The package already comes with built-in defaults
+// (company detection, total sum labels, ignore/disc/deposit keywords, etc.).
+// You only need to provide this map if you want to extend or override
+// recognition rules for your receipts.
+final options = {
+  // Company/store name normalization:
+  // Map "raw OCR matches" -> "canonical company name"
+  "storeNames": {
+    "REWE": "Rewe",
+    "REWE CITY": "Rewe",
+  },
+
+  // Total sum labels:
+  // Map "raw OCR labels" -> "canonical label"
+  "totalLabels": {
+    "SUMME": "Summe",
+    "GESAMT": "Gesamt",
+  },
+
+  // Keywords to ignore (metadata, coupons, etc.)
+  "ignoreKeywords": ["E-Bon", "Coupon", "Posten"],
+
+  // Food classification keywords (postfix markers after prices)
+  "foodKeywords": ["BW", "B", "2"],
+
+  // Non-food classification keywords (e.g. household items, services)
+  "nonFoodKeywords": ["AW", "A", "1"],
+
+  // Discounts or promotional keywords
+  "discountKeywords": ["Rabatt", "Discount"],
+
+  // Deposit/bottle return keywords
+  "depositKeywords": ["Pfand", "Deposit"],
+};
+
 // Create a receipt recognizer
 final receiptRecognizer = ReceiptRecognizer(
-  options: {
-    // The 'storeNames' map lets you normalize store/company names detected by OCR.
-    // Keys: possible OCR outputs or store name variants (case-insensitive).
-    // Values: the canonical store name you want in the final RecognizedReceipt.
-    'storeNames': {
-      // Normalize multiple variations of Aldi:
-      'aldi nord': 'Aldi Nord',
-      'aldi süd': 'Aldi Süd',
-      'aldi': 'Aldi',
-
-      // Normalize REWE variants:
-      'r e w e': 'Rewe',
-      'rewe': 'Rewe',
-
-      // Normalize Lidl spelling:
-      'lidl': 'Lidl',
-    }
-  },
+  options: ReceiptOptions.fromJsonLike(options),
   singleScan: true,
   onScanComplete: (receipt) {
     // Handle the recognized receipt

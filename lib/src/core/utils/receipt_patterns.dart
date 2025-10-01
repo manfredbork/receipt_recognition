@@ -18,6 +18,27 @@ abstract class ReceiptPatterns {
     caseSensitive: false,
   );
 
+  /// Pattern to identify food keywords related to products.
+  static final RegExp foodKeywords = RegExp(r'(B|2|BW)', caseSensitive: false);
+
+  /// Pattern to identify non food keywords related to products.
+  static final RegExp nonFoodKeywords = RegExp(
+    r'(A|1|AW)',
+    caseSensitive: false,
+  );
+
+  /// Pattern to identify discount keywords related to products.
+  static final RegExp discountKeywords = RegExp(
+    r'(Rabatt|Coupon|Discount)',
+    caseSensitive: false,
+  );
+
+  /// Pattern to identify deposit keywords related to products.
+  static final RegExp depositKeywords = RegExp(
+    r'(Leerg.MW|Leergut|Einweg|Pfand|Deposit)',
+    caseSensitive: false,
+  );
+
   /// Pattern to match monetary values (e.g., 1,99 or -5.00).
   static final RegExp amount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
 

@@ -55,9 +55,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     super.initState();
     _audioPlayer.setSource(AssetSource('sounds/checkout_beep.mp3'));
     _receiptRecognizer = ReceiptRecognizer(
-      options: {
-        'stores': {'supermarket-pattern-name': 'supermarket-display-name'},
-      },
       onScanUpdate: _onScanUpdate,
       onScanTimeout: _onScanTimeout,
     );
