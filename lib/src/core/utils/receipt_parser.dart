@@ -40,6 +40,8 @@ final class ReceiptParser {
     ReceiptOptions options,
     ReceiptRotator rot,
   ) {
+    if (lines.isEmpty) return [];
+
     final parsed = <RecognizedEntity>[];
 
     final minX = lines.map((l) => rot.xAtCenterLeft(l)).reduce(math.min);

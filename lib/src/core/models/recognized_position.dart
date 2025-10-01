@@ -60,7 +60,7 @@ final class RecognizedPosition {
   ///
   /// Calculated as the average of product and price confidence scores.
   int get confidence {
-    final avg = (3 * product.confidence + 2 * price.confidence) / 5;
+    final avg = (product.confidence + price.confidence) / 2;
     return avg.isFinite ? avg.toInt() : 0;
   }
 }

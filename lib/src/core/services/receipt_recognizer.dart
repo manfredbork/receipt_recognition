@@ -234,9 +234,7 @@ final class ReceiptRecognizer {
         for (final position in optimizedReceipt.positions) {
           final product = position.product.normalizedText;
           final price = position.price.formattedValue;
-          print(
-            '${'🛍️  $product'.padRight(totalWidth)}💰 $price ${position.confidence}',
-          );
+          print('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
         }
         print(
           '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
@@ -258,8 +256,8 @@ final class ReceiptRecognizer {
     if (_validScans >= _minValidScans || _singleScan) {
       _initializedScan = null;
       _optimizer.init();
+      _onScanComplete?.call(receipt);
     }
-    _onScanComplete?.call(receipt);
     return receipt;
   }
 

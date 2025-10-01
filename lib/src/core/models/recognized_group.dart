@@ -47,8 +47,8 @@ final class RecognizedGroup {
   /// Calculates an adaptive confidence score for a product name based on similarity
   /// to previously recognized group members.
   ///
-  /// Uses fuzzy string matching (partial and full ratio) and penalizes inconsistent
-  /// matches using the standard deviation of scores. This helps prioritize stable
+  /// Uses fuzzy string matching full ratio and penalizes inconsistent matches
+  /// using the standard deviation of scores. This helps prioritize stable
   /// and coherent groupings over noisy OCR data.
   ///
   /// Returns an integer score between 0–100 indicating confidence.
@@ -56,11 +56,7 @@ final class RecognizedGroup {
     if (_members.isEmpty) return 0;
 
     final scores =
-        _members.map((b) {
-          final partial = partialRatio(product.value, b.product.value);
-          final full = ratio(product.value, b.product.value);
-          return max(partial, full);
-        }).toList();
+        _members.map((b) => ratio(product.value, b.product.value)).toList();
 
     if (scores.isEmpty) return 0;
 
