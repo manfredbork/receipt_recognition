@@ -59,6 +59,11 @@ final class ReceiptParser {
     RecognizedAmount? detectedAmount;
 
     for (final line in lines) {
+      if (_shouldExitIfValidSum(parsed, detectedSumLabel, rot)) break;
+      if (_shouldStopParsing(line, options)) break;
+      if (_shouldIgnoreLine(line, options)) continue;
+      if (_shouldSkipLine(line, detectedSumLabel, rot)) continue;
+
       if (_tryParseCompany(
         line,
         parsed,
@@ -80,17 +85,13 @@ final class ReceiptParser {
         continue;
       }
 
-      if (_shouldSkipLine(line, detectedSumLabel, rot)) continue;
-      if (_shouldIgnoreLine(line, options)) continue;
-      if (_shouldStopParsing(line, options)) break;
-      if (_shouldExitWhenCorrectSum(parsed, detectedSumLabel, rot)) break;
       if (_tryParseUnknown(line, parsed, receiptHalfX, rot)) continue;
     }
 
     return parsed.toList();
   }
 
-  static bool _shouldExitWhenCorrectSum(
+  static bool _shouldExitIfValidSum(
     List<RecognizedEntity> entities,
     RecognizedSumLabel? sumLabel,
     ReceiptRotator rot,

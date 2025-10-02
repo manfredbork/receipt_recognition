@@ -216,27 +216,29 @@ final class ReceiptRecognizer {
     RecognizedReceipt optimizedReceipt,
     ValidationResult validation,
   ) {
-    if (kDebugMode) {
-      if (optimizedReceipt.positions.isNotEmpty) {
-        print('🧾${'-' * 48}');
-        print('✅ Validation status: ${validation.status}');
-        print('💬 Message: ${validation.message}');
-        print('🧾${'-' * 48}');
-        print('🏪 Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
-        const int totalWidth = 40;
-        for (final position in optimizedReceipt.positions) {
-          final product = position.product.normalizedText;
-          final price = position.price.formattedValue;
-          print('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
-        }
-        print(
-          '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
+    if (optimizedReceipt.positions.isNotEmpty) {
+      debugPrint('🧾${'-' * 48}');
+      debugPrint('✅ Validation status: ${validation.status}');
+      debugPrint('💬 Message: ${validation.message}');
+      debugPrint('🧾${'-' * 48}');
+      debugPrint('🏪 Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
+      const int totalWidth = 40;
+      for (final position in optimizedReceipt.positions) {
+        final product = position.product.normalizedText;
+        final price = position.price.formattedValue;
+        debugPrint('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
+        debugPrint(
+          'Confidence: ${position.confidence} Stability: ${position.group?.stability}',
         );
-        print('🧾 Sum in receipt: ${optimizedReceipt.sum?.formattedValue}');
-        print(
-          '📌 Optimizer final sum label: ${optimizedReceipt.sumLabel?.formattedValue}',
-        );
+        debugPrint('Alternative Texts: ${position.product.alternativeTexts}');
       }
+      debugPrint(
+        '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
+      );
+      debugPrint('🧾 Sum in receipt: ${optimizedReceipt.sum?.formattedValue}');
+      debugPrint(
+        '📌 Optimizer final sum label: ${optimizedReceipt.sumLabel?.formattedValue}',
+      );
     }
   }
 

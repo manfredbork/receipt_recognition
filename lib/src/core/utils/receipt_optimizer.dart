@@ -38,6 +38,7 @@ final class ReceiptOptimizer implements Optimizer {
   final int _sumConfirmationThreshold;
   final int _maxCacheSize;
   final int _stabilityThreshold;
+  final int _confidenceThreshold;
   final Duration _invalidateInterval;
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
 
@@ -59,7 +60,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// - [invalidateInterval]: Time after which unstable groups are removed
   ReceiptOptimizer({
     int loopThreshold = 10,
-    int sumConfirmationThreshold = 3,
+    int sumConfirmationThreshold = 2,
     int maxCacheSize = 20,
     int confidenceThreshold = 70,
     int stabilityThreshold = 50,
@@ -68,6 +69,7 @@ final class ReceiptOptimizer implements Optimizer {
        _loopThreshold = loopThreshold,
        _sumConfirmationThreshold = sumConfirmationThreshold,
        _maxCacheSize = maxCacheSize,
+       _confidenceThreshold = confidenceThreshold,
        _stabilityThreshold = stabilityThreshold,
        _invalidateInterval = invalidateInterval,
        _shouldInitialize = false,
@@ -235,7 +237,8 @@ final class ReceiptOptimizer implements Optimizer {
       _groups.removeWhere((g) {
         final kill =
             now.difference(g.timestamp) >= _invalidateInterval &&
-            g.stability < _stabilityThreshold;
+            g.stability > _stabilityThreshold &&
+            g.confidence < _confidenceThreshold;
         if (kill) removed.add(g);
         return kill;
       });

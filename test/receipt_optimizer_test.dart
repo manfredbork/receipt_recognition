@@ -18,7 +18,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer(
       maxCacheSize: 2,
-      confidenceThreshold: 60,
+      confidenceThreshold: 50,
     );
 
     final result = optimizer.optimize(receipt, force: true);

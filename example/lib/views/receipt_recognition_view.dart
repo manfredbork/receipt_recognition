@@ -188,7 +188,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   void _handleProcessingError(Object error, StackTrace stackTrace) {
-    debugPrint('Image processing error: $error\n$stackTrace');
+    debugPrint('Image processing error: $error');
   }
 
   Future<void> _startLiveFeed() async {
