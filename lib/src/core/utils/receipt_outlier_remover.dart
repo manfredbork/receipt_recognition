@@ -282,8 +282,7 @@ final class ReceiptOutlierRemover {
   }
 
   static bool _isSuspectKeyword(String s) {
-    return ReceiptPatterns.sumLabels.hasMatch(s) ||
-        ReceiptPatterns.ignoreKeywords.hasMatch(s);
+    return ReceiptPatterns.sumLabels.hasMatch(s);
   }
 
   static String _safeProductText(RecognizedPosition p) {

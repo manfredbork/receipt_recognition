@@ -51,23 +51,9 @@ final class ReceiptParser {
     final Rect overallDeskewed = lines
         .map(rot.deskewLineBox)
         .reduce((a, b) => a.expandToInclude(b));
+    final angleDeg = rot.angleDeg;
 
-    _applyBoundingBox(
-      TextLine(
-        text: '',
-        elements: [],
-        boundingBox: overallDeskewed,
-        recognizedLanguages: const [],
-        cornerPoints: const [],
-        confidence: null,
-        angle: rot.angleDeg,
-      ),
-      parsed,
-      rot,
-    );
-
-    final customCompanyDetection = options.storeNames;
-    final customSumLabelDetection = options.totalLabels;
+    _applyBoundingBox(_createTextLine(overallDeskewed, angleDeg), parsed, rot);
 
     RecognizedCompany? detectedCompany;
     RecognizedSumLabel? detectedSumLabel;
@@ -79,13 +65,13 @@ final class ReceiptParser {
         parsed,
         detectedCompany,
         detectedAmount,
-        customCompanyDetection,
+        options.storeNames,
       )) {
         detectedCompany = parsed.last as RecognizedCompany;
         continue;
       }
 
-      if (_tryParseSumLabel(line, parsed, customSumLabelDetection)) {
+      if (_tryParseSumLabel(line, parsed, options.totalLabels)) {
         detectedSumLabel = parsed.last as RecognizedSumLabel;
         continue;
       }
@@ -96,7 +82,9 @@ final class ReceiptParser {
       }
 
       if (_shouldSkipLine(line, detectedSumLabel, rot)) continue;
-      if (_shouldIgnoreLine(line, options)) continue; // <-- updated
+      if (_shouldIgnoreLine(line, options)) continue;
+      if (_shouldStopParsing(line, options)) break;
+      if (_findSum(parsed, detectedSumLabel, rot) != null) break;
       if (_tryParseUnknown(line, parsed, receiptHalfX, rot)) continue;
     }
 
@@ -189,9 +177,13 @@ final class ReceiptParser {
   }
 
   static bool _shouldIgnoreLine(TextLine line, ReceiptOptions options) {
-    final t = line.text;
-    return options.ignoreKeywords.hasMatch(t) ||
-        ReceiptPatterns.ignoreKeywords.hasMatch(t);
+    return options.ignoreKeywords.hasMatch(line.text) ||
+        ReceiptPatterns.ignoreKeywords.hasMatch(line.text);
+  }
+
+  static bool _shouldStopParsing(TextLine line, ReceiptOptions options) {
+    return options.stopKeywords.hasMatch(line.text) ||
+        ReceiptPatterns.stopKeywords.hasMatch(line.text);
   }
 
   static bool _tryParseAmount(
@@ -367,6 +359,18 @@ final class ReceiptParser {
     return isLeftOfAmount && alignedVertically;
   }
 
+  static TextLine _createTextLine(Rect boundingBox, double angleDeg) {
+    return TextLine(
+      text: '',
+      elements: [],
+      boundingBox: boundingBox,
+      recognizedLanguages: const [],
+      cornerPoints: const [],
+      confidence: null,
+      angle: angleDeg,
+    );
+  }
+
   static RecognizedPosition _createPosition(
     RecognizedUnknown unknown,
     RecognizedAmount amount,
@@ -390,16 +394,15 @@ final class ReceiptParser {
     return position;
   }
 
-  static void _setSum(
+  static RecognizedSum? _findSum(
     List<RecognizedEntity> entities,
     RecognizedSumLabel? sumLabel,
-    RecognizedReceipt receipt,
     ReceiptRotator rot,
   ) {
-    if (sumLabel == null) return;
+    if (sumLabel == null) return null;
 
     final amounts = entities.whereType<RecognizedAmount>().toList();
-    if (amounts.isEmpty) return;
+    if (amounts.isEmpty) return null;
 
     final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
 
@@ -422,11 +425,22 @@ final class ReceiptParser {
       pick = sameRow.first;
     } else {
       final closest = _findClosestSumAmount(sumLabel, amounts, rot);
-      if (closest == null) return;
+      if (closest == null) return null;
       pick = closest;
     }
 
-    receipt.sum = RecognizedSum(value: pick.value, line: pick.line);
+    return RecognizedSum(value: pick.value, line: pick.line);
+  }
+
+  static void _setSum(
+    List<RecognizedEntity> entities,
+    RecognizedSumLabel? sumLabel,
+    RecognizedReceipt receipt,
+    ReceiptRotator rot,
+  ) {
+    RecognizedSum? sum = _findSum(entities, sumLabel, rot);
+    if (sum == null) return;
+    receipt.sum = sum;
   }
 
   static List<String> _knownSumLabels(String source) {

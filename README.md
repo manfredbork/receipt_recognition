@@ -72,7 +72,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 // Example configuration for customizing parsing behavior.
 //
 // ⚡ Note: This is OPTIONAL. The package already comes with built-in defaults
-// (company detection, total sum labels, ignore/disc/deposit keywords, etc.).
+// (company detection, total sum labels, ignore/stop/disc/deposit keywords, etc.).
 // You only need to provide this map if you want to extend or override
 // recognition rules for your receipts.
 final options = {
@@ -92,6 +92,9 @@ final options = {
 
   // Keywords to ignore (metadata, coupons, etc.)
   "ignoreKeywords": ["E-Bon", "Coupon", "Posten"],
+  
+    // Keywords to stop parsing after sum (metadata, change, etc.)
+  "stopKeywords": ["Rückgeld", "Bar", "Change"],
 
   // Food classification keywords (postfix markers after prices)
   "foodKeywords": ["BW", "B", "2"],

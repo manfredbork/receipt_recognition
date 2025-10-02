@@ -18,6 +18,12 @@ abstract class ReceiptPatterns {
     caseSensitive: false,
   );
 
+  /// Pattern indicating where parsing should stop (e.g., refunds or change lines).
+  static final RegExp stopKeywords = RegExp(
+    r'(Geg.|Rückgeld|Bar|Change)',
+    caseSensitive: false,
+  );
+
   /// Pattern to identify food keywords related to products.
   static final RegExp foodKeywords = RegExp(r'(B|2|BW)', caseSensitive: false);
 

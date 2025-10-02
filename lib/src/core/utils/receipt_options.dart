@@ -73,6 +73,7 @@ final class ReceiptOptions {
   final DetectionMap totalLabels;
 
   final KeywordSet ignoreKeywords;
+  final KeywordSet stopKeywords;
   final KeywordSet foodKeywords;
   final KeywordSet nonFoodKeywords;
   final KeywordSet discountKeywords;
@@ -82,6 +83,7 @@ final class ReceiptOptions {
     required this.storeNames,
     required this.totalLabels,
     required this.ignoreKeywords,
+    required this.stopKeywords,
     required this.foodKeywords,
     required this.nonFoodKeywords,
     required this.discountKeywords,
@@ -93,6 +95,7 @@ final class ReceiptOptions {
     storeNames: DetectionMap.fromMap(const {}),
     totalLabels: DetectionMap.fromMap(const {}),
     ignoreKeywords: KeywordSet.fromList(const []),
+    stopKeywords: KeywordSet.fromList(const []),
     foodKeywords: KeywordSet.fromList(const []),
     nonFoodKeywords: KeywordSet.fromList(const []),
     discountKeywords: KeywordSet.fromList(const []),
@@ -121,6 +124,7 @@ final class ReceiptOptions {
       storeNames: DetectionMap.fromMap(pickStrMap(json['storeNames'])),
       totalLabels: DetectionMap.fromMap(pickStrMap(json['totalLabels'])),
       ignoreKeywords: KeywordSet.fromList(pickStrList(json['ignoreKeywords'])),
+      stopKeywords: KeywordSet.fromList(pickStrList(json['stopKeywords'])),
       foodKeywords: KeywordSet.fromList(pickStrList(json['foodKeywords'])),
       nonFoodKeywords: KeywordSet.fromList(
         pickStrList(json['nonFoodKeywords']),
