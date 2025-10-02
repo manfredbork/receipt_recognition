@@ -101,9 +101,6 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
         _maxProgress = current;
       }
     });
-    if (!isScanInProgress) {
-      _playScanSound();
-    }
   }
 
   void _onScanTimeout() {
@@ -177,6 +174,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     _maxProgress = 0;
     _errorMessage = null;
 
+    _playScanSound();
     stopLiveFeed();
 
     if (mounted) {

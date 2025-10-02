@@ -46,7 +46,9 @@ abstract class ReceiptPatterns {
   );
 
   /// Pattern to match monetary values (e.g., 1,99 or -5.00).
-  static final RegExp amount = RegExp(r'-?\s*\d+\s*[.,]\s*\d{2}');
+  static final RegExp amount = RegExp(
+    r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
+  );
 
   /// Pattern to match strings likely to be product descriptions.
   static final RegExp unknown = RegExp(r'[\D\S]{4,}');

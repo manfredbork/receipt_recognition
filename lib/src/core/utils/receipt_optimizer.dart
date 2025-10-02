@@ -59,11 +59,11 @@ final class ReceiptOptimizer implements Optimizer {
   /// - [invalidateInterval]: Time after which unstable groups are removed
   ReceiptOptimizer({
     int loopThreshold = 10,
-    int sumConfirmationThreshold = 2,
-    int maxCacheSize = 10,
-    int confidenceThreshold = 75,
+    int sumConfirmationThreshold = 3,
+    int maxCacheSize = 20,
+    int confidenceThreshold = 70,
     int stabilityThreshold = 50,
-    Duration invalidateInterval = const Duration(seconds: 1),
+    Duration invalidateInterval = const Duration(seconds: 2),
   }) : _thresholder = ReceiptThresholder(baseThreshold: confidenceThreshold),
        _loopThreshold = loopThreshold,
        _sumConfirmationThreshold = sumConfirmationThreshold,
@@ -127,7 +127,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   bool _checkConvergence(RecognizedReceipt receipt) {
     final positionsHash = receipt.positions
-        .map((p) => '${p.product.value}:${p.price.value}')
+        .map((p) => '${p.product.normalizedText}:${p.price.value}')
         .join(',');
     final sumHash = receipt.sum?.formattedValue ?? '';
     final fingerprint = '$positionsHash|$sumHash';

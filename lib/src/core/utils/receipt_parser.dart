@@ -4,7 +4,6 @@ import 'dart:ui';
 import 'package:collection/collection.dart';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:intl/intl.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 final class ReceiptParser {
@@ -84,11 +83,26 @@ final class ReceiptParser {
       if (_shouldSkipLine(line, detectedSumLabel, rot)) continue;
       if (_shouldIgnoreLine(line, options)) continue;
       if (_shouldStopParsing(line, options)) break;
-      if (_findSum(parsed, detectedSumLabel, rot) != null) break;
+      if (_shouldExitWhenCorrectSum(parsed, detectedSumLabel, rot)) break;
       if (_tryParseUnknown(line, parsed, receiptHalfX, rot)) continue;
     }
 
     return parsed.toList();
+  }
+
+  static bool _shouldExitWhenCorrectSum(
+    List<RecognizedEntity> entities,
+    RecognizedSumLabel? sumLabel,
+    ReceiptRotator rot,
+  ) {
+    final sum = _findSum(entities, sumLabel, rot);
+    if (sum == null) return false;
+    final amounts = entities.whereType<RecognizedAmount>().toList();
+    if (amounts.isEmpty) return false;
+    final calculatedSum = CalculatedSum(
+      value: amounts.fold(-sum.value, (a, b) => a + b.value),
+    );
+    return sum.formattedValue == calculatedSum.formattedValue;
   }
 
   static bool _shouldSkipLine(
@@ -196,11 +210,11 @@ final class ReceiptParser {
     if (amount != null) {
       final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
       if (rot.xCenter(line) > receiptHalfX - tol) {
-        final locale = _detectsLocale(amount);
-        final trimmedAmount = ReceiptFormatter.trim(
-          amount,
-        ).replaceAll(RegExp(r'[^\d,.\-]'), '');
-        final value = NumberFormat.decimalPattern(locale).parse(trimmedAmount);
+        final trimmedAmount = ReceiptFormatter.trim(amount)
+            .replaceAll(RegExp(r'[-−–—]'), '-')
+            .replaceAll(RegExp(r'[.,‚،٫·]'), '.')
+            .replaceAll(RegExp(r'[^\d.-]'), '');
+        final value = double.parse(trimmedAmount);
         parsed.add(RecognizedAmount(line: line, value: value));
         return true;
       }
@@ -470,12 +484,6 @@ final class ReceiptParser {
 
     final dxPenalty = dx >= 0 ? dx : (dx.abs() * 3);
     return dy + (dxPenalty * 0.3);
-  }
-
-  static String? _detectsLocale(String text) {
-    if (text.contains('.')) return 'en_US';
-    if (text.contains(',')) return 'de_DE';
-    return Intl.defaultLocale;
   }
 
   static void _sortByDistance(
