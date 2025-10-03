@@ -2,29 +2,31 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Represents a complete recognized receipt with all its components.
 ///
-/// Contains positions (line items), total sum, company name, and validation methods.
+/// Contains positions (line items), total sum, company name,
+/// bounding box, and parsed OCR entities.
 class RecognizedReceipt {
   /// Line items recognized from the receipt.
   List<RecognizedPosition> positions;
 
-  /// When this receipt was processed.
+  /// Timestamp when this receipt was processed.
   DateTime timestamp;
 
-  /// The total sum recognized from the receipt, if any.
+  /// The recognized total sum, if any.
   RecognizedSum? sum;
 
-  /// The label text (e.g., "Total" or "Summe") associated with the recognized sum.
+  /// The label associated with the recognized sum (e.g. "Total").
   RecognizedSumLabel? sumLabel;
 
-  /// The company/store name recognized from the receipt, if any.
+  /// The recognized company/store name, if any.
   RecognizedCompany? company;
 
-  /// The bounding box of the receipt including skew angle and skew bounding box.
+  /// The bounding box of the receipt including skew.
   RecognizedBoundingBox? boundingBox;
 
-  /// All intermediate OCR entities parsed from the receipt (lines, labels, amounts, etc.).
+  /// All intermediate OCR entities parsed from the receipt.
   final List<RecognizedEntity>? entities;
 
+  /// Creates a new recognized receipt.
   RecognizedReceipt({
     required this.positions,
     required this.timestamp,
@@ -39,7 +41,7 @@ class RecognizedReceipt {
   factory RecognizedReceipt.empty() =>
       RecognizedReceipt(positions: [], timestamp: DateTime.now(), entities: []);
 
-  /// Creates a [RecognizedReceipt] from a JSON map for testing or deserialization.
+  /// Creates a receipt from a JSON map.
   factory RecognizedReceipt.fromJson(Map<String, dynamic> json) {
     return RecognizedReceipt(
       positions:
@@ -58,7 +60,7 @@ class RecognizedReceipt {
     );
   }
 
-  /// Creates a copy of this receipt with optionally updated properties.
+  /// Creates a copy with optionally updated properties.
   RecognizedReceipt copyWith({
     RecognizedCompany? company,
     RecognizedSum? sum,
@@ -79,7 +81,7 @@ class RecognizedReceipt {
     );
   }
 
-  /// A simple fingerprint based on position values and sum.
+  /// A simple fingerprint string based on positions and sum.
   String get fingerprint {
     final positionsHash = positions
         .map((p) => '${p.product.formattedValue}:${p.price.value}')
@@ -88,11 +90,11 @@ class RecognizedReceipt {
     return '$positionsHash|$sumValue';
   }
 
-  /// Calculates the sum of all position prices.
+  /// The calculated sum of all position prices.
   CalculatedSum get calculatedSum =>
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
 
-  /// Whether the receipt has a valid match between calculated and recognized sum.
+  /// True if the calculated and recognized sum match and value is positive.
   bool get isValid =>
       calculatedSum.formattedValue == sum?.formattedValue &&
       calculatedSum.value > 0.0;

@@ -19,6 +19,7 @@ final class RecognizedPosition {
   /// Optional group this position belongs to for optimization purposes.
   RecognizedGroup? group;
 
+  /// Creates a [RecognizedPosition] with the given product, price, and metadata.
   RecognizedPosition({
     required this.product,
     required this.price,

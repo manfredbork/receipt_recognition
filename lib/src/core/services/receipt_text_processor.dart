@@ -6,9 +6,9 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 class ReceiptTextProcessor {
   /// Runs parsing off the UI thread and returns a structured receipt.
   static Future<RecognizedReceipt> processText(
-      RecognizedText text,
-      ReceiptOptions options,
-      ) {
+    RecognizedText text,
+    ReceiptOptions options,
+  ) {
     return compute<_ParseArgs, RecognizedReceipt>(
       _parseTextInBackground,
       _ParseArgs(text, options),

@@ -6,15 +6,23 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 /// Deskews coordinates by rotating them by -angleDeg around the origin (0,0).
 /// If |angleDeg| < 0.5, rotation is skipped (fast path).
 class ReceiptRotator {
+  /// Deskew angle in degrees (positive = clockwise).
   final double angleDeg;
+
+  /// Precomputed sine of the deskew angle.
   final double sinA;
+
+  /// Precomputed cosine of the deskew angle.
   final double cosA;
+
+  /// True when rotation is applied (|angleDeg| ≥ 0.5).
   final bool hasRotation;
 
+  /// Creates a rotator that deskews geometry by -[angleDeg].
   ReceiptRotator(this.angleDeg)
-      : hasRotation = angleDeg.abs() >= 0.5,
-        sinA = math.sin(-angleDeg * math.pi / 180.0),
-        cosA = math.cos(-angleDeg * math.pi / 180.0);
+    : hasRotation = angleDeg.abs() >= 0.5,
+      sinA = math.sin(-angleDeg * math.pi / 180.0),
+      cosA = math.cos(-angleDeg * math.pi / 180.0);
 
   /// Rotates a point by -angleDeg around (0,0).
   Offset rotatePoint(Offset p) {

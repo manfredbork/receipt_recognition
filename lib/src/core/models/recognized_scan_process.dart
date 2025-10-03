@@ -2,26 +2,27 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Represents the progress of an ongoing receipt scan process.
 ///
-/// Contains information about newly recognized items and current validation status.
+/// Contains recognized positions, validation status, and the merged receipt.
 final class RecognizedScanProgress {
-  /// Positions that were recognized in this scan.
+  /// All positions recognized in this scan.
   final List<RecognizedPosition> positions;
 
-  /// Positions that were newly added in this scan.
+  /// Positions newly added in this scan.
   final List<RecognizedPosition> addedPositions;
 
-  /// Positions that were updated in this scan.
+  /// Positions updated in this scan.
   final List<RecognizedPosition> updatedPositions;
 
-  /// Current validation result for the receipt.
+  /// Current validation result of the receipt.
   final ReceiptValidationResult validationResult;
 
-  /// Estimated percentage of completion (0-100).
+  /// Estimated completion percentage (0–100).
   final int? estimatedPercentage;
 
-  /// The current merged receipt from all scans, if available.
+  /// The current merged receipt from all scans.
   final RecognizedReceipt? mergedReceipt;
 
+  /// Creates a new scan progress snapshot.
   RecognizedScanProgress({
     required this.positions,
     required this.addedPositions,
@@ -34,7 +35,7 @@ final class RecognizedScanProgress {
 
 /// Indicates the completeness level of a recognized receipt.
 enum ReceiptCompleteness {
-  /// Receipt is complete with perfect validation.
+  /// Receipt is fully complete with perfect validation.
   complete,
 
   /// Receipt is nearly complete with high validation score.
@@ -49,15 +50,16 @@ enum ReceiptCompleteness {
 
 /// Contains validation results for a recognized receipt.
 class ReceiptValidationResult {
-  /// The completeness status of the receipt.
+  /// Completeness status of the receipt.
   final ReceiptCompleteness status;
 
-  /// Percentage match between calculated and declared sum (0-100).
+  /// Match percentage between calculated and declared sum (0–100).
   final int? matchPercentage;
 
   /// Human-readable validation message.
   final String? message;
 
+  /// Creates a new validation result.
   ReceiptValidationResult({
     required this.status,
     this.matchPercentage,

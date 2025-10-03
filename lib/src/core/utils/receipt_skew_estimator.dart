@@ -7,9 +7,9 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 class ReceiptSkewEstimator {
   /// Estimates skew in degrees using weighted linear fits of left/right columns.
   static double estimateDegrees(
-      RecognizedReceipt receipt, {
-        int minSamples = 3,
-      }) {
+    RecognizedReceipt receipt, {
+    int minSamples = 3,
+  }) {
     final leftPoints = <_WPoint>[];
     final rightPoints = <_WPoint>[];
 

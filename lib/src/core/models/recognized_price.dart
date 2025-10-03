@@ -5,12 +5,13 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 ///
 /// Contains the numeric price value and its confidence score.
 final class RecognizedPrice extends RecognizedEntity<num> {
-  /// Confidence score for this recognition (0-100).
+  /// Confidence score for this recognition (0–100).
   int confidence;
 
   /// The position this price belongs to, if any.
   RecognizedPosition? position;
 
+  /// Creates a recognized price from [value] and source [line].
   RecognizedPrice({
     required super.line,
     required super.value,
@@ -18,7 +19,7 @@ final class RecognizedPrice extends RecognizedEntity<num> {
     this.position,
   });
 
-  /// Creates a [RecognizedPrice] from a JSON map.
+  /// Creates a price entity from a JSON map.
   factory RecognizedPrice.fromJson(Map<String, dynamic> json) {
     return RecognizedPrice(
       value: (json['value'] as num),
@@ -27,7 +28,7 @@ final class RecognizedPrice extends RecognizedEntity<num> {
     );
   }
 
-  /// Creates a copy of this price with optionally updated properties.
+  /// Creates a copy with optionally updated properties.
   RecognizedPrice copyWith({
     num? value,
     TextLine? line,
@@ -42,7 +43,7 @@ final class RecognizedPrice extends RecognizedEntity<num> {
     );
   }
 
-  /// Formats the price value using the ReceiptFormatter.
+  /// Formats the price value into a string.
   @override
   String format(num value) => ReceiptFormatter.format(value);
 }

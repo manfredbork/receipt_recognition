@@ -5,8 +5,8 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Static utility to remove outlier positions (wrong items, duplicates, metadata)
 /// so that the calculated sum matches the detected receipt sum.
 final class ReceiptOutlierRemover {
-  /// Modifies [receipt.positions] in-place by removing a minimal subset of items
-  /// whose total (±[ReceiptConstants.outlierTau] cents) closes the gap between calculated and detected sum.
+  /// Modifies [RecognizedReceipt.positions] in-place by removing a minimal subset of items
+  /// whose total (±ReceiptConstants.outlierTau cents) closes the gap between calculated and detected sum.
   static void removeOutliersToMatchSum(RecognizedReceipt receipt) {
     if (receipt.sum == null || receipt.positions.length <= 1) return;
 
@@ -247,7 +247,7 @@ final class ReceiptOutlierRemover {
     return pool;
   }
 
-  /// Ranks candidates: lower confidence first, then suspects, then larger impact; caps to [ReceiptConstants.outlierMaxCandidates].
+  /// Ranks candidates: lower confidence first, then suspects, then larger impact; caps to ReceiptConstants.outlierMaxCandidates.
   static List<_Cand> _rankPool(List<_Cand> pool) {
     if (pool.isEmpty) return const <_Cand>[];
     pool.sort((a, b) {

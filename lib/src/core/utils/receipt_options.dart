@@ -2,13 +2,15 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// A typed wrapper for "label -> canonical" maps with a precompiled regex.
 final class DetectionMap {
+  /// Precompiled alternation regex matching any label (case-insensitive).
   final RegExp regexp;
+
+  /// Lowercased label→canonical mapping used for lookups.
   final Map<String, String> mapping;
 
   DetectionMap._(this.regexp, this.mapping);
 
-  /// Builds a case-insensitive map from label→canonical and compiles one regex
-  /// matching any label. Returns a safe never-match regex when the map is empty.
+  /// Builds a case-insensitive mapping and one regex; returns a never-match regex if empty.
   factory DetectionMap.fromMap(Map<String, String> map) {
     if (map.isEmpty) {
       return DetectionMap._(
@@ -34,26 +36,31 @@ final class DetectionMap {
     );
   }
 
+  /// Returns the canonical value if any label in [text] matches, otherwise null.
   String? detect(String text) {
     final m = regexp.stringMatch(text);
     if (m == null) return null;
     return mapping[m.toLowerCase()];
   }
 
+  /// The alternation pattern string used by [regexp].
   String get pattern => regexp.pattern;
 
+  /// True if [s] contains any of the configured labels.
   bool hasMatch(String s) => regexp.hasMatch(s);
 }
 
 /// Typed wrapper for simple keyword lists compiled into a single regex.
 final class KeywordSet {
+  /// Original keyword list (as provided).
   final List<String> keywords;
+
+  /// Precompiled alternation regex matching any keyword (case-insensitive).
   final RegExp regexp;
 
   KeywordSet._(this.keywords, this.regexp);
 
-  /// Builds a case-insensitive keyword set and compiles one alternation regex.
-  /// Returns a safe never-match regex when the list is empty.
+  /// Builds a case-insensitive keyword set and one alternation regex (never-match if empty).
   factory KeywordSet.fromList(List<String> list) {
     if (list.isEmpty) {
       return KeywordSet._(const [], RegExp(ReceiptConstants.neverMatchLiteral));
@@ -70,21 +77,37 @@ final class KeywordSet {
     );
   }
 
+  /// True if [text] contains any keyword.
   bool hasMatch(String text) => regexp.hasMatch(text);
 }
 
 /// Strongly-typed, user-configurable options for the parser.
 final class ReceiptOptions {
+  /// Map of store aliases to canonical names.
   final DetectionMap storeNames;
+
+  /// Map of total labels (e.g., “Total”, “Summe”) to canonical label.
   final DetectionMap totalLabels;
 
+  /// Keywords that should be ignored during parsing.
   final KeywordSet ignoreKeywords;
+
+  /// Keywords that indicate parsing should stop.
   final KeywordSet stopKeywords;
+
+  /// Keywords that classify an item as food.
   final KeywordSet foodKeywords;
+
+  /// Keywords that classify an item as non-food.
   final KeywordSet nonFoodKeywords;
+
+  /// Keywords that indicate discounts.
   final KeywordSet discountKeywords;
+
+  /// Keywords that indicate deposits/returns.
   final KeywordSet depositKeywords;
 
+  /// Creates a new options object with explicit maps/sets.
   ReceiptOptions({
     required this.storeNames,
     required this.totalLabels,
@@ -97,7 +120,6 @@ final class ReceiptOptions {
   });
 
   /// Returns a minimal config with all maps/lists empty (no matches).
-  /// Handy for tests, defaults, or disabling features.
   factory ReceiptOptions.empty() => ReceiptOptions(
     storeNames: DetectionMap.fromMap(const {}),
     totalLabels: DetectionMap.fromMap(const {}),
@@ -109,8 +131,7 @@ final class ReceiptOptions {
     depositKeywords: KeywordSet.fromList(const []),
   );
 
-  /// Builds options from a JSON-like map, safely picking string-only maps/lists
-  /// for each field and ignoring non-string entries.
+  /// Builds options from a JSON-like map, picking only string-typed maps/lists.
   factory ReceiptOptions.fromJsonLike(Map<String, dynamic> json) {
     Map<String, String> pickStrMap(dynamic v) {
       if (v is Map) {

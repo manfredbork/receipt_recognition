@@ -11,6 +11,7 @@ class RecognizedBounds {
   /// The maximum right coordinate across all text lines.
   final double maxRight;
 
+  /// Creates bounds with [minLeft] and [maxRight] values.
   RecognizedBounds({required this.minLeft, required this.maxRight});
 
   /// Creates bounds from a list of text lines by finding minimum left and maximum right coordinates.
