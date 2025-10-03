@@ -361,9 +361,15 @@ final class ReceiptOptimizer implements Optimizer {
     );
 
     final effectiveThreshold = _thresholder.threshold;
-
+    final repText = _groupRepresentativeText(group);
+    final incomingText = position.product.normalizedText;
+    final repTokens = _tokens(repText);
+    final incTokens = _tokens(incomingText);
+    final jaccard = _jaccard(repTokens, incTokens);
+    final looksDissimilar = jaccard < ReceiptConstants.minProductSimToMerge;
     final shouldUseGroup =
         !sameTimestamp &&
+        !looksDissimilar &&
         positionConfidence.confidence >= effectiveThreshold &&
         positionConfidence.confidence > currentBestConfidence;
 
@@ -420,7 +426,18 @@ final class ReceiptOptimizer implements Optimizer {
     mergedReceipt.sumLabel ??= receipt.sumLabel;
     mergedReceipt.boundingBox ??= receipt.boundingBox;
 
-    _removeOutliersToMatchSum(mergedReceipt);
+    final stableSum = minBy(
+      _sumCandidates.where(
+        (c) =>
+            c.confirmations >= _sumConfirmationThreshold &&
+            _isConfirmedSumValid(c, mergedReceipt),
+      ),
+      (c) => c.verticalDistance,
+    );
+    if (stableSum != null) {
+      _removeOutliersToMatchSum(mergedReceipt);
+    }
+
     _updateEntities(mergedReceipt);
 
     return mergedReceipt;
@@ -618,6 +635,39 @@ final class ReceiptOptimizer implements Optimizer {
     _companies.clear();
     _sums.clear();
     _shouldInitialize = false;
+  }
+
+  String _groupRepresentativeText(RecognizedGroup g) {
+    final best = maxBy(g.members, (p) => p.confidence);
+    return (best?.product.normalizedText ??
+        g.members.first.product.normalizedText);
+  }
+
+  Set<String> _tokens(String s) {
+    String cleaned(String x) =>
+        x
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
+    final spaced = cleaned(s).split(RegExp(r'\s+'));
+    final despaced = cleaned(
+      s.replaceAll(RegExp(r'\s+'), ''),
+    ).split(RegExp(r'\s+'));
+
+    final toks = <String>{};
+    for (final t in [...spaced, ...despaced]) {
+      if (t.length >= 3) toks.add(t);
+    }
+    return toks;
+  }
+
+  double _jaccard(Set<String> a, Set<String> b) {
+    if (a.isEmpty && b.isEmpty) return 1.0;
+    final inter = a.intersection(b).length;
+    final uni = a.union(b).length;
+    return inter / uni;
   }
 }
 
