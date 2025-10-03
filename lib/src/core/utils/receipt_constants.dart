@@ -51,6 +51,9 @@ class ReceiptConstants {
   /// Minimum number of positions required for sum validation.
   static const int optimizerMinPositionsForSum = 2;
 
+  /// Minimum fuzzy similarity required to merge product text variants.
+  static const double optimizerVariantMinSim = 0.85;
+
   /// Minimum Jaccard similarity of product tokens required to merge items.
   static const double minProductSimToMerge = 0.5;
 }

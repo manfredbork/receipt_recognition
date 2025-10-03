@@ -50,6 +50,8 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   /// Whether the app is currently processing a frame.
   bool _isBusy = false;
 
+  bool _didComplete = false;
+
   @override
   void initState() {
     super.initState();
@@ -68,7 +70,11 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
   /// Whether the system is ready and allowed to process the next frame.
   bool get isReadyToProcess =>
-      _receiptRecognizer != null && _canProcess && _isReady && !_isBusy;
+      _receiptRecognizer != null &&
+      _canProcess &&
+      _isReady &&
+      !_isBusy &&
+      !_didComplete;
 
   /// Whether the camera preview is initialized and not disposed.
   bool get isCameraPreviewReady =>
@@ -79,6 +85,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
   @override
   void dispose() {
+    _didComplete = true;
     _canProcess = false;
     _isReady = false;
     _isBusy = false;
@@ -94,12 +101,11 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   void _onScanUpdate(RecognizedScanProgress progress) {
+    if (_didComplete) return;
     setState(() {
       _scanProgress = progress;
       final current = progress.estimatedPercentage ?? 0;
-      if (current > _maxProgress) {
-        _maxProgress = current;
-      }
+      if (current > _maxProgress) _maxProgress = current;
     });
   }
 
@@ -124,37 +130,31 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   Future<void> _processImage(InputImage inputImage) async {
-    if (!isReadyToProcess) {
-      return;
-    }
+    if (!isReadyToProcess) return;
     _isBusy = true;
 
-    InputImage processedMlkitImage;
-
-    if (inputImage.bytes != null) {
-      try {
-        processedMlkitImage = InputImage.fromBytes(
-          bytes: inputImage.bytes!,
-          metadata: InputImageMetadata(
-            size: inputImage.metadata!.size,
-            rotation: inputImage.metadata!.rotation,
-            format: inputImage.metadata!.format,
-            bytesPerRow: inputImage.metadata!.bytesPerRow,
-          ),
-        );
-      } catch (e) {
-        processedMlkitImage = inputImage;
-      }
-    } else {
-      processedMlkitImage = inputImage;
-    }
+    final processedMlkitImage =
+        (inputImage.bytes != null)
+            ? InputImage.fromBytes(
+              bytes: inputImage.bytes!,
+              metadata: InputImageMetadata(
+                size: inputImage.metadata!.size,
+                rotation: inputImage.metadata!.rotation,
+                format: inputImage.metadata!.format,
+                bytesPerRow: inputImage.metadata!.bytesPerRow,
+              ),
+            )
+            : inputImage;
 
     try {
       final receipt = await _receiptRecognizer?.processImage(
         processedMlkitImage,
       );
+
+      if (!_canProcess || _didComplete) return;
+
       if (_isValidReceipt(receipt)) {
-        _handleSuccessfulScan(receipt!);
+        await _handleSuccessfulScan(receipt!);
       }
     } catch (e, st) {
       _handleProcessingError(e, st);
@@ -165,22 +165,34 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   bool _isValidReceipt(RecognizedReceipt? receipt) {
-    return receipt != null && receipt.positions.isNotEmpty;
+    if (receipt == null) return false;
+
+    if (receipt.isValid == true) return true;
+
+    final hasPositions = receipt.positions.isNotEmpty;
+    final hasSum = receipt.sum != null;
+
+    final pct = _scanProgress?.estimatedPercentage ?? 0;
+    final nearlyDone = pct >= 95;
+
+    return hasPositions && (hasSum || nearlyDone);
   }
 
-  void _handleSuccessfulScan(RecognizedReceipt receipt) {
-    _receipt = receipt;
+  Future<void> _handleSuccessfulScan(RecognizedReceipt receipt) async {
+    if (_didComplete) return;
+    _didComplete = true;
+
     _canProcess = false;
+    _receipt = receipt;
     _maxProgress = 0;
     _errorMessage = null;
 
     _playScanSound();
-    stopLiveFeed();
+    HapticFeedback.lightImpact();
 
-    if (mounted) {
-      HapticFeedback.lightImpact();
-      setState(() {});
-    }
+    await stopLiveFeed();
+
+    if (mounted) setState(() {});
   }
 
   void _playScanSound() {
@@ -192,6 +204,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   Future<void> _startLiveFeed() async {
+    _didComplete = false;
     await startLiveFeed(_processImage);
     _isReady = true;
     if (mounted) setState(() {});
@@ -259,6 +272,8 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                 onStartScan: () async {
                   setState(() {
                     _receipt = null;
+                    _errorMessage = null;
+                    _didComplete = false;
                     _canProcess = true;
                     _isReady = false;
                     isControllerDisposed = false;

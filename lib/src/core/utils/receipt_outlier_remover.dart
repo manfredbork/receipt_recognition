@@ -30,9 +30,35 @@ final class ReceiptOutlierRemover {
     final calculatedCents = _toCents(calculatedSum);
     final deltaCents = calculatedCents - detectedCents;
 
+    ReceiptLogger.log('out.start', {
+      'n': receipt.positions.length,
+      'det': detectedSum,
+      'calc': calculatedSum,
+      'delta¢': deltaCents,
+    });
+
+    if (_polarityFixIfMatchesSum(receipt, deltaCents)) {
+      return;
+    }
+
     final candidates = List<_Cand>.of(
       _rankPool(_selectPool(receipt, deltaCents, useDeltaGate: true)),
     );
+
+    ReceiptLogger.log('out.candidates', {
+      'c':
+          candidates
+              .map(
+                (c) => {
+                  'i': c.index,
+                  '¢': c.cents,
+                  'conf': c.confidence,
+                  'sus': c.suspect,
+                  'score': c.score,
+                },
+              )
+              .toList(),
+    });
 
     if (candidates.isEmpty) {
       final fallback = _rankPool(
@@ -184,6 +210,12 @@ final class ReceiptOutlierRemover {
     }
 
     final allowedDeletions = math.min(hardCap, softCap);
+
+    ReceiptLogger.log('out.choice', {
+      'bestMask': bestMask,
+      'allowed': allowedDeletions,
+    });
+
     final positions = receipt.positions;
     final toRemove = <RecognizedPosition>{};
     int bits = bestMask!;
@@ -196,8 +228,89 @@ final class ReceiptOutlierRemover {
       idx++;
     }
 
+    ReceiptLogger.log('out.removed', {
+      'idx': toRemove.map((p) => receipt.positions.indexOf(p)).toList(),
+    });
+
     if (toRemove.length > allowedDeletions) return;
     receipt.positions.removeWhere((p) => toRemove.contains(p));
+  }
+
+  /// Tries sign flips on cashback-like lines; only applies if sum lands within tau.
+  static bool _polarityFixIfMatchesSum(RecognizedReceipt r, int deltaCents) {
+    final posCashback = <int>[];
+    final negCashback = <int>[];
+    for (int i = 0; i < r.positions.length; i++) {
+      final p = r.positions[i];
+      final v = p.price.value;
+      final looksCashback = p.product.isDiscount || p.product.isDeposit;
+      if (!looksCashback) continue;
+      if (v > 0) posCashback.add(i);
+      if (v < 0) negCashback.add(i);
+    }
+
+    void applyFlip(List<int> idxs) {
+      for (final i in idxs) {
+        final old = r.positions[i];
+        final flipped = old.copyWith(
+          price: old.price.copyWith(value: -old.price.value),
+        );
+        r.positions[i] = flipped;
+
+        ReceiptLogger.log('polarity.flip', {
+          'pos': ReceiptLogger.posKey(old),
+          'old': old.price.value,
+          'new': flipped.price.value,
+        });
+      }
+    }
+
+    int centsOf(int i) => _toCents(r.positions[i].price.value.abs());
+
+    if (deltaCents > 0) {
+      for (final i in posCashback) {
+        final newDelta = deltaCents - 2 * centsOf(i);
+        if (newDelta.abs() <= ReceiptConstants.outlierTau) {
+          applyFlip([i]);
+          return true;
+        }
+      }
+    } else if (deltaCents < 0) {
+      for (final i in negCashback) {
+        final newDelta = deltaCents + 2 * centsOf(i);
+        if (newDelta.abs() <= ReceiptConstants.outlierTau) {
+          applyFlip([i]);
+          return true;
+        }
+      }
+    }
+
+    const cap = 12;
+    if (deltaCents > 0) {
+      final L = posCashback.take(cap).toList();
+      for (int a = 0; a < L.length; a++) {
+        for (int b = a + 1; b < L.length; b++) {
+          final newDelta = deltaCents - 2 * (centsOf(L[a]) + centsOf(L[b]));
+          if (newDelta.abs() <= ReceiptConstants.outlierTau) {
+            applyFlip([L[a], L[b]]);
+            return true;
+          }
+        }
+      }
+    } else if (deltaCents < 0) {
+      final L = negCashback.take(cap).toList();
+      for (int a = 0; a < L.length; a++) {
+        for (int b = a + 1; b < L.length; b++) {
+          final newDelta = deltaCents + 2 * (centsOf(L[a]) + centsOf(L[b]));
+          if (newDelta.abs() <= ReceiptConstants.outlierTau) {
+            applyFlip([L[a], L[b]]);
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
 
   /// Converts a numeric amount to integer cents (rounded).

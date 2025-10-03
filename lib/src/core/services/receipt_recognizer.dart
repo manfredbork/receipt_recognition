@@ -100,8 +100,6 @@ final class ReceiptRecognizer {
 
     final validation = _validateReceipt(optimizedReceipt);
 
-    _printDebugInfo(optimizedReceipt, validation);
-
     final finalReceipt = _handleValidationResult(
       now,
       optimizedReceipt,
@@ -111,6 +109,8 @@ final class ReceiptRecognizer {
     if (_validScans < _minValidScans && !_singleScan) {
       return null;
     }
+
+    ReceiptLogger.logReceipt(optimizedReceipt, validation);
 
     if (validation.matchPercentage == 100) {
       return Future.delayed(_scanCompleteDelay, () => finalReceipt);
@@ -210,32 +210,6 @@ final class ReceiptRecognizer {
       return true;
     }
     return false;
-  }
-
-  void _printDebugInfo(
-    RecognizedReceipt optimizedReceipt,
-    ReceiptValidationResult validation,
-  ) {
-    if (optimizedReceipt.positions.isNotEmpty) {
-      debugPrint('🧾${'-' * 48}');
-      debugPrint('✅ Validation status: ${validation.status}');
-      debugPrint('💬 Message: ${validation.message}');
-      debugPrint('🧾${'-' * 48}');
-      debugPrint('🏪 Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
-      const int totalWidth = 40;
-      for (final position in optimizedReceipt.positions) {
-        final product = position.product.normalizedText;
-        final price = position.price.formattedValue;
-        debugPrint('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
-      }
-      debugPrint(
-        '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
-      );
-      debugPrint('🧾 Sum in receipt: ${optimizedReceipt.sum?.formattedValue}');
-      debugPrint(
-        '📌 Optimizer final sum label: ${optimizedReceipt.sumLabel?.formattedValue}',
-      );
-    }
   }
 
   RecognizedReceipt _handleValidReceipt(

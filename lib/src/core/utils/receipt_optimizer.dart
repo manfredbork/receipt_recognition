@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
+import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fw;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
@@ -113,7 +114,20 @@ final class ReceiptOptimizer implements Optimizer {
     if (!force && receipt.isValid) {
       return receipt;
     } else {
-      return _createOptimizedReceipt(receipt);
+      ReceiptLogger.log('opt.in', {
+        'n': receipt.positions.length,
+        'calc': receipt.calculatedSum.value.toStringAsFixed(2),
+        'sum?': receipt.sum?.value,
+      });
+
+      final out = _createOptimizedReceipt(receipt);
+
+      ReceiptLogger.log('opt.out', {
+        'n': out.positions.length,
+        'calc': out.calculatedSum.value.toStringAsFixed(2),
+        'sum?': out.sum?.value,
+      });
+      return out;
     }
   }
 
@@ -242,28 +256,61 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Removes stale or weak groups and cleans stats.
+  /// Removes stale or weak groups and cleans stats (with debug reasons).
   void _cleanupGroups() {
     if (_groups.length >= _maxCacheSize) {
       final now = DateTime.now();
-      final removed = <RecognizedGroup>{};
-      _groups.removeWhere((g) {
-        final kill =
-            now.difference(g.timestamp) >= _invalidateInterval &&
-            (g.stability < _stabilityThreshold ||
-                g.confidence < _confidenceThreshold);
-        if (kill) removed.add(g);
-        return kill;
-      });
+      final doomed = <RecognizedGroup>[];
 
-      for (final g in removed) {
-        _orderStats.remove(g);
+      for (final g in _groups) {
+        final hits = _cashbackHits(g);
+        final hasCb = hits > 0;
+        final ttl =
+            hasCb
+                ? (_hasCashbackKeyword(g)
+                    ? _invalidateInterval * 3
+                    : _invalidateInterval * 2)
+                : _invalidateInterval;
+        final age = now.difference(g.timestamp);
+        final tooOld = age >= ttl;
+        final tooWeak =
+            g.stability < _stabilityThreshold ||
+            g.confidence < _confidenceThreshold;
+        final kill = tooOld && tooWeak;
+
+        if (kill) {
+          ReceiptLogger.log('group.kill', {
+            'grp': ReceiptLogger.grpKey(g),
+            'stb': g.stability,
+            'conf': g.confidence,
+            'ageMs': now.difference(g.timestamp).inMilliseconds,
+            'neg?': g.members.any((p) => p.product.isCashback),
+          });
+          doomed.add(g);
+        }
+      }
+
+      if (doomed.isNotEmpty) {
+        final doomedSet = doomed.toSet();
+        _groups.removeWhere(doomedSet.contains);
+
+        for (final g in doomedSet) {
+          _orderStats.remove(g);
+        }
         for (final s in _orderStats.values) {
-          s.aboveCounts.remove(g);
+          for (final g in doomedSet) {
+            s.aboveCounts.remove(g);
+          }
         }
       }
     }
+
     final emptied = _groups.where((g) => g.members.isEmpty).toList();
+
+    for (final g in emptied) {
+      ReceiptLogger.log('group.empty', {'grp': ReceiptLogger.grpKey(g)});
+    }
+
     _groups.removeWhere((g) => g.members.isEmpty);
     for (final g in emptied) {
       _orderStats.remove(g);
@@ -271,6 +318,51 @@ final class ReceiptOptimizer implements Optimizer {
         s.aboveCounts.remove(g);
       }
     }
+  }
+
+  /// Normalizes common OCR quirks and strips non-alnum.
+  String _ocrNorm(String s) {
+    final lower = s.toLowerCase();
+    final buf = StringBuffer();
+    for (final uc in lower.codeUnits) {
+      final c = String.fromCharCode(uc);
+      switch (c) {
+        case '0':
+          buf.write('o');
+          break;
+        case '1':
+          buf.write('l');
+          break;
+        case 'i':
+          buf.write('l');
+          break;
+        case '5':
+          buf.write('s');
+          break;
+        case '8':
+          buf.write('b');
+          break;
+        default:
+          if (RegExp(r'[a-z0-9]').hasMatch(c)) {
+            buf.write(c);
+          } else {
+            buf.write(' ');
+          }
+      }
+    }
+    return buf.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  /// Fuzzy OCR-friendly similarity in [0,1] via fuzzywuzzy.
+  double _fuzzySim(String a, String b) {
+    final x = _ocrNorm(a), y = _ocrNorm(b);
+    if (x.isEmpty && y.isEmpty) return 1.0;
+    if (x.isEmpty || y.isEmpty) return 0.0;
+    final r1 = fw.tokenSetRatio(x, y);
+    final r2 = fw.tokenSortRatio(x, y);
+    final r3 = fw.partialRatio(x, y);
+    final best = r1 > r2 ? (r1 > r3 ? r1 : r3) : (r2 > r3 ? r2 : r3);
+    return best / 100.0;
   }
 
   /// Resets per-frame operation markers on positions.
@@ -294,6 +386,26 @@ final class ReceiptOptimizer implements Optimizer {
     );
 
     final isStableSumConfirmed = stableSum != null;
+
+    ReceiptLogger.log('sum.candidates', {
+      'cands':
+          _sumCandidates
+              .map(
+                (c) => {
+                  'txt': c.label.value,
+                  'sum': c.sum.value,
+                  'vd': c.verticalDistance,
+                  'conf': c.confirmations,
+                },
+              )
+              .toList(),
+    });
+
+    ReceiptLogger.log('sum.stable', {
+      'has': isStableSumConfirmed,
+      'picked': stableSum?.sum.value,
+      'vd': stableSum?.verticalDistance,
+    });
 
     for (final position in receipt.positions) {
       if (isStableSumConfirmed) {
@@ -360,18 +472,75 @@ final class ReceiptOptimizer implements Optimizer {
       (p) => position.timestamp == p.timestamp,
     );
 
-    final effectiveThreshold = _thresholder.threshold;
+    final isNegative = position.price.value < 0;
+    int effectiveThreshold = _thresholder.threshold;
+    if (isNegative) {
+      effectiveThreshold = (effectiveThreshold - 10).clamp(0, 100);
+    }
+
     final repText = _groupRepresentativeText(group);
-    final incomingText = position.product.normalizedText;
-    final repTokens = _tokens(repText);
-    final incTokens = _tokens(incomingText);
-    final jaccard = _jaccard(repTokens, incTokens);
-    final looksDissimilar = jaccard < ReceiptConstants.minProductSimToMerge;
+    final incText = position.product.normalizedText;
+    final fuzzy = _fuzzySim(repText, incText);
+
+    Set<String> toks(String s) {
+      final x = _ocrNorm(s);
+      return x.split(' ').where((t) => t.length >= 2).toSet();
+    }
+
+    String brand(String s) {
+      final x = _ocrNorm(s).split(' ').where((t) => t.isNotEmpty).toList();
+      return x.isEmpty ? '' : x.first;
+    }
+
+    final repTok = toks(repText);
+    final incTok = toks(incText);
+    final sameBrand = brand(repText) == brand(incText);
+    final variantDifferent =
+        sameBrand && repTok.isNotEmpty && incTok.isNotEmpty && repTok != incTok;
+    final baseMin = ReceiptConstants.minProductSimToMerge;
+    final minNeeded =
+        variantDifferent ? ReceiptConstants.optimizerVariantMinSim : baseMin;
+
+    final looksDissimilar = isNegative ? false : (fuzzy < minNeeded);
+
     final shouldUseGroup =
         !sameTimestamp &&
         !looksDissimilar &&
         positionConfidence.confidence >= effectiveThreshold &&
         positionConfidence.confidence > currentBestConfidence;
+
+    final reason =
+        sameTimestamp
+            ? 'same-ts'
+            : looksDissimilar
+            ? 'lex-low'
+            : positionConfidence.confidence < effectiveThreshold
+            ? 'conf-low'
+            : positionConfidence.confidence <= currentBestConfidence
+            ? 'not-best'
+            : 'ok';
+
+    ReceiptLogger.log('conf', {
+      'pos': ReceiptLogger.posKey(position),
+      'grp': ReceiptLogger.grpKey(group),
+      'neg': isNegative,
+      'price': position.price.value,
+      'prodC': productConfidence,
+      'priceC': priceConfidence,
+      'effThr': effectiveThreshold,
+      'fuzzy':
+          (() {
+            try {
+              final repText = _groupRepresentativeText(group);
+              final incText = position.product.normalizedText;
+              return _fuzzySim(repText, incText);
+            } catch (_) {
+              return null;
+            }
+          })(),
+      'use': reason == 'ok',
+      'why': reason,
+    });
 
     return _ConfidenceResult(
       productConfidence: positionConfidence.product.confidence,
@@ -388,6 +557,10 @@ final class ReceiptOptimizer implements Optimizer {
     position.operation = Operation.added;
     newGroup.addMember(position);
     _groups.add(newGroup);
+    ReceiptLogger.log('group.new', {
+      'grp': ReceiptLogger.grpKey(newGroup),
+      'pos': ReceiptLogger.posKey(position),
+    });
   }
 
   /// Adds a position to an existing group.
@@ -395,14 +568,25 @@ final class ReceiptOptimizer implements Optimizer {
     position.group = group;
     position.operation = Operation.updated;
     group.addMember(position);
+    ReceiptLogger.log('group.add', {
+      'grp': ReceiptLogger.grpKey(group),
+      'pos': ReceiptLogger.posKey(position),
+      'm': group.members.length,
+    });
   }
 
   /// Builds a merged, ordered receipt from stable groups and updates entities.
   RecognizedReceipt _createOptimizedReceipt(RecognizedReceipt receipt) {
     final stableGroups =
-        _groups.where((g) => g.stability >= _stabilityThreshold).toList();
+        _groups.where((g) {
+          if (g.stability >= _stabilityThreshold) return true;
+          final hits = _cashbackHits(g);
+          if (hits == 0) return false;
+          return hits >= 2 || _isLikelyCashbackSingleton(g);
+        }).toList();
 
     _learnOrder(receipt);
+
     stableGroups.sort(_compareGroupsForOrder);
 
     final mergedReceipt = RecognizedReceipt.empty();
@@ -416,6 +600,13 @@ final class ReceiptOptimizer implements Optimizer {
           product: best.product.copyWith(line: latest.product.line),
           price: best.price.copyWith(line: latest.price.line),
         )..operation = latest.operation;
+
+        ReceiptLogger.log('merge.keep', {
+          'grp': ReceiptLogger.grpKey(group),
+          'pos': ReceiptLogger.posKey(patched),
+          'bestC': best.confidence,
+          'latestTs': latest.timestamp.millisecondsSinceEpoch,
+        });
 
         mergedReceipt.positions.add(patched);
       }
@@ -434,6 +625,13 @@ final class ReceiptOptimizer implements Optimizer {
       ),
       (c) => c.verticalDistance,
     );
+
+    ReceiptLogger.log('out.gate', {
+      'enabled': stableSum != null,
+      'sum': stableSum?.sum.value,
+      'vd': stableSum?.verticalDistance,
+    });
+
     if (stableSum != null) {
       _removeOutliersToMatchSum(mergedReceipt);
     }
@@ -495,6 +693,17 @@ final class ReceiptOptimizer implements Optimizer {
   void _removeOutliersToMatchSum(RecognizedReceipt receipt) {
     ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
   }
+
+  /// Counts how many cashback (negative price) items are in the group.
+  int _cashbackHits(RecognizedGroup g) =>
+      g.members.where((p) => p.product.isCashback).length;
+
+  /// True if any member matches deposit/discount keywords.
+  bool _hasCashbackKeyword(RecognizedGroup g) =>
+      g.members.any((p) => p.product.isDeposit || p.product.isDiscount);
+
+  /// True if a single negative sighting looks legit (keyword only).
+  bool _isLikelyCashbackSingleton(RecognizedGroup g) => _hasCashbackKeyword(g);
 
   /// Checks whether a confirmed sum candidate is plausible for the receipt.
   bool _isConfirmedSumValid(
@@ -569,6 +778,21 @@ final class ReceiptOptimizer implements Optimizer {
         s.aboveCounts.updateAll((_, v) => math.max(1, v ~/ 2));
       }
     }
+
+    ReceiptLogger.log('order.learn', {
+      'angleDeg': _lastAngleDeg,
+      'stats':
+          _orderStats.entries
+              .map(
+                (e) => {
+                  'g': ReceiptLogger.grpKey(e.key),
+                  'y': e.value.orderY,
+                  'hasY': e.value.hasY,
+                  'seen': e.value.firstSeen.millisecondsSinceEpoch,
+                },
+              )
+              .toList(),
+    });
   }
 
   /// Comparator for group ordering with tie-breakers and history.
@@ -641,33 +865,6 @@ final class ReceiptOptimizer implements Optimizer {
     final best = maxBy(g.members, (p) => p.confidence);
     return (best?.product.normalizedText ??
         g.members.first.product.normalizedText);
-  }
-
-  Set<String> _tokens(String s) {
-    String cleaned(String x) =>
-        x
-            .toLowerCase()
-            .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-            .replaceAll(RegExp(r'\s+'), ' ')
-            .trim();
-
-    final spaced = cleaned(s).split(RegExp(r'\s+'));
-    final despaced = cleaned(
-      s.replaceAll(RegExp(r'\s+'), ''),
-    ).split(RegExp(r'\s+'));
-
-    final toks = <String>{};
-    for (final t in [...spaced, ...despaced]) {
-      if (t.length >= 3) toks.add(t);
-    }
-    return toks;
-  }
-
-  double _jaccard(Set<String> a, Set<String> b) {
-    if (a.isEmpty && b.isEmpty) return 1.0;
-    final inter = a.intersection(b).length;
-    final uni = a.union(b).length;
-    return inter / uni;
   }
 }
 
