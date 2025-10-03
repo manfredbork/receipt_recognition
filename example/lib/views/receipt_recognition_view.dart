@@ -14,7 +14,6 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Displays a camera preview, handles scan progress, overlays bounding boxes,
 /// and shows the result in a formatted receipt widget when scanning completes.
 class ReceiptRecognitionView extends StatefulWidget {
-  /// Creates a new instance of [ReceiptRecognitionView].
   const ReceiptRecognitionView({super.key});
 
   @override
@@ -23,33 +22,20 @@ class ReceiptRecognitionView extends StatefulWidget {
 
 class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     with CameraHandlerMixin {
-  /// Audio player for playing a scan confirmation sound.
   final _audioPlayer = AudioPlayer();
 
-  /// Instance of the receipt recognizer used to process frames.
   ReceiptRecognizer? _receiptRecognizer;
 
-  /// The recognized receipt, if one was successfully scanned.
   RecognizedReceipt? _receipt;
-
-  /// Current progress and intermediate data from the scanning process.
   RecognizedScanProgress? _scanProgress;
 
-  /// Error message shown if the scan fails.
   String? _errorMessage;
 
-  /// Tracks the maximum percentage of scan progress reached.
   int _maxProgress = 0;
 
-  /// Whether the app is currently allowed to process frames.
   bool _canProcess = false;
-
-  /// Whether the camera feed is initialized and ready for processing.
   bool _isReady = false;
-
-  /// Whether the app is currently processing a frame.
   bool _isBusy = false;
-
   bool _didComplete = false;
 
   @override
@@ -64,11 +50,8 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   @override
-  Widget build(BuildContext context) {
-    return _liveFeed();
-  }
+  Widget build(BuildContext context) => _liveFeed();
 
-  /// Whether the system is ready and allowed to process the next frame.
   bool get isReadyToProcess =>
       _receiptRecognizer != null &&
       _canProcess &&
@@ -76,11 +59,9 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
       !_isBusy &&
       !_didComplete;
 
-  /// Whether the camera preview is initialized and not disposed.
   bool get isCameraPreviewReady =>
       cameraController?.value.isInitialized == true && !isControllerDisposed;
 
-  /// Whether the scan is still in progress (i.e., not yet 100% complete).
   bool get isScanInProgress => (_scanProgress?.estimatedPercentage ?? 0) < 100;
 
   @override
@@ -109,14 +90,15 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     });
   }
 
-  void _onScanTimeout() {
+  Future<void> _onScanTimeout() async {
     if (_receipt != null) return;
 
     _canProcess = false;
     _receipt = null;
     _maxProgress = 0;
-    stopLiveFeed();
     HapticFeedback.lightImpact();
+
+    await stopLiveFeed(); // ensure camera actually stops
 
     setState(() {
       _errorMessage = 'Scan failed – try again';
@@ -192,6 +174,9 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
     await stopLiveFeed();
 
+    // Prep recognizer for the next scan session
+    _receiptRecognizer?.init();
+
     if (mounted) setState(() {});
   }
 
@@ -222,7 +207,8 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                 fit: StackFit.expand,
                 children: [
                   CameraPreview(cameraController!),
-                  if (_scanProgress?.positions.isNotEmpty == true)
+                  if (_scanProgress?.positions.isNotEmpty == true &&
+                      _receipt == null) // hide overlays after success
                     PositionOverlay(
                       positions:
                           isScanInProgress ? _scanProgress!.positions : [],
@@ -235,7 +221,9 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                       sumLabel: _scanProgress?.mergedReceipt?.sumLabel,
                       sum: _scanProgress?.mergedReceipt?.sum,
                     ),
-                  if (_scanProgress != null && _maxProgress > 0)
+                  if (_scanProgress != null &&
+                      _maxProgress > 0 &&
+                      _receipt == null)
                     Center(
                       child: Stack(
                         alignment: Alignment.center,
@@ -247,7 +235,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                               value: (_maxProgress / 100).clamp(0.0, 1.0),
                               strokeWidth: 6,
                               backgroundColor: Colors.white24,
-                              valueColor: AlwaysStoppedAnimation<Color>(
+                              valueColor: const AlwaysStoppedAnimation<Color>(
                                 Colors.greenAccent,
                               ),
                             ),
@@ -273,11 +261,16 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                   setState(() {
                     _receipt = null;
                     _errorMessage = null;
-                    _didComplete = false;
+                    _scanProgress = null; // reset progress
+                    _maxProgress = 0; // reset UI
+                    _didComplete = false; // reset completion latch
                     _canProcess = true;
                     _isReady = false;
                     isControllerDisposed = false;
                   });
+
+                  _receiptRecognizer?.init(); // reset internal caches
+
                   await _startLiveFeed();
                 },
               ),
@@ -291,7 +284,13 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                         key: ValueKey(_receipt),
                         receipt: _receipt!,
                         onClose: () {
-                          setState(() => _receipt = null);
+                          setState(() {
+                            _receipt = null;
+                            _scanProgress = null;
+                            _maxProgress = 0;
+                            _didComplete = false;
+                          });
+                          _receiptRecognizer?.init();
                         },
                       )
                       : const SizedBox.shrink(),

@@ -89,7 +89,6 @@ final class ReceiptRecognizer {
 
     _lastScan = now;
 
-    // Use the typed options-path; parser was updated to accept ReceiptOptions.
     final receipt = await _recognizeReceipt(inputImage, _options);
 
     final optimizedReceipt = _optimizer.optimize(receipt);
@@ -124,7 +123,6 @@ final class ReceiptRecognizer {
     ReceiptOptions options,
   ) async {
     final text = await _textRecognizer.processImage(inputImage);
-    // Parser updated to use typed options:
     return await ReceiptTextProcessor.processText(text, options);
   }
 
@@ -189,10 +187,20 @@ final class ReceiptRecognizer {
   /// Use this when a receipt is nearly complete and should be accepted despite
   /// validation discrepancies. Resets the optimizer and scan counters.
   RecognizedReceipt acceptReceipt(RecognizedReceipt receipt) {
-    _initializedScan = null;
-    _optimizer.init();
-    _validScans = 0;
+    init();
     return receipt;
+  }
+
+  /// Reinitializes the recognizer for a new scan session.
+  ///
+  /// Clears internal state, resets scan counters, and reinitializes the optimizer.
+  /// Call this before starting a new receipt scan to avoid carrying over data
+  /// from a previous session.
+  void init() {
+    _initializedScan = null;
+    _lastScan = null;
+    _validScans = 0;
+    _optimizer.init();
   }
 
   /// Releases all resources used by the recognizer.
