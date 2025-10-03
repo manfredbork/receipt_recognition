@@ -227,10 +227,6 @@ final class ReceiptRecognizer {
         final product = position.product.normalizedText;
         final price = position.price.formattedValue;
         debugPrint('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
-        debugPrint(
-          'Confidence: ${position.confidence} Stability: ${position.group?.stability}',
-        );
-        debugPrint('Alternative Texts: ${position.product.alternativeTexts}');
       }
       debugPrint(
         '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
