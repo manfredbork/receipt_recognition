@@ -97,12 +97,3 @@ class RecognizedReceipt {
       calculatedSum.formattedValue == sum?.formattedValue &&
       calculatedSum.value > 0.0;
 }
-
-/// Centralized constants shared between receipt parsing and optimization.
-class ReceiptConstants {
-  /// Vertical tolerance (in pixels) for comparing bounding box alignment.
-  static const int boundingBoxBuffer = 30;
-
-  /// Sum tolerance tight and more precise below 1 cent.
-  static const double sumTolerance = 0.009;
-}

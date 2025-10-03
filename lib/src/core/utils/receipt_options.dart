@@ -1,16 +1,18 @@
-/// A literal that won't ever occur in receipt text → safe never-match regex.
-const String _neverMatchLiteral = r'___NEVER_MATCH___';
-
 /// A typed wrapper for "label -> canonical" maps with a precompiled regex.
 final class DetectionMap {
-  final RegExp regexp; // alternation of all keys
-  final Map<String, String> mapping; // lowercase key -> canonical value
+  final RegExp regexp;
+  final Map<String, String> mapping;
 
   DetectionMap._(this.regexp, this.mapping);
 
+  /// Builds a case-insensitive map from label→canonical and compiles one regex
+  /// matching any label. Returns a safe never-match regex when the map is empty.
   factory DetectionMap.fromMap(Map<String, String> map) {
     if (map.isEmpty) {
-      return DetectionMap._(RegExp(_neverMatchLiteral), const {});
+      return DetectionMap._(
+        RegExp(ReceiptConstants.neverMatchLiteral),
+        const {},
+      );
     }
 
     final patterns = <String>[];
@@ -48,9 +50,11 @@ final class KeywordSet {
 
   KeywordSet._(this.keywords, this.regexp);
 
+  /// Builds a case-insensitive keyword set and compiles one alternation regex.
+  /// Returns a safe never-match regex when the list is empty.
   factory KeywordSet.fromList(List<String> list) {
     if (list.isEmpty) {
-      return KeywordSet._(const [], RegExp(_neverMatchLiteral));
+      return KeywordSet._(const [], RegExp(ReceiptConstants.neverMatchLiteral));
     }
     final escaped =
         list
@@ -90,7 +94,8 @@ final class ReceiptOptions {
     required this.depositKeywords,
   });
 
-  /// Minimal “empty” config (not const because RegExp isn't const).
+  /// Returns a minimal config with all maps/lists empty (no matches).
+  /// Handy for tests, defaults, or disabling features.
   factory ReceiptOptions.empty() => ReceiptOptions(
     storeNames: DetectionMap.fromMap(const {}),
     totalLabels: DetectionMap.fromMap(const {}),
@@ -102,7 +107,8 @@ final class ReceiptOptions {
     depositKeywords: KeywordSet.fromList(const []),
   );
 
-  /// JSON-like: maps and lists (strings only are picked).
+  /// Builds options from a JSON-like map, safely picking string-only maps/lists
+  /// for each field and ignoring non-string entries.
   factory ReceiptOptions.fromJsonLike(Map<String, dynamic> json) {
     Map<String, String> pickStrMap(dynamic v) {
       if (v is Map) {
@@ -137,4 +143,16 @@ final class ReceiptOptions {
       ),
     );
   }
+}
+
+/// Centralized constants shared between receipt parsing and optimization.
+class ReceiptConstants {
+  /// Vertical tolerance (in pixels) for comparing bounding box alignment.
+  static const int boundingBoxBuffer = 30;
+
+  /// Sum tolerance tight and more precise below 1 cent.
+  static const double sumTolerance = 0.009;
+
+  /// A literal that won't ever occur in receipt text → safe never-match regex.
+  static const String neverMatchLiteral = r'___NEVER_MATCH___';
 }
