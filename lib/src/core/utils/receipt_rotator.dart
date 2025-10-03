@@ -12,11 +12,11 @@ class ReceiptRotator {
   final bool hasRotation;
 
   ReceiptRotator(this.angleDeg)
-    : hasRotation = angleDeg.abs() >= 0.5,
-      sinA = math.sin(-angleDeg * math.pi / 180.0),
-      cosA = math.cos(-angleDeg * math.pi / 180.0);
+      : hasRotation = angleDeg.abs() >= 0.5,
+        sinA = math.sin(-angleDeg * math.pi / 180.0),
+        cosA = math.cos(-angleDeg * math.pi / 180.0);
 
-  /// Rotate a point by -angleDeg (deskew). Around origin (0,0).
+  /// Rotates a point by -angleDeg around (0,0).
   Offset rotatePoint(Offset p) {
     if (!hasRotation) return p;
     final rx = p.dx * cosA - p.dy * sinA;
@@ -24,7 +24,7 @@ class ReceiptRotator {
     return Offset(rx, ry);
   }
 
-  /// Deskew a Rect by rotating its 4 corners and returning the AABB.
+  /// Deskews a rect by rotating its corners and returning the AABB.
   Rect deskewRect(Rect r) {
     if (!hasRotation) return r;
 
@@ -41,47 +41,52 @@ class ReceiptRotator {
     return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
-  /// Deskewed AABB for a TextLine’s boundingBox.
+  /// Returns the deskewed AABB for a line’s bounding box.
   Rect deskewLineBox(TextLine line) => deskewRect(line.boundingBox);
 
-  // --- Project common anchors of a TextLine into deskewed X/Y ---
-
+  /// Returns the deskewed X of a line’s center.
   double xCenter(TextLine l) {
     final c = l.boundingBox.center;
     if (!hasRotation) return c.dx;
     return c.dx * cosA - c.dy * sinA;
   }
 
+  /// Returns the deskewed Y of a line’s center.
   double yCenter(TextLine l) {
     final c = l.boundingBox.center;
     if (!hasRotation) return c.dy;
     return c.dx * sinA + c.dy * cosA;
   }
 
+  /// Returns the deskewed X at the line’s center-left.
   double xAtCenterLeft(TextLine l) {
     final p = l.boundingBox.centerLeft;
     if (!hasRotation) return p.dx;
     return p.dx * cosA - p.dy * sinA;
   }
 
+  /// Returns the deskewed X at the line’s center-right.
   double xAtCenterRight(TextLine l) {
     final p = l.boundingBox.centerRight;
     if (!hasRotation) return p.dx;
     return p.dx * cosA - p.dy * sinA;
   }
 
+  /// Returns the deskewed Y at the line’s top-center.
   double yAtTopCenter(TextLine l) {
     final p = l.boundingBox.topCenter;
     if (!hasRotation) return p.dy;
     return p.dx * sinA + p.dy * cosA;
   }
 
+  /// Returns the deskewed Y at the line’s bottom-center.
   double yAtBottomCenter(TextLine l) {
     final p = l.boundingBox.bottomCenter;
     if (!hasRotation) return p.dy;
     return p.dx * sinA + p.dy * cosA;
   }
 
+  /// Returns the minimum deskewed X of a rect.
   double minXOf(Rect r) {
     if (!hasRotation) return r.left;
     final a = (r.left * cosA - r.top * sinA);
@@ -91,6 +96,7 @@ class ReceiptRotator {
     return math.min(math.min(a, b), math.min(c, d));
   }
 
+  /// Returns the maximum deskewed X of a rect.
   double maxXOf(Rect r) {
     if (!hasRotation) return r.right;
     final a = (r.left * cosA - r.top * sinA);
@@ -100,12 +106,14 @@ class ReceiptRotator {
     return math.max(math.max(a, b), math.max(c, d));
   }
 
+  /// Returns the deskewed X of a rect’s center.
   double xOfCenter(Rect r) {
     final c = r.center;
     if (!hasRotation) return c.dx;
     return c.dx * cosA - c.dy * sinA;
   }
 
+  /// Returns the deskewed Y of a rect’s center.
   double yOfCenter(Rect r) {
     final c = r.center;
     if (!hasRotation) return c.dy;

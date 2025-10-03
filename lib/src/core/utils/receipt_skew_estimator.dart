@@ -5,10 +5,11 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Estimates the skew angle (degrees) of a receipt from its product/price columns.
 /// Positive angle means the receipt drifts to the right as Y increases (clockwise tilt).
 class ReceiptSkewEstimator {
+  /// Estimates skew in degrees using weighted linear fits of left/right columns.
   static double estimateDegrees(
-    RecognizedReceipt receipt, {
-    int minSamples = 3,
-  }) {
+      RecognizedReceipt receipt, {
+        int minSamples = 3,
+      }) {
     final leftPoints = <_WPoint>[];
     final rightPoints = <_WPoint>[];
 
@@ -57,6 +58,7 @@ class ReceiptSkewEstimator {
     return resultDeg.abs() < 0.5 ? 0.0 : resultDeg;
   }
 
+  /// Fits a weighted line and returns its angle in degrees, or null if insufficient data.
   static double? _fitAngleDegrees(List<_WPoint> pts, int minSamples) {
     if (pts.length < minSamples) return null;
     final fit = _fitSlope(pts);
@@ -64,6 +66,7 @@ class ReceiptSkewEstimator {
     return math.atan(fit.a) * 180.0 / math.pi;
   }
 
+  /// Computes weighted least-squares slope/intercept for x = a*y + b.
   static _LineFit? _fitSlope(List<_WPoint> pts) {
     double sw = 0, sy = 0, sx = 0;
     for (final p in pts) {

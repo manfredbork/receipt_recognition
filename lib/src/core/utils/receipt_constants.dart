@@ -9,8 +9,6 @@ class ReceiptConstants {
   /// A literal that won't ever occur in receipt text → safe never-match regex.
   static const String neverMatchLiteral = r'___NEVER_MATCH___';
 
-  /// ---------------- Outlier remover ----------------
-
   /// Allowed tolerance in cents when matching delta between sums.
   static const int outlierTau = 1;
 
@@ -25,8 +23,6 @@ class ReceiptConstants {
 
   /// Extra score penalty if an item looks like a suspect keyword.
   static const int outlierSuspectBonus = 50;
-
-  /// ---------------- Optimizer ----------------
 
   /// Max identical iterations before stopping optimization.
   static const int optimizerLoopThreshold = 10;
