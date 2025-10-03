@@ -52,15 +52,19 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   @override
   String format(String value) => ReceiptFormatter.trim(value);
 
+  /// Returns the formatted product text.
   String get text => formattedValue;
 
+  /// Returns the normalized product text using alternatives.
   String get normalizedText =>
       ReceiptNormalizer.normalizeByAlternativeTexts(alternativeTexts) ?? text;
 
+  /// Returns the postfix text after the price, if any.
   String get postfixText =>
       position?.group?.convertToPostfixText(position?.price.line.text ?? '') ??
       '';
 
+  /// Returns the normalized postfix text using keyword matching.
   String get normalizedPostfixText => alternativePostfixTexts.firstWhere(
     (postfixText) =>
         options.foodKeywords.hasMatch(postfixText) ||
@@ -70,27 +74,33 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     orElse: () => '',
   );
 
+  /// Returns alternative product texts from the group.
   List<String> get alternativeTexts => position?.group?.alternativeTexts ?? [];
 
+  /// Returns alternative postfix texts from the group.
   List<String> get alternativePostfixTexts =>
       position?.group?.alternativePostfixTexts ?? [];
 
-  // --- Classification: user options + built-in fallback ---
+  /// True if this product is a cashback (negative price).
   bool get isCashback => (position?.price.value ?? 0.0) < 0;
 
+  /// True if this product is classified as food.
   bool get isFood =>
       options.foodKeywords.hasMatch(normalizedPostfixText) ||
       ReceiptPatterns.foodKeywords.hasMatch(normalizedPostfixText);
 
+  /// True if this product is classified as non-food.
   bool get isNonFood =>
       options.nonFoodKeywords.hasMatch(normalizedPostfixText) ||
       ReceiptPatterns.nonFoodKeywords.hasMatch(normalizedPostfixText);
 
+  /// True if this product represents a discount.
   bool get isDiscount =>
       isCashback &&
       (options.discountKeywords.hasMatch(text) ||
           ReceiptPatterns.discountKeywords.hasMatch(text));
 
+  /// True if this product represents a deposit return.
   bool get isDeposit =>
       isCashback &&
       (options.depositKeywords.hasMatch(text) ||

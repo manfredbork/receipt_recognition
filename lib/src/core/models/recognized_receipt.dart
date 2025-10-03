@@ -79,6 +79,15 @@ class RecognizedReceipt {
     );
   }
 
+  /// A simple fingerprint based on position values and sum.
+  String get fingerprint {
+    final positionsHash = positions
+        .map((p) => '${p.product.formattedValue}:${p.price.value}')
+        .join(',');
+    final sumValue = sum?.formattedValue ?? '';
+    return '$positionsHash|$sumValue';
+  }
+
   /// Calculates the sum of all position prices.
   CalculatedSum get calculatedSum =>
       CalculatedSum(value: positions.fold(0.0, (a, b) => a + b.price.value));
@@ -157,15 +166,4 @@ class ReceiptConstants {
 
   /// Sum tolerance tight and more precise below 1 cent.
   static const double sumTolerance = 0.009;
-}
-
-extension ReceiptHash on RecognizedReceipt {
-  /// A simple fingerprint based on position count and sum.
-  String get fingerprint {
-    final positionsHash = positions
-        .map((p) => '${p.product.value}:${p.price.value}')
-        .join(',');
-    final sumValue = sum?.formattedValue ?? '';
-    return '$positionsHash|$sumValue';
-  }
 }

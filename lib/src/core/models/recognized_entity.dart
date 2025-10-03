@@ -56,7 +56,7 @@ final class RecognizedUnknown extends RecognizedEntity<String> {
   String format(String value) => value;
 }
 
-/// Represents the outer bounds of the receipt.
+/// Represents the outer bounds and the skew angle of the receipt.
 final class RecognizedBoundingBox extends RecognizedEntity<Rect> {
   RecognizedBoundingBox({required super.value, required super.line});
 

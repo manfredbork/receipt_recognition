@@ -92,6 +92,10 @@ final class RecognizedGroup {
     return average.toInt();
   }
 
+  /// Removes a leading amount pattern from [postfixText].
+  ///
+  /// Returns the remaining postfix string, or an empty string
+  /// if no valid amount prefix is found.
   String convertToPostfixText(String postfixText) {
     if (postfixText.isEmpty) return postfixText;
     final amountMatch = ReceiptPatterns.amount.matchAsPrefix(
