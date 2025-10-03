@@ -1,5 +1,5 @@
 {
-  "too_few_positions": {
+  "similar_items_same_price": {
     "positions": [
       {
         "product": {
@@ -28,7 +28,7 @@
       "value": 4.98
     }
   },
-  "too_many_positions": {
+  "very_similar_items_same_price": {
     "positions": [
       {
         "product": {

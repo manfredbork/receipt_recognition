@@ -19,7 +19,7 @@ void main() {
   late Map<String, dynamic> fixtures;
 
   setUpAll(() async {
-    final file = File('test/assets/test_receipts_outliers.json');
+    final file = File('test/assets/test_receipts_outlier_remover.json');
     fixtures = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
   });
 
