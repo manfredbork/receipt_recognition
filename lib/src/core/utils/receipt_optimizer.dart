@@ -12,10 +12,10 @@ abstract class Optimizer {
   /// Initializes or resets the optimizer state.
   void init();
 
-  /// Processes a receipt to improve its recognition quality.
+  /// Processes a receipt and returns an optimized version.
   ///
-  /// Returns an optimized version of the input receipt.
-  RecognizedReceipt optimize(RecognizedReceipt receipt);
+  /// Set [force] to true to always return a merged/optimized receipt.
+  RecognizedReceipt optimize(RecognizedReceipt receipt, {bool force = false});
 
   /// Releases resources used by the optimizer.
   void close();
@@ -33,7 +33,7 @@ final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedSum> _sums = [];
   final List<_SumCandidate> _sumCandidates = [];
   final ReceiptThresholder _thresholder;
-  final double _ewmaAlpha = 0.3;
+  final double _ewmaAlpha;
   final int _loopThreshold;
   final int _sumConfirmationThreshold;
   final int _maxCacheSize;
@@ -51,27 +51,36 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Creates a new receipt optimizer with configurable thresholds.
   ///
-  /// Parameters:
-  /// - [loopThreshold]: Number of identical consecutive results before optimization halts
-  /// - [sumConfirmationThreshold]: Minimum number of matching detections to confirm a sum
-  /// - [maxCacheSize]: Maximum number of items to keep in memory
-  /// - [confidenceThreshold]: Minimum confidence score (0-100) for matching
-  /// - [stabilityThreshold]: Minimum stability score (0-100) for groups
-  /// - [invalidateInterval]: Time after which unstable groups are removed
+  /// Defaults are sourced from [ReceiptConstants] so tuning is centralized.
   ReceiptOptimizer({
-    int loopThreshold = 10,
-    int sumConfirmationThreshold = 2,
-    int maxCacheSize = 20,
-    int confidenceThreshold = 70,
-    int stabilityThreshold = 50,
-    Duration invalidateInterval = const Duration(seconds: 2),
-  }) : _thresholder = ReceiptThresholder(baseThreshold: confidenceThreshold),
-       _loopThreshold = loopThreshold,
-       _sumConfirmationThreshold = sumConfirmationThreshold,
-       _maxCacheSize = maxCacheSize,
-       _confidenceThreshold = confidenceThreshold,
-       _stabilityThreshold = stabilityThreshold,
-       _invalidateInterval = invalidateInterval,
+    int? loopThreshold,
+    int? sumConfirmationThreshold,
+    int? maxCacheSize,
+    int? confidenceThreshold,
+    int? stabilityThreshold,
+    Duration? invalidateInterval,
+    double? ewmaAlpha,
+  }) : _confidenceThreshold =
+           confidenceThreshold ?? ReceiptConstants.optimizerConfidenceThreshold,
+       _thresholder = ReceiptThresholder(
+         baseThreshold:
+             confidenceThreshold ??
+             ReceiptConstants.optimizerConfidenceThreshold,
+       ),
+       _loopThreshold =
+           loopThreshold ?? ReceiptConstants.optimizerLoopThreshold,
+       _sumConfirmationThreshold =
+           sumConfirmationThreshold ??
+           ReceiptConstants.optimizerSumConfirmationThreshold,
+       _maxCacheSize = maxCacheSize ?? ReceiptConstants.optimizerMaxCacheSize,
+       _stabilityThreshold =
+           stabilityThreshold ?? ReceiptConstants.optimizerStabilityThreshold,
+       _invalidateInterval =
+           invalidateInterval ??
+           Duration(
+             milliseconds: ReceiptConstants.optimizerInvalidateIntervalMs,
+           ),
+       _ewmaAlpha = ewmaAlpha ?? ReceiptConstants.optimizerEwmaAlpha,
        _shouldInitialize = false,
        _needsRegrouping = false,
        _unchangedCount = 0;
@@ -82,14 +91,11 @@ final class ReceiptOptimizer implements Optimizer {
     _shouldInitialize = true;
   }
 
-  /// Processes a receipt to improve its recognition quality.
+  /// Processes a receipt and returns an optimized version.
   ///
-  /// Applies various optimization strategies including:
-  /// - Company name normalization
-  /// - Sum validation and correction
-  /// - Position grouping and confidence scoring
+  /// If [force] is false and the receipt is already valid, the input is returned.
   @override
-  RecognizedReceipt optimize(RecognizedReceipt receipt, {force = false}) {
+  RecognizedReceipt optimize(RecognizedReceipt receipt, {bool force = false}) {
     if (!_checkConvergence(receipt)) {
       return receipt;
     }
@@ -111,6 +117,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Clears caches and resets internal state if flagged.
   void _initializeIfNeeded() {
     if (_shouldInitialize) {
       _groups.clear();
@@ -127,6 +134,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Tracks convergence to avoid infinite loops and trigger regrouping.
   bool _checkConvergence(RecognizedReceipt receipt) {
     final positionsHash = receipt.positions
         .map((p) => '${p.product.normalizedText}:${p.price.value}')
@@ -150,6 +158,7 @@ final class ReceiptOptimizer implements Optimizer {
     return true;
   }
 
+  /// Forces regrouping of all positions into fresh groups.
   void _forceRegroup() {
     final allPositions = _groups.expand((g) => g.members).toList();
     _groups.clear();
@@ -158,16 +167,17 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Updates company history cache for later normalization.
   void _updateCompanies(RecognizedReceipt receipt) {
     if (receipt.company != null) {
       _companies.add(receipt.company!);
     }
-
     if (_companies.length > _maxCacheSize) {
       _companies.removeAt(0);
     }
   }
 
+  /// Updates sum history and confirms stable sum candidates.
   void _updateSums(RecognizedReceipt receipt) {
     if (receipt.sum != null) {
       _sums.add(receipt.sum!);
@@ -207,6 +217,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Fills missing company from frequency in history.
   void _optimizeCompany(RecognizedReceipt receipt) {
     if (receipt.company == null && _companies.isNotEmpty) {
       final lastCompany = _companies.lastOrNull;
@@ -220,6 +231,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Fills missing sum from frequency in history.
   void _optimizeSum(RecognizedReceipt receipt) {
     if (receipt.sum == null && _sums.isNotEmpty) {
       final sums = ReceiptNormalizer.sortByFrequency(
@@ -230,6 +242,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Removes stale or weak groups and cleans stats.
   void _cleanupGroups() {
     if (_groups.length >= _maxCacheSize) {
       final now = DateTime.now();
@@ -260,6 +273,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Resets per-frame operation markers on positions.
   void _resetOperations() {
     for (final group in _groups) {
       for (final position in group.members) {
@@ -268,6 +282,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Processes positions, optionally respecting a confirmed stable sum.
   void _processPositions(RecognizedReceipt receipt) {
     final stableSum = minBy(
       _sumCandidates.where(
@@ -303,6 +318,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Assigns a position to the best existing group or creates a new one.
   void _processPosition(RecognizedPosition position) {
     int bestConfidence = 0;
     RecognizedGroup? bestGroup;
@@ -324,6 +340,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Computes position→group confidence and selection decision.
   _ConfidenceResult _calculateConfidence(
     RecognizedPosition position,
     RecognizedGroup group,
@@ -358,6 +375,7 @@ final class ReceiptOptimizer implements Optimizer {
     );
   }
 
+  /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
     final newGroup = RecognizedGroup(maxGroupSize: _maxCacheSize);
     position.group = newGroup;
@@ -366,18 +384,19 @@ final class ReceiptOptimizer implements Optimizer {
     _groups.add(newGroup);
   }
 
+  /// Adds a position to an existing group.
   void _addToExistingGroup(RecognizedPosition position, RecognizedGroup group) {
     position.group = group;
     position.operation = Operation.updated;
     group.addMember(position);
   }
 
+  /// Builds a merged, ordered receipt from stable groups and updates entities.
   RecognizedReceipt _createOptimizedReceipt(RecognizedReceipt receipt) {
     final stableGroups =
         _groups.where((g) => g.stability >= _stabilityThreshold).toList();
 
     _learnOrder(receipt);
-
     stableGroups.sort(_compareGroupsForOrder);
 
     final mergedReceipt = RecognizedReceipt.empty();
@@ -407,6 +426,7 @@ final class ReceiptOptimizer implements Optimizer {
     return mergedReceipt;
   }
 
+  /// Refreshes the `entities` list from receipt fields and positions.
   void _updateEntities(RecognizedReceipt receipt) {
     final products = receipt.positions.map((p) => p.product);
     final prices = receipt.positions.map((p) => p.price);
@@ -454,10 +474,12 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Applies the outlier-removal step to make sums consistent.
   void _removeOutliersToMatchSum(RecognizedReceipt receipt) {
     ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
   }
 
+  /// Checks whether a confirmed sum candidate is plausible for the receipt.
   bool _isConfirmedSumValid(
     _SumCandidate candidate,
     RecognizedReceipt receipt,
@@ -469,6 +491,7 @@ final class ReceiptOptimizer implements Optimizer {
         ReceiptConstants.sumTolerance;
   }
 
+  /// Learns vertical ordering of groups using skew-aware projection.
   void _learnOrder(RecognizedReceipt receipt) {
     final angleDeg = ReceiptSkewEstimator.estimateDegrees(receipt);
 
@@ -525,12 +548,13 @@ final class ReceiptOptimizer implements Optimizer {
 
     for (final s in _orderStats.values) {
       final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
-      if (total > 50) {
+      if (total > ReceiptConstants.optimizerAboveCountDecayThreshold) {
         s.aboveCounts.updateAll((_, v) => math.max(1, v ~/ 2));
       }
     }
   }
 
+  /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
     final tiePx =
         (_lastAngleDeg?.abs() ?? 0) < 0.5
@@ -579,6 +603,7 @@ final class ReceiptOptimizer implements Optimizer {
     return at.compareTo(bt);
   }
 
+  /// Projects a line’s center onto Y using an optional skew angle.
   double _projectedYFromLine(TextLine line, double? angleRad) {
     final c = line.boundingBox.center;
     if (angleRad == null) return c.dy.toDouble();
@@ -587,8 +612,6 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   /// Releases all resources used by the optimizer.
-  ///
-  /// Clears all cached groups, companies, and sums.
   @override
   void close() {
     _groups.clear();

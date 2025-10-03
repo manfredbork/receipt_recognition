@@ -1,3 +1,5 @@
+import 'package:receipt_recognition/receipt_recognition.dart';
+
 /// A typed wrapper for "label -> canonical" maps with a precompiled regex.
 final class DetectionMap {
   final RegExp regexp;
@@ -143,16 +145,4 @@ final class ReceiptOptions {
       ),
     );
   }
-}
-
-/// Centralized constants shared between receipt parsing and optimization.
-class ReceiptConstants {
-  /// Vertical tolerance (in pixels) for comparing bounding box alignment.
-  static const int boundingBoxBuffer = 30;
-
-  /// Sum tolerance tight and more precise below 1 cent.
-  static const double sumTolerance = 0.009;
-
-  /// A literal that won't ever occur in receipt text → safe never-match regex.
-  static const String neverMatchLiteral = r'___NEVER_MATCH___';
 }

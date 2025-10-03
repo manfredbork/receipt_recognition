@@ -1,3 +1,4 @@
+export 'utils/receipt_constants.dart';
 export 'utils/receipt_formatter.dart';
 export 'utils/receipt_normalizer.dart';
 export 'utils/receipt_optimizer.dart';
