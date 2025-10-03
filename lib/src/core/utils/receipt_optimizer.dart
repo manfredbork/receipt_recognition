@@ -237,8 +237,8 @@ final class ReceiptOptimizer implements Optimizer {
       _groups.removeWhere((g) {
         final kill =
             now.difference(g.timestamp) >= _invalidateInterval &&
-            g.stability > _stabilityThreshold &&
-            g.confidence < _confidenceThreshold;
+            (g.stability < _stabilityThreshold ||
+                g.confidence < _confidenceThreshold);
         if (kill) removed.add(g);
         return kill;
       });
