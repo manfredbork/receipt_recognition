@@ -20,7 +20,7 @@ final class ReceiptRecognizer {
   final Duration _scanTimeout;
   final Duration _scanCompleteDelay;
   final VoidCallback? _onScanTimeout;
-  final Function(ScanProgress)? _onScanUpdate;
+  final Function(RecognizedScanProgress)? _onScanUpdate;
   final Function(RecognizedReceipt)? _onScanComplete;
 
   int _validScans;
@@ -60,7 +60,7 @@ final class ReceiptRecognizer {
     Duration scanTimeout = const Duration(seconds: 20),
     Duration scanCompleteDelay = const Duration(milliseconds: 100),
     VoidCallback? onScanTimeout,
-    Function(ScanProgress)? onScanUpdate,
+    Function(RecognizedScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(),
@@ -131,7 +131,7 @@ final class ReceiptRecognizer {
   RecognizedReceipt? _handleValidationResult(
     DateTime now,
     RecognizedReceipt receipt,
-    ValidationResult validation,
+    ReceiptValidationResult validation,
   ) {
     switch (validation.status) {
       case ReceiptCompleteness.complete:
@@ -144,9 +144,9 @@ final class ReceiptRecognizer {
     }
   }
 
-  ValidationResult _validateReceipt(RecognizedReceipt receipt) {
+  ReceiptValidationResult _validateReceipt(RecognizedReceipt receipt) {
     if (receipt.positions.isEmpty || receipt.sum == null) {
-      return ValidationResult(
+      return ReceiptValidationResult(
         status: ReceiptCompleteness.invalid,
         matchPercentage: 0,
         message: 'Receipt missing critical information',
@@ -156,19 +156,19 @@ final class ReceiptRecognizer {
     final percentage = _calculateMatchPercentage(receipt);
 
     if (percentage.round() == 100) {
-      return ValidationResult(
+      return ReceiptValidationResult(
         status: ReceiptCompleteness.complete,
         matchPercentage: 100,
         message: 'Receipt complete',
       );
     } else if (percentage >= _nearlyCompleteThreshold) {
-      return ValidationResult(
+      return ReceiptValidationResult(
         status: ReceiptCompleteness.nearlyComplete,
         matchPercentage: percentage.toInt(),
         message: 'Receipt nearly complete (${percentage.toInt()}%)',
       );
     } else {
-      return ValidationResult(
+      return ReceiptValidationResult(
         status: ReceiptCompleteness.incomplete,
         matchPercentage: percentage.toInt(),
         message: 'Receipt incomplete (${percentage.toInt()}%)',
@@ -214,7 +214,7 @@ final class ReceiptRecognizer {
 
   void _printDebugInfo(
     RecognizedReceipt optimizedReceipt,
-    ValidationResult validation,
+    ReceiptValidationResult validation,
   ) {
     if (optimizedReceipt.positions.isNotEmpty) {
       debugPrint('🧾${'-' * 48}');
@@ -244,7 +244,7 @@ final class ReceiptRecognizer {
 
   RecognizedReceipt _handleValidReceipt(
     RecognizedReceipt receipt,
-    ValidationResult validationResult,
+    ReceiptValidationResult validationResult,
   ) {
     _handleOnScanUpdate(receipt, validationResult);
 
@@ -259,7 +259,7 @@ final class ReceiptRecognizer {
   RecognizedReceipt? _handleIncompleteReceipt(
     DateTime now,
     RecognizedReceipt receipt,
-    ValidationResult validationResult,
+    ReceiptValidationResult validationResult,
   ) {
     _handleOnScanUpdate(receipt, validationResult);
 
@@ -278,7 +278,7 @@ final class ReceiptRecognizer {
 
   void _handleOnScanUpdate(
     RecognizedReceipt receipt,
-    ValidationResult validationResult,
+    ReceiptValidationResult validationResult,
   ) {
     final positions =
         receipt.positions.where((p) => p.operation != Operation.none).toList();
@@ -288,7 +288,7 @@ final class ReceiptRecognizer {
         positions.where((p) => p.operation == Operation.updated).toList();
 
     _onScanUpdate?.call(
-      ScanProgress(
+      RecognizedScanProgress(
         positions: positions,
         addedPositions: addedPositions,
         updatedPositions: updatedPositions,

@@ -33,7 +33,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   RecognizedReceipt? _receipt;
 
   /// Current progress and intermediate data from the scanning process.
-  ScanProgress? _scanProgress;
+  RecognizedScanProgress? _scanProgress;
 
   /// Error message shown if the scan fails.
   String? _errorMessage;
@@ -93,7 +93,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     if (mounted) setState(() {});
   }
 
-  void _onScanUpdate(ScanProgress progress) {
+  void _onScanUpdate(RecognizedScanProgress progress) {
     setState(() {
       _scanProgress = progress;
       final current = progress.estimatedPercentage ?? 0;

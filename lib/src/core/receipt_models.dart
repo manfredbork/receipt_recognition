@@ -5,3 +5,4 @@ export 'models/recognized_position.dart';
 export 'models/recognized_price.dart';
 export 'models/recognized_product.dart';
 export 'models/recognized_receipt.dart';
+export 'models/recognized_scan_process.dart';
