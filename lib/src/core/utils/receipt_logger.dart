@@ -10,7 +10,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// Includes helpers for generating compact keys for positions and groups.
 final class ReceiptLogger {
   /// Global toggle to enable or disable verbose recognition logs.
-  static bool kRecogVerbose = true;
+  static bool kRecogVerbose = false;
 
   /// Writes a structured one-liner log entry if verbose logging is enabled.
   ///
