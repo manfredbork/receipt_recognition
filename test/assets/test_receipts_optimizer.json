@@ -1,5 +1,63 @@
 {
-  "similar_items_same_price": {
+  "same_texts_but_different_items_one_scan": {
+    "positions": [
+      {
+        "product": {
+          "value": "Deposit",
+          "confidence": 90
+        },
+        "price": {
+          "value": -1.00,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Deposit",
+          "confidence": 85
+        },
+        "price": {
+          "value": -0.50,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      }
+    ],
+    "sum": {
+      "value": 3.98
+    }
+  },
+  "similar_texts_but_different_items_one_scan": {
+    "positions": [
+      {
+        "product": {
+          "value": "Coca Cola Zero",
+          "confidence": 95
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 85
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Coca Cola Light",
+          "confidence": 80
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      }
+    ],
+    "sum": {
+      "value": 3.98
+    }
+  },
+  "similar_texts_but_different_items_two_scans": {
     "positions": [
       {
         "product": {
@@ -28,7 +86,7 @@
       "value": 4.98
     }
   },
-  "very_similar_items_same_price": {
+  "similar_texts_and_same_items_two_scans": {
     "positions": [
       {
         "product": {
@@ -45,6 +103,35 @@
         "product": {
           "value": "Mi lk #",
           "confidence": 80
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00.001000Z"
+      }
+    ],
+    "sum": {
+      "value": 3.98
+    }
+  },
+  "same_texts_and_same_items_two_scans": {
+    "positions": [
+      {
+        "product": {
+          "value": "Butter",
+          "confidence": 90
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Butter",
+          "confidence": 85
         },
         "price": {
           "value": 1.99,

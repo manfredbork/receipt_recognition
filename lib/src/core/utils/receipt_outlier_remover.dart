@@ -30,8 +30,8 @@ final class ReceiptOutlierRemover {
     final calculatedCents = _toCents(calculatedSum);
     final deltaCents = calculatedCents - detectedCents;
 
-    final candidates = _rankPool(
-      _selectPool(receipt, deltaCents, useDeltaGate: true),
+    final candidates = List<_Cand>.of(
+      _rankPool(_selectPool(receipt, deltaCents, useDeltaGate: true)),
     );
 
     if (candidates.isEmpty) {
@@ -209,7 +209,7 @@ final class ReceiptOutlierRemover {
     int deltaCents, {
     required bool useDeltaGate,
   }) {
-    if (receipt.sum == null) return const <_Cand>[];
+    if (receipt.sum == null) return <_Cand>[];
 
     final pool = <_Cand>[];
     for (var i = 0; i < receipt.positions.length; i++) {
@@ -249,7 +249,7 @@ final class ReceiptOutlierRemover {
 
   /// Ranks candidates: lower confidence first, then suspects, then larger impact; caps to ReceiptConstants.outlierMaxCandidates.
   static List<_Cand> _rankPool(List<_Cand> pool) {
-    if (pool.isEmpty) return const <_Cand>[];
+    if (pool.isEmpty) return <_Cand>[];
     pool.sort((a, b) {
       final byConf = a.confidence.compareTo(b.confidence);
       if (byConf != 0) return byConf;
