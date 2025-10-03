@@ -1,11 +1,8 @@
-// dart test
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
-
-// ---------- tiny helpers ----------
 
 /// Returns a RecognizedReceipt from json[key], or null if missing.
 RecognizedReceipt? _receiptFrom(Map<String, dynamic> json, String key) {
@@ -18,8 +15,6 @@ RecognizedReceipt? _receiptFrom(Map<String, dynamic> json, String key) {
 bool _close(double a, double b, {int cents = 1}) =>
     ((a - b).abs() <= cents / 100.0);
 
-// ---------- tests ----------
-
 void main() {
   late Map<String, dynamic> fixtures;
 
@@ -30,33 +25,34 @@ void main() {
 
   test('allows at least one deletion for small receipts (n=3)', () {
     final receipt = _receiptFrom(fixtures, 'outlier_single')!;
-    // Should be able to remove exactly 1 item to match the total.
     ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
     expect(receipt.positions.length, 2);
   });
 
-  test('json/outlier_single: removes one duplicate/misread price to match sum', () {
-    final receipt = _receiptFrom(fixtures, 'outlier_single');
-    if (receipt == null) {
-      return; // fixture not present yet → skip silently
-    }
+  test(
+    'json/outlier_single: removes one duplicate/misread price to match sum',
+    () {
+      final receipt = _receiptFrom(fixtures, 'outlier_single');
+      if (receipt == null) {
+        return;
+      }
 
-    final detected = receipt.sum!.value.toDouble();
-    ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
-    // Expect we removed exactly 1 line OR we matched by already-perfect totals.
-    final left = receipt.calculatedSum.value.toDouble();
-    expect(
-      _close(left, detected),
-      isTrue,
-      reason:
-          'Remaining positions should match detected sum within ±1¢ (got $left vs $detected).',
-    );
-  });
+      final detected = receipt.sum!.value.toDouble();
+      ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
+      final left = receipt.calculatedSum.value.toDouble();
+      expect(
+        _close(left, detected),
+        isTrue,
+        reason:
+            'Remaining positions should match detected sum within ±1¢ (got $left vs $detected).',
+      );
+    },
+  );
 
   test('json/outlier_pair: removes two junk prices to match sum', () {
     final receipt = _receiptFrom(fixtures, 'outlier_pair');
     if (receipt == null) {
-      return; // fixture not present yet → skip silently
+      return;
     }
 
     final detected = receipt.sum!.value.toDouble();
@@ -67,8 +63,6 @@ void main() {
     final afterLen = receipt.positions.length;
     final left = receipt.calculatedSum.value.toDouble();
 
-    // Usually pair removal reduces by 2; if a single fixed it, we still only
-    // assert that totals match.
     expect(
       _close(left, detected),
       isTrue,
@@ -81,12 +75,11 @@ void main() {
   test('json/outlier_summe: removes a misparsed SUMME/metadata line', () {
     final receipt = _receiptFrom(fixtures, 'outlier_summe');
     if (receipt == null) {
-      return; // fixture not present yet → skip silently
+      return;
     }
 
     final detected = receipt.sum!.value.toDouble();
 
-    // Sanity: ensure there is a SUMME-like line in the input
     final hadSumme = receipt.positions.any(
       (p) => p.product.value.toString().toLowerCase().contains('summe'),
     );
@@ -94,7 +87,6 @@ void main() {
 
     ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
 
-    // The SUMME line should be gone; totals match.
     final hasSummeNow = receipt.positions.any(
       (p) => p.product.value.toString().toLowerCase().contains('summe'),
     );
@@ -111,7 +103,7 @@ void main() {
   test('json/outlier_no_solution: unchanged when no subset fits tolerance', () {
     final receipt = _receiptFrom(fixtures, 'outlier_no_solution');
     if (receipt == null) {
-      return; // fixture not present yet → skip silently
+      return;
     }
 
     final before = receipt.positions.map((p) => p.product.value).toList();
