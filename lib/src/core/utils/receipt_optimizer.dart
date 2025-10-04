@@ -263,14 +263,7 @@ final class ReceiptOptimizer implements Optimizer {
       final doomed = <RecognizedGroup>[];
 
       for (final g in _groups) {
-        final hits = _cashbackHits(g);
-        final hasCb = hits > 0;
-        final ttl =
-            hasCb
-                ? (_hasCashbackKeyword(g)
-                    ? _invalidateInterval * 3
-                    : _invalidateInterval * 2)
-                : _invalidateInterval;
+        final ttl = _invalidateInterval;
         final age = now.difference(g.timestamp);
         final tooOld = age >= ttl;
         final tooWeak =
@@ -578,12 +571,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// Builds a merged, ordered receipt from stable groups and updates entities.
   RecognizedReceipt _createOptimizedReceipt(RecognizedReceipt receipt) {
     final stableGroups =
-        _groups.where((g) {
-          if (g.stability >= _stabilityThreshold) return true;
-          final hits = _cashbackHits(g);
-          if (hits == 0) return false;
-          return hits >= 2 || _isLikelyCashbackSingleton(g);
-        }).toList();
+        _groups.where((g) => g.stability >= _stabilityThreshold).toList();
 
     _learnOrder(receipt);
 
@@ -693,17 +681,6 @@ final class ReceiptOptimizer implements Optimizer {
   void _removeOutliersToMatchSum(RecognizedReceipt receipt) {
     ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
   }
-
-  /// Counts how many cashback (negative price) items are in the group.
-  int _cashbackHits(RecognizedGroup g) =>
-      g.members.where((p) => p.product.isCashback).length;
-
-  /// True if any member matches deposit/discount keywords.
-  bool _hasCashbackKeyword(RecognizedGroup g) =>
-      g.members.any((p) => p.product.isDeposit || p.product.isDiscount);
-
-  /// True if a single negative sighting looks legit (keyword only).
-  bool _isLikelyCashbackSingleton(RecognizedGroup g) => _hasCashbackKeyword(g);
 
   /// Checks whether a confirmed sum candidate is plausible for the receipt.
   bool _isConfirmedSumValid(

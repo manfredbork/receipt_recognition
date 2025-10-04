@@ -43,11 +43,23 @@ final class ReceiptLogger {
       debugPrint('💬 Message: ${validation.message}');
       debugPrint('🧾${'-' * 48}');
       debugPrint('🏪 Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
-      const int totalWidth = 40;
+      const int padFullWidth = 30;
+      final int padHalfWidth = (padFullWidth / 2).toInt();
       for (final position in optimizedReceipt.positions) {
         final product = position.product.normalizedText;
         final price = position.price.formattedValue;
-        debugPrint('${'🛍️  $product'.padRight(totalWidth)}💰 $price');
+        final confidence = position.confidence;
+        final stability =
+            (position.product.alternativeTexts.length *
+                    100 /
+                    ReceiptConstants.optimizerMaxCacheSize)
+                .clamp(0, 100)
+                .toInt();
+        debugPrint(
+          '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padHalfWidth)}'
+          '${'📈  $confidence'.padRight(padHalfWidth)}% Confidence'
+          '${'⚖️  $stability'.padRight(padHalfWidth)}% Stability',
+        );
       }
       debugPrint(
         '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
