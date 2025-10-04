@@ -42,6 +42,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   void initState() {
     super.initState();
     _audioPlayer.setSource(AssetSource('sounds/checkout_beep.mp3'));
+    _receiptRecognizer?.close();
     _receiptRecognizer = ReceiptRecognizer(
       onScanUpdate: _onScanUpdate,
       onScanTimeout: _onScanTimeout,
@@ -83,6 +84,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
   void _onScanUpdate(RecognizedScanProgress progress) {
     if (_didComplete) return;
+
     setState(() {
       _scanProgress = progress;
       final current = progress.estimatedPercentage ?? 0;
@@ -98,7 +100,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     _maxProgress = 0;
     HapticFeedback.lightImpact();
 
-    await stopLiveFeed(); // ensure camera actually stops
+    await stopLiveFeed();
 
     setState(() {
       _errorMessage = 'Scan failed – try again';
@@ -147,17 +149,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
   }
 
   bool _isValidReceipt(RecognizedReceipt? receipt) {
-    if (receipt == null) return false;
-
-    if (receipt.isValid == true) return true;
-
-    final hasPositions = receipt.positions.isNotEmpty;
-    final hasSum = receipt.sum != null;
-
-    final pct = _scanProgress?.estimatedPercentage ?? 0;
-    final nearlyDone = pct >= 95;
-
-    return hasPositions && (hasSum || nearlyDone);
+    return receipt != null && receipt.isValid;
   }
 
   Future<void> _handleSuccessfulScan(RecognizedReceipt receipt) async {
@@ -174,8 +166,11 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
 
     await stopLiveFeed();
 
-    // Prep recognizer for the next scan session
-    _receiptRecognizer?.init();
+    _receiptRecognizer?.close();
+    _receiptRecognizer = ReceiptRecognizer(
+      onScanUpdate: _onScanUpdate,
+      onScanTimeout: _onScanTimeout,
+    );
 
     if (mounted) setState(() {});
   }
@@ -208,7 +203,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                 children: [
                   CameraPreview(cameraController!),
                   if (_scanProgress?.positions.isNotEmpty == true &&
-                      _receipt == null) // hide overlays after success
+                      _receipt == null)
                     PositionOverlay(
                       positions:
                           isScanInProgress ? _scanProgress!.positions : [],
@@ -261,15 +256,19 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                   setState(() {
                     _receipt = null;
                     _errorMessage = null;
-                    _scanProgress = null; // reset progress
-                    _maxProgress = 0; // reset UI
-                    _didComplete = false; // reset completion latch
+                    _scanProgress = null;
+                    _maxProgress = 0;
+                    _didComplete = false;
                     _canProcess = true;
                     _isReady = false;
                     isControllerDisposed = false;
                   });
 
-                  _receiptRecognizer?.init(); // reset internal caches
+                  _receiptRecognizer?.close();
+                  _receiptRecognizer = ReceiptRecognizer(
+                    onScanUpdate: _onScanUpdate,
+                    onScanTimeout: _onScanTimeout,
+                  );
 
                   await _startLiveFeed();
                 },

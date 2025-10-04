@@ -57,7 +57,7 @@ final class ReceiptRecognizer {
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 100),
-    Duration scanTimeout = const Duration(seconds: 20),
+    Duration scanTimeout = const Duration(seconds: 30),
     Duration scanCompleteDelay = const Duration(milliseconds: 100),
     VoidCallback? onScanTimeout,
     Function(RecognizedScanProgress)? onScanUpdate,
@@ -153,7 +153,7 @@ final class ReceiptRecognizer {
 
     final percentage = _calculateMatchPercentage(receipt);
 
-    if (percentage.round() == 100) {
+    if (percentage == 100) {
       return ReceiptValidationResult(
         status: ReceiptCompleteness.complete,
         matchPercentage: 100,
@@ -162,24 +162,26 @@ final class ReceiptRecognizer {
     } else if (percentage >= _nearlyCompleteThreshold) {
       return ReceiptValidationResult(
         status: ReceiptCompleteness.nearlyComplete,
-        matchPercentage: percentage.toInt(),
-        message: 'Receipt nearly complete (${percentage.toInt()}%)',
+        matchPercentage: percentage,
+        message: 'Receipt nearly complete ($percentage%)',
       );
     } else {
       return ReceiptValidationResult(
         status: ReceiptCompleteness.incomplete,
-        matchPercentage: percentage.toInt(),
-        message: 'Receipt incomplete (${percentage.toInt()}%)',
+        matchPercentage: percentage,
+        message: 'Receipt incomplete ($percentage%)',
       );
     }
   }
 
-  double _calculateMatchPercentage(RecognizedReceipt receipt) {
+  int _calculateMatchPercentage(RecognizedReceipt receipt) {
     final calculatedNumerator = receipt.calculatedSum.value;
     final calculatedDenominator = receipt.sum!.value;
-    return (calculatedNumerator < calculatedDenominator)
-        ? (calculatedNumerator / calculatedDenominator * 100)
-        : (calculatedDenominator / calculatedNumerator * 100);
+    final calculateRatio =
+        calculatedNumerator < calculatedDenominator
+            ? calculatedNumerator / calculatedDenominator * 100
+            : calculatedDenominator / calculatedNumerator * 100;
+    return calculateRatio.clamp(0, 100).toInt() - _minValidScans + _validScans;
   }
 
   /// Manually accepts a receipt that doesn't meet automatic validation criteria.

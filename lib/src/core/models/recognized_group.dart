@@ -79,13 +79,13 @@ final class RecognizedGroup {
   /// Compares the price value with existing members using a ratio approach.
   /// Returns a score from 0-100 indicating confidence level.
   int calculatePriceConfidence(RecognizedPrice price) {
-    if (_members.isEmpty) return 0;
+    if (_members.isEmpty || price.value == 0) return 0;
 
     final scores =
         _members.map((b) {
-          final minVal = min(price.value.abs(), b.price.value.abs());
-          final maxVal = max(price.value.abs(), b.price.value.abs());
-          return (minVal / maxVal * 100).toInt();
+          final diff = (price.value - b.price.value).abs();
+          final ratio = diff / (price.value.abs() + b.price.value.abs()) * 100;
+          return (100 - ratio).toInt();
         }).toList();
 
     final average = scores.reduce((a, b) => a + b) / scores.length;

@@ -30,6 +30,10 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
   /// Indicates if the camera controller has been disposed.
   bool isControllerDisposed = false;
 
+  // --- New: single image-stream listener + guard ---
+  bool _streamActive = false;
+  void Function(CameraImage)? _imageListener;
+
   /// Initializes the back-facing camera from a list of available cameras.
   Future<void> initCamera(List<CameraDescription> cameras) async {
     for (var cam in cameras) {
@@ -45,50 +49,77 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
   ///
   /// Converts [CameraImage] frames into [InputImage]s for use with MLKit.
   Future<void> startLiveFeed(Function(InputImage) processImage) async {
-    if (cameraController != null || isStreaming || isControllerDisposed) return;
-    isControllerDisposed = false;
+    if (cameraController != null && cameraController!.value.isStreamingImages) {
+      try {
+        await cameraController!.stopImageStream();
+      } catch (_) {}
+      _imageListener = null;
+      _streamActive = false;
+      isStreaming = false;
+    }
+
+    if (cameraController == null || isControllerDisposed) {
+      if (cameraBack == null) return;
+
+      cameraController = CameraController(
+        cameraBack!,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup:
+            Platform.isAndroid
+                ? ImageFormatGroup.nv21
+                : ImageFormatGroup.bgra8888,
+      );
+
+      await cameraController!.initialize();
+      isControllerDisposed = false;
+      if (!mounted) return;
+
+      await cameraController!.lockCaptureOrientation(
+        DeviceOrientation.portraitUp,
+      );
+    }
+
+    _streamActive = true;
     isStreaming = true;
 
-    cameraController = CameraController(
-      cameraBack!,
-      ResolutionPreset.high,
-      enableAudio: false,
-      imageFormatGroup:
-          Platform.isAndroid
-              ? ImageFormatGroup.nv21
-              : ImageFormatGroup.bgra8888,
-    );
-
-    await cameraController!.initialize();
-    if (!mounted) return;
-
-    await cameraController!.lockCaptureOrientation(
-      DeviceOrientation.portraitUp,
-    );
-
-    cameraController!.startImageStream((image) {
-      if (!isControllerDisposed) {
-        final input = convertToInputImage(image);
-        if (input != null) processImage(input);
+    _imageListener = (CameraImage image) {
+      if (!_streamActive) return;
+      final input = convertToInputImage(image);
+      if (input != null) {
+        try {
+          processImage(input);
+        } catch (e) {
+          debugPrint('processImage error: $e');
+        }
       }
+    };
+
+    await cameraController!.startImageStream((img) {
+      final l = _imageListener;
+      if (l != null) l(img);
     });
   }
 
   /// Stops the live image stream and disposes of the camera controller.
   Future<void> stopLiveFeed() async {
-    if (!isStreaming) return;
-    isStreaming = false;
+    if (cameraController == null) return;
 
-    if (cameraController != null && !isControllerDisposed) {
-      final controller = cameraController!;
+    final controller = cameraController!;
+    _streamActive = false;
+    isStreaming = false;
+    _imageListener = null;
+
+    setState(() {
       cameraController = null;
       isControllerDisposed = true;
-      isStreaming = false;
+    });
 
-      if (mounted) setState(() {});
-
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
-        await controller.stopImageStream();
+        if (controller.value.isStreamingImages) {
+          await controller.stopImageStream();
+        }
       } catch (e) {
         debugPrint('stopImageStream error: $e');
       }
@@ -98,12 +129,12 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
       } catch (e) {
         debugPrint('dispose error: $e');
       }
-    }
+    });
   }
 
   /// Converts a [CameraImage] into an [InputImage] for MLKit processing.
   InputImage? convertToInputImage(CameraImage image) {
-    if (cameraController == null || image.planes.isEmpty) return null;
+    if (image.planes.isEmpty) return null;
 
     final rotation = _getInputImageRotation();
     if (rotation == null) return null;
@@ -125,11 +156,13 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
   }
 
   InputImageRotation? _getInputImageRotation() {
+    if (cameraBack == null) return null;
     final sensorOrientation = cameraBack!.sensorOrientation;
 
     if (Platform.isIOS) {
       return InputImageRotationValue.fromRawValue(sensorOrientation);
     } else if (Platform.isAndroid) {
+      if (cameraController == null) return null;
       final rotationCompensation =
           orientations[cameraController!.value.deviceOrientation];
       if (rotationCompensation == null) return null;
