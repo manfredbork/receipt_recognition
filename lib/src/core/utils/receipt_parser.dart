@@ -30,6 +30,7 @@ final class ReceiptParser {
     final filtered = _filterIntermediaryEntities(prunedA, rot);
 
     _lastReceipt = _buildReceipt(filtered, rot, options);
+
     return _lastReceipt;
   }
 
@@ -48,21 +49,22 @@ final class ReceiptParser {
     if (lines.isEmpty) return [];
 
     final parsed = <RecognizedEntity>[];
-
+    final texts = lines.map((l) => l.text).toList();
     final minX = lines.map((l) => rot.xAtCenterLeft(l)).reduce(math.min);
     final maxX = lines.map((l) => rot.xAtCenterRight(l)).reduce(math.max);
     final receiptHalfX = (minX + maxX) / 2;
-
-    final Rect overallDeskewed = lines
+    final angleDeg = rot.angleDeg;
+    final Rect deskewedLines = lines
         .map(rot.deskewLineBox)
         .reduce((a, b) => a.expandToInclude(b));
-    final angleDeg = rot.angleDeg;
-
-    _applyBoundingBox(_createTextLine(overallDeskewed, angleDeg), parsed, rot);
+    final TextLine deskewedText = _createTextLine(deskewedLines, angleDeg);
 
     RecognizedStore? detectedStore;
     RecognizedSumLabel? detectedSumLabel;
     RecognizedAmount? detectedAmount;
+
+    _applyPurchaseDate(texts, parsed);
+    _applyBoundingBox(deskewedText, parsed, rot);
 
     for (final line in lines) {
       if (_shouldExitIfValidSum(parsed, detectedSumLabel, rot)) break;
@@ -251,6 +253,50 @@ final class ReceiptParser {
     return false;
   }
 
+  /// Extracts and adds purchase date to the parsed entities if found in the text lines.
+  static bool _applyPurchaseDate(
+    List<String> lines,
+    List<RecognizedEntity> parsed,
+  ) {
+    String? purchaseDate = _extractDateFromLines(lines);
+    if (purchaseDate != null) {
+      parsed.add(
+        RecognizedPurchaseDate(
+          value: purchaseDate,
+          line: _createTextLine(Rect.zero, 0.0),
+        ),
+      );
+      return true;
+    }
+    return false;
+  }
+
+  /// Extracts the first date found in the given text lines.
+  static String? _extractDateFromLines(List<String> lines) {
+    final datePatterns = [
+      ReceiptPatterns.dateDayMonthYearNumeric,
+      ReceiptPatterns.dateYearMonthDayNumeric,
+      ReceiptPatterns.dateDayMonthYearEn,
+      ReceiptPatterns.dateMonthDayYearEn,
+      ReceiptPatterns.dateDayMonthYearDe,
+    ];
+
+    for (final line in lines) {
+      for (final p in datePatterns) {
+        final m = p.firstMatch(line);
+        if (m != null) {
+          return m.group(1);
+        }
+      }
+    }
+    final full = lines.join(' ');
+    for (final p in datePatterns) {
+      final m = p.firstMatch(full);
+      if (m != null) return m.group(1);
+    }
+    return null;
+  }
+
   /// Returns the first detected store entity if any.
   static RecognizedStore? _findStore(List<RecognizedEntity> entities) {
     for (final entity in entities) {
@@ -267,6 +313,16 @@ final class ReceiptParser {
     return null;
   }
 
+  /// Returns the first detected purchase date entity if any.
+  static RecognizedPurchaseDate? _findPurchaseDate(
+    List<RecognizedEntity> entities,
+  ) {
+    for (final entity in entities) {
+      if (entity is RecognizedPurchaseDate) return entity;
+    }
+    return null;
+  }
+
   /// Returns the first detected bounding box entity if any.
   static RecognizedBoundingBox? _findBoundingBox(
     List<RecognizedEntity> entities,
@@ -275,6 +331,22 @@ final class ReceiptParser {
       if (entity is RecognizedBoundingBox) return entity;
     }
     return null;
+  }
+
+  /// Applies the parsed sum label to the receipt.
+  static void _processSumLabel(
+    RecognizedSumLabel? sumLabel,
+    RecognizedReceipt receipt,
+  ) {
+    receipt.sumLabel = sumLabel;
+  }
+
+  /// Applies the parsed purchase date to the receipt.
+  static void _processPurchaseDate(
+    RecognizedPurchaseDate? purchaseDate,
+    RecognizedReceipt receipt,
+  ) {
+    receipt.purchaseDate = purchaseDate;
   }
 
   /// Applies the parsed bounding box to the receipt.
@@ -752,15 +824,18 @@ final class ReceiptParser {
     final List<RecognizedUnknown> forbidden = [];
     final store = _findStore(entities);
     final sumLabel = _findSumLabel(entities);
+    final purchaseDate = _findPurchaseDate(entities);
     final boundingBox = _findBoundingBox(entities);
 
     _setSum(entities, sumLabel, receipt, rot);
     _processAmounts(entities, yUnknowns, receipt, forbidden, rot, options);
     _processStore(store, receipt);
+    _processSumLabel(sumLabel, receipt);
+    _processPurchaseDate(purchaseDate, receipt);
     _processBoundingBox(boundingBox, receipt);
     _filterSuspiciousProducts(receipt);
     _trimToMatchSum(receipt);
 
-    return receipt.copyWith(entities: entities, sumLabel: sumLabel);
+    return receipt.copyWith(entities: entities);
   }
 }

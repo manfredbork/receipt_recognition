@@ -33,13 +33,13 @@ final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedStore> _stores = [];
   final List<RecognizedSum> _sums = [];
   final List<_SumCandidate> _sumCandidates = [];
+  final Map<RecognizedGroup, _OrderStats> _orderStats = {};
   final ReceiptThresholder _thresholder;
   final int _loopThreshold;
   final int _sumConfirmationThreshold;
   final int _stabilityThreshold;
   final int _confidenceThreshold;
   final Duration _invalidateInterval;
-  final Map<RecognizedGroup, _OrderStats> _orderStats = {};
   final double _ewmaAlpha;
 
   int _maxCacheSize;
@@ -49,6 +49,7 @@ final class ReceiptOptimizer implements Optimizer {
   String? _lastFingerprint;
   double? _lastAngleRad;
   double? _lastAngleDeg;
+  RecognizedPurchaseDate? _purchaseDate;
 
   /// Creates a new receipt optimizer with configurable thresholds.
   ///
@@ -105,8 +106,10 @@ final class ReceiptOptimizer implements Optimizer {
     _initializeIfNeeded();
     _updateStores(receipt);
     _updateSums(receipt);
-    _optimizestore(receipt);
+    _updatePurchaseDate(receipt);
+    _optimizeStore(receipt);
     _optimizeSum(receipt);
+    _optimizePurchaseDate(receipt);
     _cleanupGroups();
     _resetOperations();
     _processPositions(receipt);
@@ -146,6 +149,7 @@ final class ReceiptOptimizer implements Optimizer {
       _needsRegrouping = false;
       _unchangedCount = 0;
       _lastFingerprint = null;
+      _purchaseDate = null;
     }
   }
 
@@ -192,58 +196,77 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Updates purchase date cache.
+  void _updatePurchaseDate(RecognizedReceipt receipt) {
+    if (receipt.purchaseDate != null) {
+      _purchaseDate ??= receipt.purchaseDate;
+    }
+  }
+
   /// Updates sum history and confirms stable sum candidates.
   void _updateSums(RecognizedReceipt receipt) {
-    if (receipt.sum != null) {
-      _sums.add(receipt.sum!);
+    if (receipt.sum == null) return;
 
-      final sumLabel = receipt.entities
-          ?.whereType<RecognizedSumLabel>()
-          .firstWhereOrNull(
-            (label) =>
-                (label.line.boundingBox.top - receipt.sum!.line.boundingBox.top)
-                    .abs() <
-                ReceiptConstants.boundingBoxBuffer,
-          );
+    _sums.add(receipt.sum!);
 
-      if (sumLabel != null) {
-        final candidate = _SumCandidate(
-          label: sumLabel,
-          sum: receipt.sum!,
-          verticalDistance:
-              (sumLabel.line.boundingBox.top -
-                      receipt.sum!.line.boundingBox.top)
-                  .abs()
-                  .toInt(),
-        );
+    final angleDeg = ReceiptSkewEstimator.estimateDegrees(receipt);
+    final rot = ReceiptRotator(angleDeg);
+    final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
 
-        final existing =
-            _sumCandidates.where((c) => c.matches(candidate)).firstOrNull;
-        if (existing != null) {
-          existing.confirm();
-        } else {
-          _sumCandidates.add(candidate);
-        }
+    final sumLabel = receipt.entities
+        ?.whereType<RecognizedSumLabel>()
+        .firstWhereOrNull((label) {
+          final dy =
+              (rot.yCenter(label.line) - rot.yCenter(receipt.sum!.line)).abs();
+          final isRightOfLabel =
+              rot.xCenter(receipt.sum!.line) >=
+              rot.maxXOf(label.line.boundingBox) - tol;
+          return dy <= tol && isRightOfLabel;
+        });
 
-        if (_sumCandidates.length > _maxCacheSize) {
-          _sumCandidates.removeAt(0);
-        }
+    if (sumLabel != null) {
+      final vd =
+          (rot.yCenter(sumLabel.line) - rot.yCenter(receipt.sum!.line))
+              .abs()
+              .round();
+
+      final candidate = _SumCandidate(
+        label: sumLabel,
+        sum: receipt.sum!,
+        verticalDistance: vd,
+      );
+
+      final existing =
+          _sumCandidates.where((c) => c.matches(candidate)).firstOrNull;
+      if (existing != null) {
+        existing.confirm();
+      } else {
+        _sumCandidates.add(candidate);
+      }
+
+      if (_sumCandidates.length > _maxCacheSize) {
+        _sumCandidates.removeAt(0);
       }
     }
   }
 
   /// Fills missing store from frequency in history.
-  void _optimizestore(RecognizedReceipt receipt) {
+  void _optimizeStore(RecognizedReceipt receipt) {
     if (receipt.store == null && _stores.isNotEmpty) {
-      final laststore = _stores.lastOrNull;
-      if (laststore != null) {
+      final lastStore = _stores.lastOrNull;
+      if (lastStore != null) {
         final mostFrequent =
             ReceiptNormalizer.sortByFrequency(
               _stores.map((c) => c.value).toList(),
             ).lastOrNull;
-        receipt.store = laststore.copyWith(value: mostFrequent);
+        receipt.store = lastStore.copyWith(value: mostFrequent);
       }
     }
+  }
+
+  /// Fills missing purchase date from cache.
+  void _optimizePurchaseDate(RecognizedReceipt receipt) {
+    receipt.purchaseDate ??= _purchaseDate;
   }
 
   /// Fills missing sum from frequency in history.
@@ -599,6 +622,7 @@ final class ReceiptOptimizer implements Optimizer {
     mergedReceipt.store ??= receipt.store;
     mergedReceipt.sum ??= receipt.sum;
     mergedReceipt.sumLabel ??= receipt.sumLabel;
+    mergedReceipt.purchaseDate ??= receipt.purchaseDate;
     mergedReceipt.boundingBox ??= receipt.boundingBox;
 
     final stableSum = minBy(
@@ -657,6 +681,14 @@ final class ReceiptOptimizer implements Optimizer {
         RecognizedSumLabel(
           value: receipt.sumLabel!.value,
           line: receipt.sumLabel!.line,
+        ),
+      );
+    }
+    if (receipt.purchaseDate != null) {
+      receipt.entities?.add(
+        RecognizedPurchaseDate(
+          value: receipt.purchaseDate!.value,
+          line: receipt.purchaseDate!.line,
         ),
       );
     }

@@ -63,6 +63,26 @@ final class RecognizedCompany extends RecognizedStore {
   RecognizedCompany({required super.value, required super.line});
 }
 
+/// Represents a recognized purchase date extracted from a receipt.
+final class RecognizedPurchaseDate extends RecognizedEntity<String> {
+  /// Creates a purchase date entity from [value] and source [line].
+  RecognizedPurchaseDate({required super.value, required super.line});
+
+  /// Creates a copy of this purchase date with optionally updated properties.
+  RecognizedPurchaseDate copyWith({String? value, TextLine? line}) {
+    return RecognizedPurchaseDate(
+      value: value ?? this.value,
+      line: line ?? this.line,
+    );
+  }
+
+  /// Parses the recognized date [value] into a [DateTime] object, if possible.
+  DateTime? get parsedDateTime => ReceiptFormatter.parseDate(value);
+
+  @override
+  String format(String value) => value;
+}
+
 /// Represents an unidentified text line from the receipt.
 final class RecognizedUnknown extends RecognizedEntity<String> {
   /// Creates an unknown entity from [value] and source [line].

@@ -43,6 +43,9 @@ final class ReceiptLogger {
       debugPrint('💬 Message: ${validation.message}');
       debugPrint('🧾${'-' * 48}');
       debugPrint('🏪 Supermarket: ${optimizedReceipt.store?.value ?? 'N/A'}');
+      debugPrint(
+        '📅 Purchase date: ${optimizedReceipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
+      );
       const int padFullWidth = 30;
       final int padHalfWidth = (padFullWidth / 2).toInt();
       for (final position in optimizedReceipt.positions) {
@@ -52,8 +55,8 @@ final class ReceiptLogger {
         final stability = position.stability;
         debugPrint(
           '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padHalfWidth)}'
-          '${'📈  $confidence % Confidence'.padRight(padHalfWidth)}'
-          '${'⚖️  $stability % Stability'.padRight(padHalfWidth)}',
+          '${'📈  $confidence % Confidence'.padRight(padFullWidth)}'
+          '${'⚖️  $stability % Stability'.padRight(padFullWidth)}',
         );
       }
       debugPrint(

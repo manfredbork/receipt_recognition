@@ -20,6 +20,9 @@ class RecognizedReceipt {
   /// The recognized store name, if any.
   RecognizedStore? store;
 
+  /// The recognized purchase date, if any.
+  RecognizedPurchaseDate? purchaseDate;
+
   /// The bounding box of the receipt including skew.
   RecognizedBoundingBox? boundingBox;
 
@@ -33,8 +36,9 @@ class RecognizedReceipt {
     this.sum,
     this.sumLabel,
     this.store,
-    this.entities,
+    this.purchaseDate,
     this.boundingBox,
+    this.entities,
   });
 
   /// Creates an empty receipt with the current timestamp.
@@ -55,6 +59,13 @@ class RecognizedReceipt {
                 line: DummyTextLine(),
               )
               : null,
+      purchaseDate:
+          json['purchase_date'] != null
+              ? RecognizedPurchaseDate(
+                value: (json['purchase_date'] as String),
+                line: DummyTextLine(),
+              )
+              : null,
       timestamp: DateTime.now(),
       entities: [],
     );
@@ -65,6 +76,7 @@ class RecognizedReceipt {
     RecognizedStore? store,
     RecognizedSum? sum,
     RecognizedSumLabel? sumLabel,
+    RecognizedPurchaseDate? purchaseDate,
     RecognizedBoundingBox? boundingBox,
     List<RecognizedEntity>? entities,
     List<RecognizedPosition>? positions,
@@ -74,6 +86,7 @@ class RecognizedReceipt {
       store: store ?? this.store,
       sum: sum ?? this.sum,
       sumLabel: sumLabel ?? this.sumLabel,
+      purchaseDate: purchaseDate ?? this.purchaseDate,
       boundingBox: boundingBox ?? this.boundingBox,
       entities: entities ?? this.entities,
       positions: positions ?? this.positions,
