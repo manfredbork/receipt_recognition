@@ -251,29 +251,6 @@ final class ReceiptParser {
     return false;
   }
 
-  /// Builds a complete receipt from entities and post-filters.
-  static RecognizedReceipt _buildReceipt(
-    List<RecognizedEntity> entities,
-    ReceiptRotator rot,
-    ReceiptOptions options,
-  ) {
-    final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
-    final receipt = RecognizedReceipt.empty();
-    final List<RecognizedUnknown> forbidden = [];
-    final store = _findStore(entities);
-    final sumLabel = _findSumLabel(entities);
-    final boundingBox = _findBoundingBox(entities);
-
-    _setSum(entities, sumLabel, receipt, rot);
-    _processAmounts(entities, yUnknowns, receipt, forbidden, rot, options);
-    _processStore(store, receipt);
-    _processBoundingBox(boundingBox, receipt);
-    _filterSuspiciousProducts(receipt);
-    _trimToMatchSum(receipt);
-
-    return receipt.copyWith(entities: entities, sumLabel: sumLabel);
-  }
-
   /// Returns the first detected store entity if any.
   static RecognizedStore? _findStore(List<RecognizedEntity> entities) {
     for (final entity in entities) {
@@ -762,5 +739,28 @@ final class ReceiptParser {
   static double _mad(List<double> xs, double med) {
     final dev = xs.map((x) => (x - med).abs()).toList()..sort();
     return _median(dev);
+  }
+
+  /// Builds a complete receipt from entities and post-filters.
+  static RecognizedReceipt _buildReceipt(
+    List<RecognizedEntity> entities,
+    ReceiptRotator rot,
+    ReceiptOptions options,
+  ) {
+    final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
+    final receipt = RecognizedReceipt.empty();
+    final List<RecognizedUnknown> forbidden = [];
+    final store = _findStore(entities);
+    final sumLabel = _findSumLabel(entities);
+    final boundingBox = _findBoundingBox(entities);
+
+    _setSum(entities, sumLabel, receipt, rot);
+    _processAmounts(entities, yUnknowns, receipt, forbidden, rot, options);
+    _processStore(store, receipt);
+    _processBoundingBox(boundingBox, receipt);
+    _filterSuspiciousProducts(receipt);
+    _trimToMatchSum(receipt);
+
+    return receipt.copyWith(entities: entities, sumLabel: sumLabel);
   }
 }
