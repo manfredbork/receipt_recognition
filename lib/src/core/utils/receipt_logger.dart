@@ -32,7 +32,7 @@ final class ReceiptLogger {
 
   /// Logs a detailed summary of the [optimizedReceipt] and its [validation] result.
   ///
-  /// Prints company, positions, calculated sum, detected sum, and final sum label for debugging.
+  /// Prints store, positions, calculated sum, detected sum, and final sum label for debugging.
   static void logReceipt(
     RecognizedReceipt optimizedReceipt,
     ReceiptValidationResult validation,
@@ -42,7 +42,7 @@ final class ReceiptLogger {
       debugPrint('✅ Validation status: ${validation.status}');
       debugPrint('💬 Message: ${validation.message}');
       debugPrint('🧾${'-' * 48}');
-      debugPrint('🏪 Supermarket: ${optimizedReceipt.company?.value ?? 'N/A'}');
+      debugPrint('🏪 Supermarket: ${optimizedReceipt.store?.value ?? 'N/A'}');
       const int padFullWidth = 30;
       final int padHalfWidth = (padFullWidth / 2).toInt();
       for (final position in optimizedReceipt.positions) {

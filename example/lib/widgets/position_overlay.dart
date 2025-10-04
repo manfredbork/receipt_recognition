@@ -10,7 +10,7 @@ class PositionOverlay extends StatelessWidget {
   final List<RecognizedPosition> positions;
 
   /// Optionally highlights the recognized store/company information.
-  final RecognizedCompany? company;
+  final RecognizedStore? store;
 
   /// Optionally highlights the recognized sum label.
   final RecognizedSumLabel? sumLabel;
@@ -30,7 +30,7 @@ class PositionOverlay extends StatelessWidget {
     required this.positions,
     required this.imageSize,
     required this.screenSize,
-    this.company,
+    this.store,
     this.sumLabel,
     this.sum,
   });
@@ -42,7 +42,7 @@ class PositionOverlay extends StatelessWidget {
         positions: positions,
         imageSize: imageSize,
         screenSize: screenSize,
-        company: company,
+        store: store,
         sumLabel: sumLabel,
         sum: sum,
       ),
@@ -52,7 +52,7 @@ class PositionOverlay extends StatelessWidget {
 
 class _PositionPainter extends CustomPainter {
   final List<RecognizedPosition> positions;
-  final RecognizedCompany? company;
+  final RecognizedStore? store;
   final RecognizedSumLabel? sumLabel;
   final RecognizedSum? sum;
   final Size imageSize;
@@ -62,7 +62,7 @@ class _PositionPainter extends CustomPainter {
     required this.positions,
     required this.imageSize,
     required this.screenSize,
-    this.company,
+    this.store,
     this.sumLabel,
     this.sum,
   });
@@ -100,8 +100,8 @@ class _PositionPainter extends CustomPainter {
       canvas.drawRect(priceBox, paintProduct);
     }
 
-    if (company != null) {
-      final rect = _scaleRect(company!.line.boundingBox);
+    if (store != null) {
+      final rect = _scaleRect(store!.line.boundingBox);
       canvas.drawRect(rect, paintCompany);
     }
 

@@ -34,7 +34,7 @@ class ReceiptWidget extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          receipt.company?.formattedValue ?? 'Unknown Store',
+                          receipt.store?.formattedValue ?? 'Unknown Store',
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,

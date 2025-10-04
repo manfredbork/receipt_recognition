@@ -7,7 +7,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Parses OCR output into a structured receipt by deskewing, extracting entities,
-/// filtering spatial outliers, and assembling positions, sum, company, and bounds.
+/// filtering spatial outliers, and assembling positions, sum, store, and bounds.
 final class ReceiptParser {
   static RecognizedReceipt _lastReceipt = RecognizedReceipt.empty();
 
@@ -60,7 +60,7 @@ final class ReceiptParser {
 
     _applyBoundingBox(_createTextLine(overallDeskewed, angleDeg), parsed, rot);
 
-    RecognizedCompany? detectedCompany;
+    RecognizedStore? detectedStore;
     RecognizedSumLabel? detectedSumLabel;
     RecognizedAmount? detectedAmount;
 
@@ -70,14 +70,14 @@ final class ReceiptParser {
       if (_shouldIgnoreLine(line, options)) continue;
       if (_shouldSkipLine(line, detectedSumLabel, rot)) continue;
 
-      if (_tryParseCompany(
+      if (_tryParseStore(
         line,
         parsed,
-        detectedCompany,
+        detectedStore,
         detectedAmount,
         options.storeNames,
       )) {
-        detectedCompany = parsed.last as RecognizedCompany;
+        detectedStore = parsed.last as RecognizedStore;
         continue;
       }
 
@@ -136,26 +136,26 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Detects company name via custom map or fallback pattern.
-  static bool _tryParseCompany(
+  /// Detects store name via custom map or fallback pattern.
+  static bool _tryParseStore(
     TextLine line,
     List<RecognizedEntity> parsed,
-    RecognizedCompany? detectedCompany,
+    RecognizedStore? detectedStore,
     RecognizedAmount? detectedAmount,
     DetectionMap customDetection,
   ) {
-    if (detectedCompany == null && detectedAmount == null) {
+    if (detectedStore == null && detectedAmount == null) {
       final text = ReceiptFormatter.trim(line.text);
 
-      final customCompany = customDetection.detect(text);
-      if (customCompany != null) {
-        parsed.add(RecognizedCompany(line: line, value: customCompany));
+      final customStore = customDetection.detect(text);
+      if (customStore != null) {
+        parsed.add(RecognizedStore(line: line, value: customStore));
         return true;
       }
 
-      final company = ReceiptPatterns.companyNames.stringMatch(text);
-      if (company != null) {
-        parsed.add(RecognizedCompany(line: line, value: company));
+      final store = ReceiptPatterns.storeNames.stringMatch(text);
+      if (store != null) {
+        parsed.add(RecognizedStore(line: line, value: store));
         return true;
       }
     }
@@ -260,13 +260,13 @@ final class ReceiptParser {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
     final List<RecognizedUnknown> forbidden = [];
-    final company = _findCompany(entities);
+    final store = _findStore(entities);
     final sumLabel = _findSumLabel(entities);
     final boundingBox = _findBoundingBox(entities);
 
     _setSum(entities, sumLabel, receipt, rot);
     _processAmounts(entities, yUnknowns, receipt, forbidden, rot, options);
-    _processCompany(company, receipt);
+    _processStore(store, receipt);
     _processBoundingBox(boundingBox, receipt);
     _filterSuspiciousProducts(receipt);
     _trimToMatchSum(receipt);
@@ -274,10 +274,10 @@ final class ReceiptParser {
     return receipt.copyWith(entities: entities, sumLabel: sumLabel);
   }
 
-  /// Returns the first detected company entity if any.
-  static RecognizedCompany? _findCompany(List<RecognizedEntity> entities) {
+  /// Returns the first detected store entity if any.
+  static RecognizedStore? _findStore(List<RecognizedEntity> entities) {
     for (final entity in entities) {
-      if (entity is RecognizedCompany) return entity;
+      if (entity is RecognizedStore) return entity;
     }
     return null;
   }
@@ -308,12 +308,9 @@ final class ReceiptParser {
     receipt.boundingBox = boundingBox;
   }
 
-  /// Applies the parsed company to the receipt.
-  static void _processCompany(
-    RecognizedCompany? company,
-    RecognizedReceipt receipt,
-  ) {
-    receipt.company = company;
+  /// Applies the parsed store to the receipt.
+  static void _processStore(RecognizedStore? store, RecognizedReceipt receipt) {
+    receipt.store = store;
   }
 
   /// Pairs amounts with nearest left-side unknowns to create positions.
@@ -573,7 +570,7 @@ final class ReceiptParser {
     }
 
     for (final entity in entities) {
-      if (entity is RecognizedCompany) {
+      if (entity is RecognizedStore) {
         filtered.add(entity);
         continue;
       }

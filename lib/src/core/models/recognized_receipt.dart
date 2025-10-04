@@ -2,7 +2,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Represents a complete recognized receipt with all its components.
 ///
-/// Contains positions (line items), total sum, company name,
+/// Contains positions (line items), total sum, store name,
 /// bounding box, and parsed OCR entities.
 class RecognizedReceipt {
   /// Line items recognized from the receipt.
@@ -17,8 +17,8 @@ class RecognizedReceipt {
   /// The label associated with the recognized sum (e.g. "Total").
   RecognizedSumLabel? sumLabel;
 
-  /// The recognized company/store name, if any.
-  RecognizedCompany? company;
+  /// The recognized store name, if any.
+  RecognizedStore? store;
 
   /// The bounding box of the receipt including skew.
   RecognizedBoundingBox? boundingBox;
@@ -32,7 +32,7 @@ class RecognizedReceipt {
     required this.timestamp,
     this.sum,
     this.sumLabel,
-    this.company,
+    this.store,
     this.entities,
     this.boundingBox,
   });
@@ -62,7 +62,7 @@ class RecognizedReceipt {
 
   /// Creates a copy with optionally updated properties.
   RecognizedReceipt copyWith({
-    RecognizedCompany? company,
+    RecognizedStore? store,
     RecognizedSum? sum,
     RecognizedSumLabel? sumLabel,
     RecognizedBoundingBox? boundingBox,
@@ -71,7 +71,7 @@ class RecognizedReceipt {
     DateTime? timestamp,
   }) {
     return RecognizedReceipt(
-      company: company ?? this.company,
+      store: store ?? this.store,
       sum: sum ?? this.sum,
       sumLabel: sumLabel ?? this.sumLabel,
       boundingBox: boundingBox ?? this.boundingBox,
@@ -80,6 +80,15 @@ class RecognizedReceipt {
       timestamp: timestamp ?? this.timestamp,
     );
   }
+
+  /// The recognized company name, if any.
+  @Deprecated(
+    'Use `store` instead. This getter will be removed in a future release.',
+  )
+  RecognizedCompany? get company =>
+      store != null
+          ? RecognizedCompany(value: store!.value, line: store!.line)
+          : null;
 
   /// A simple fingerprint string based on positions and sum.
   String get fingerprint {

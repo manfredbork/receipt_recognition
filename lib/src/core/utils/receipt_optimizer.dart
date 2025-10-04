@@ -30,7 +30,7 @@ abstract class Optimizer {
 /// - Merging data from multiple scans
 final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedGroup> _groups = [];
-  final List<RecognizedCompany> _companies = [];
+  final List<RecognizedStore> _stores = [];
   final List<RecognizedSum> _sums = [];
   final List<_SumCandidate> _sumCandidates = [];
   final ReceiptThresholder _thresholder;
@@ -103,9 +103,9 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     _initializeIfNeeded();
-    _updateCompanies(receipt);
+    _updateStores(receipt);
     _updateSums(receipt);
-    _optimizeCompany(receipt);
+    _optimizestore(receipt);
     _optimizeSum(receipt);
     _cleanupGroups();
     _resetOperations();
@@ -136,7 +136,7 @@ final class ReceiptOptimizer implements Optimizer {
   void _initializeIfNeeded() {
     if (_shouldInitialize) {
       _groups.clear();
-      _companies.clear();
+      _stores.clear();
       _sums.clear();
       _sumCandidates.clear();
       _orderStats.clear();
@@ -182,13 +182,13 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Updates company history cache for later normalization.
-  void _updateCompanies(RecognizedReceipt receipt) {
-    if (receipt.company != null) {
-      _companies.add(receipt.company!);
+  /// Updates store history cache for later normalization.
+  void _updateStores(RecognizedReceipt receipt) {
+    if (receipt.store != null) {
+      _stores.add(receipt.store!);
     }
-    if (_companies.length > _maxCacheSize) {
-      _companies.removeAt(0);
+    if (_stores.length > _maxCacheSize) {
+      _stores.removeAt(0);
     }
   }
 
@@ -232,16 +232,16 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Fills missing company from frequency in history.
-  void _optimizeCompany(RecognizedReceipt receipt) {
-    if (receipt.company == null && _companies.isNotEmpty) {
-      final lastCompany = _companies.lastOrNull;
-      if (lastCompany != null) {
+  /// Fills missing store from frequency in history.
+  void _optimizestore(RecognizedReceipt receipt) {
+    if (receipt.store == null && _stores.isNotEmpty) {
+      final laststore = _stores.lastOrNull;
+      if (laststore != null) {
         final mostFrequent =
             ReceiptNormalizer.sortByFrequency(
-              _companies.map((c) => c.value).toList(),
+              _stores.map((c) => c.value).toList(),
             ).lastOrNull;
-        receipt.company = lastCompany.copyWith(value: mostFrequent);
+        receipt.store = laststore.copyWith(value: mostFrequent);
       }
     }
   }
@@ -596,7 +596,7 @@ final class ReceiptOptimizer implements Optimizer {
       }
     }
 
-    mergedReceipt.company ??= receipt.company;
+    mergedReceipt.store ??= receipt.store;
     mergedReceipt.sum ??= receipt.sum;
     mergedReceipt.sumLabel ??= receipt.sumLabel;
     mergedReceipt.boundingBox ??= receipt.boundingBox;
@@ -631,12 +631,9 @@ final class ReceiptOptimizer implements Optimizer {
     final prices = receipt.positions.map((p) => p.price);
 
     receipt.entities?.clear();
-    if (receipt.company != null) {
+    if (receipt.store != null) {
       receipt.entities?.add(
-        RecognizedCompany(
-          value: receipt.company!.value,
-          line: receipt.company!.line,
-        ),
+        RecognizedStore(value: receipt.store!.value, line: receipt.store!.line),
       );
     }
     receipt.entities?.addAll(
@@ -829,7 +826,7 @@ final class ReceiptOptimizer implements Optimizer {
   @override
   void close() {
     _groups.clear();
-    _companies.clear();
+    _stores.clear();
     _sums.clear();
     _shouldInitialize = false;
   }

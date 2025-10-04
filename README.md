@@ -72,12 +72,12 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 // Example configuration for customizing parsing behavior.
 //
 // ⚡ Note: This is OPTIONAL. The package already comes with built-in defaults
-// (company detection, total sum labels, ignore/stop/disc/deposit keywords, etc.).
+// (store detection, total sum labels, ignore/stop/disc/deposit keywords, etc.).
 // You only need to provide this map if you want to extend or override
 // recognition rules for your receipts.
 final options = {
-  // Company/store name normalization:
-  // Map "raw OCR matches" -> "canonical company name"
+  // Store name normalization:
+  // Map "raw OCR matches" -> "canonical store name"
   "storeNames": {
     "REWE": "Rewe",
     "REWE CITY": "Rewe",
@@ -93,7 +93,7 @@ final options = {
   // Keywords to ignore (metadata, coupons, etc.)
   "ignoreKeywords": ["E-Bon", "Coupon", "Posten"],
   
-    // Keywords to stop parsing after sum (metadata, change, etc.)
+  // Keywords to stop parsing after sum (metadata, change, etc.)
   "stopKeywords": ["Rückgeld", "Bar", "Change"],
 
   // Food classification keywords (postfix markers after prices)
@@ -115,7 +115,7 @@ final receiptRecognizer = ReceiptRecognizer(
   singleScan: true,
   onScanComplete: (receipt) {
     // Handle the recognized receipt
-    print('Company: ${receipt.company?.value}');
+    print('Store: ${receipt.store?.value}');
     print('Total: ${receipt.sum?.formattedValue}');
     
     for (final position in receipt.positions) {
@@ -193,7 +193,7 @@ Leverages Google's ML Kit to perform OCR (Optical Character Recognition) on rece
 #### 3. ReceiptParser
 
 Analyzes the raw text to identify and categorize receipt elements:
-- Store/company name (e.g., Aldi, Rewe, Edeka, Penny, Lidl, Kaufland, Netto in German markets)
+- Store name (e.g., Aldi, Rewe, Edeka, Penny, Lidl, Kaufland, Netto in German markets)
 - Total sum ("Summe", "Gesamt", "Total")
 - Line items (products and prices)
 - Date and time information
@@ -236,7 +236,7 @@ The optimizer:
 | Feature                 | Status         | Notes                          |
 +-------------------------+----------------+--------------------------------+
 | Basic OCR               | ✅ Complete    | Using Google ML Kit            |
-| Company/Store Detection | ✅ Complete    | With optimization              |
+| Store Detection         | ✅ Complete    | With optimization              |
 | Total Sum Detection     | ✅ Complete    | With validation                |
 | Line Item Recognition   | ✅ Complete    | Products with prices           |
 | Receipt Merging         | ✅ Complete    | For improved accuracy          |

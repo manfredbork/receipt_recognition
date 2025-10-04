@@ -43,21 +43,24 @@ abstract class RecognizedEntity<T> extends Valuable<T> {
   RecognizedEntity({required super.value, required this.line});
 }
 
-/// Represents a recognized company or store name from a receipt.
-final class RecognizedCompany extends RecognizedEntity<String> {
-  /// Creates a company entity from [value] and source [line].
-  RecognizedCompany({required super.value, required super.line});
+/// Represents a recognized store name from a receipt.
+final class RecognizedStore extends RecognizedEntity<String> {
+  /// Creates a store entity from [value] and source [line].
+  RecognizedStore({required super.value, required super.line});
 
-  /// Creates a copy of this company with optionally updated properties.
-  RecognizedCompany copyWith({String? value, TextLine? line}) {
-    return RecognizedCompany(
-      value: value ?? this.value,
-      line: line ?? this.line,
-    );
+  /// Creates a copy of this store with optionally updated properties.
+  RecognizedStore copyWith({String? value, TextLine? line}) {
+    return RecognizedStore(value: value ?? this.value, line: line ?? this.line);
   }
 
   @override
   String format(String value) => value.toUpperCase();
+}
+
+/// Represents a recognized company name from a receipt.
+final class RecognizedCompany extends RecognizedStore {
+  /// Creates a company entity from [value] and source [line].
+  RecognizedCompany({required super.value, required super.line});
 }
 
 /// Represents an unidentified text line from the receipt.

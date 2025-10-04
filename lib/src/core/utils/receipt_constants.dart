@@ -30,7 +30,7 @@ class ReceiptConstants {
   /// Confirmations required before a sum is accepted.
   static const int optimizerSumConfirmationThreshold = 2;
 
-  /// Max number of cached items (companies, sums, groups).
+  /// Max number of cached items (stores, sums, groups).
   static const int optimizerMaxCacheSize = 20;
 
   /// Minimum confidence score (0–100) for groups to be stable.

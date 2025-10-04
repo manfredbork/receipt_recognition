@@ -212,7 +212,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                         cameraController!.value.previewSize!.width,
                       ),
                       screenSize: MediaQuery.of(context).size,
-                      company: _scanProgress?.mergedReceipt?.company,
+                      store: _scanProgress?.mergedReceipt?.store,
                       sumLabel: _scanProgress?.mergedReceipt?.sumLabel,
                       sum: _scanProgress?.mergedReceipt?.sum,
                     ),
