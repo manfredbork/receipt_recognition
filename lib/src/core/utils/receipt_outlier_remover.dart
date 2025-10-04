@@ -252,8 +252,7 @@ final class ReceiptOutlierRemover {
       }
       if (cents <= 0) continue;
 
-      final prodConf = pos.product.confidence;
-      final effConf = (pos.confidence > prodConf) ? pos.confidence : prodConf;
+      final effConf = pos.confidence;
       final alts = pos.product.alternativeTexts;
 
       if (effConf > ReceiptConstants.outlierLowConfThreshold &&

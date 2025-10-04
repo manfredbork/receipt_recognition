@@ -105,17 +105,12 @@ final class ReceiptRecognizer {
       validation,
     );
 
-    if (_validScans < _minValidScans && !_singleScan) {
-      return null;
-    }
-
-    ReceiptLogger.logReceipt(optimizedReceipt, validation);
-
-    if (validation.matchPercentage == 100) {
+    if (finalReceipt != null && finalReceipt.isValid) {
+      ReceiptLogger.logReceipt(finalReceipt, validation);
       return Future.delayed(_scanCompleteDelay, () => finalReceipt);
     }
 
-    return finalReceipt;
+    return _singleScan ? optimizedReceipt : null;
   }
 
   Future<RecognizedReceipt> _recognizeReceipt(

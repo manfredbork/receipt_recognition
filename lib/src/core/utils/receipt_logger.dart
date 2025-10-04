@@ -49,16 +49,11 @@ final class ReceiptLogger {
         final product = position.product.normalizedText;
         final price = position.price.formattedValue;
         final confidence = position.confidence;
-        final stability =
-            (position.product.alternativeTexts.length *
-                    100 /
-                    ReceiptConstants.optimizerMaxCacheSize)
-                .clamp(0, 100)
-                .toInt();
+        final stability = position.stability;
         debugPrint(
           '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padHalfWidth)}'
-          '${'📈  $confidence'.padRight(padHalfWidth)}% Confidence'
-          '${'⚖️  $stability'.padRight(padHalfWidth)}% Stability',
+          '${'📈  $confidence % Confidence'.padRight(padHalfWidth)}'
+          '${'⚖️  $stability % Stability'.padRight(padHalfWidth)}',
         );
       }
       debugPrint(

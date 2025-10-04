@@ -16,7 +16,7 @@ void main() {
     final receipt = RecognizedReceipt.fromJson(
       testReceipts['same_texts_but_different_items_one_scan'],
     );
-    final optimizer = ReceiptOptimizer(maxCacheSize: 1);
+    final optimizer = ReceiptOptimizer();
 
     final result = optimizer.optimize(receipt, force: true);
 
@@ -27,7 +27,7 @@ void main() {
     final receipt = RecognizedReceipt.fromJson(
       testReceipts['similar_texts_but_different_items_one_scan'],
     );
-    final optimizer = ReceiptOptimizer(maxCacheSize: 1);
+    final optimizer = ReceiptOptimizer();
 
     final result = optimizer.optimize(receipt, force: true);
 
@@ -38,7 +38,7 @@ void main() {
     final receipt = RecognizedReceipt.fromJson(
       testReceipts['similar_texts_but_different_items_two_scans'],
     );
-    final optimizer = ReceiptOptimizer(maxCacheSize: 1);
+    final optimizer = ReceiptOptimizer();
 
     final result = optimizer.optimize(receipt, force: true);
 
@@ -49,7 +49,7 @@ void main() {
     final receipt = RecognizedReceipt.fromJson(
       testReceipts['similar_texts_and_same_items_two_scans'],
     );
-    final optimizer = ReceiptOptimizer(maxCacheSize: 1);
+    final optimizer = ReceiptOptimizer();
 
     final result = optimizer.optimize(receipt, force: true);
 
@@ -60,7 +60,7 @@ void main() {
     final receipt = RecognizedReceipt.fromJson(
       testReceipts['same_texts_and_same_items_two_scans'],
     );
-    final optimizer = ReceiptOptimizer(maxCacheSize: 1);
+    final optimizer = ReceiptOptimizer();
 
     final result = optimizer.optimize(receipt, force: true);
 

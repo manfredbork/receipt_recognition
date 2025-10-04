@@ -127,3 +127,15 @@ final class CalculatedSum extends Valuable<num> {
   @override
   String format(num value) => ReceiptFormatter.format(value);
 }
+
+/// Represents a weighted confidence score used to evaluate recognition reliability.
+final class Confidence extends Valuable<int> {
+  /// Relative influence of this confidence value when aggregated with others.
+  final int weight;
+
+  /// Creates a confidence entity from a numeric [value] and optional [weight].
+  Confidence({required super.value, this.weight = 1});
+
+  @override
+  String format(num value) => '$value%';
+}

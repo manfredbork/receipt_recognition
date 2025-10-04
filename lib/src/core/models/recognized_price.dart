@@ -5,8 +5,8 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 ///
 /// Contains the numeric price value and its confidence score.
 final class RecognizedPrice extends RecognizedEntity<num> {
-  /// Confidence score for this recognition (0–100).
-  int confidence;
+  /// Confidence assessment for this price recognition, including value and weight.
+  Confidence? confidence;
 
   /// The position this price belongs to, if any.
   RecognizedPosition? position;
@@ -15,7 +15,7 @@ final class RecognizedPrice extends RecognizedEntity<num> {
   RecognizedPrice({
     required super.line,
     required super.value,
-    this.confidence = 0,
+    this.confidence,
     this.position,
   });
 
@@ -23,7 +23,7 @@ final class RecognizedPrice extends RecognizedEntity<num> {
   factory RecognizedPrice.fromJson(Map<String, dynamic> json) {
     return RecognizedPrice(
       value: (json['value'] as num),
-      confidence: json['confidence'] ?? 0,
+      confidence: Confidence(value: json['confidence'] ?? 0),
       line: DummyTextLine(),
     );
   }
@@ -32,7 +32,7 @@ final class RecognizedPrice extends RecognizedEntity<num> {
   RecognizedPrice copyWith({
     num? value,
     TextLine? line,
-    int? confidence,
+    Confidence? confidence,
     RecognizedPosition? position,
   }) {
     return RecognizedPrice(

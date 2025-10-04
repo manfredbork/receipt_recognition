@@ -34,18 +34,18 @@ final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedSum> _sums = [];
   final List<_SumCandidate> _sumCandidates = [];
   final ReceiptThresholder _thresholder;
-  final double _ewmaAlpha;
   final int _loopThreshold;
   final int _sumConfirmationThreshold;
-  final int _maxCacheSize;
   final int _stabilityThreshold;
   final int _confidenceThreshold;
   final Duration _invalidateInterval;
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
+  final double _ewmaAlpha;
 
+  int _maxCacheSize;
+  int _unchangedCount;
   bool _shouldInitialize;
   bool _needsRegrouping;
-  int _unchangedCount;
   String? _lastFingerprint;
   double? _lastAngleRad;
   double? _lastAngleDeg;
@@ -56,11 +56,9 @@ final class ReceiptOptimizer implements Optimizer {
   ReceiptOptimizer({
     int? loopThreshold,
     int? sumConfirmationThreshold,
-    int? maxCacheSize,
     int? confidenceThreshold,
     int? stabilityThreshold,
     Duration? invalidateInterval,
-    double? ewmaAlpha,
   }) : _confidenceThreshold =
            confidenceThreshold ?? ReceiptConstants.optimizerConfidenceThreshold,
        _thresholder = ReceiptThresholder(
@@ -73,7 +71,6 @@ final class ReceiptOptimizer implements Optimizer {
        _sumConfirmationThreshold =
            sumConfirmationThreshold ??
            ReceiptConstants.optimizerSumConfirmationThreshold,
-       _maxCacheSize = maxCacheSize ?? ReceiptConstants.optimizerMaxCacheSize,
        _stabilityThreshold =
            stabilityThreshold ?? ReceiptConstants.optimizerStabilityThreshold,
        _invalidateInterval =
@@ -81,10 +78,11 @@ final class ReceiptOptimizer implements Optimizer {
            Duration(
              milliseconds: ReceiptConstants.optimizerInvalidateIntervalMs,
            ),
-       _ewmaAlpha = ewmaAlpha ?? ReceiptConstants.optimizerEwmaAlpha,
+       _ewmaAlpha = ReceiptConstants.optimizerEwmaAlpha,
+       _maxCacheSize = ReceiptConstants.optimizerMaxCacheSize,
+       _unchangedCount = 0,
        _shouldInitialize = false,
-       _needsRegrouping = false,
-       _unchangedCount = 0;
+       _needsRegrouping = false;
 
   /// Marks the optimizer for reinitialization on next optimization.
   @override
@@ -97,6 +95,9 @@ final class ReceiptOptimizer implements Optimizer {
   /// If [force] is false and the receipt is already valid, the input is returned.
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt, {bool force = false}) {
+    if (force) {
+      _maxCacheSize = 1;
+    }
     if (!_checkConvergence(receipt)) {
       return receipt;
     }
@@ -451,10 +452,10 @@ final class ReceiptOptimizer implements Optimizer {
     RecognizedGroup group,
     int currentBestConfidence,
   ) {
-    final productConfidence = group.calculateProductConfidence(
+    Confidence productConfidence = group.calculateProductConfidence(
       position.product,
     );
-    final priceConfidence = group.calculatePriceConfidence(position.price);
+    Confidence priceConfidence = group.calculatePriceConfidence(position.price);
 
     final positionConfidence = position.copyWith(
       product: position.product.copyWith(confidence: productConfidence),
@@ -465,11 +466,7 @@ final class ReceiptOptimizer implements Optimizer {
       (p) => position.timestamp == p.timestamp,
     );
 
-    final isNegative = position.price.value < 0;
     int effectiveThreshold = _thresholder.threshold;
-    if (isNegative) {
-      effectiveThreshold = (effectiveThreshold - 10).clamp(0, 100);
-    }
 
     final repText = _groupRepresentativeText(group);
     final incText = position.product.normalizedText;
@@ -494,7 +491,7 @@ final class ReceiptOptimizer implements Optimizer {
     final minNeeded =
         variantDifferent ? ReceiptConstants.optimizerVariantMinSim : baseMin;
 
-    final looksDissimilar = isNegative ? false : (fuzzy < minNeeded);
+    final looksDissimilar = fuzzy < minNeeded;
 
     final shouldUseGroup =
         !sameTimestamp &&
@@ -516,7 +513,6 @@ final class ReceiptOptimizer implements Optimizer {
     ReceiptLogger.log('conf', {
       'pos': ReceiptLogger.posKey(position),
       'grp': ReceiptLogger.grpKey(group),
-      'neg': isNegative,
       'price': position.price.value,
       'prodC': productConfidence,
       'priceC': priceConfidence,
@@ -536,8 +532,8 @@ final class ReceiptOptimizer implements Optimizer {
     });
 
     return _ConfidenceResult(
-      productConfidence: positionConfidence.product.confidence,
-      priceConfidence: positionConfidence.price.confidence,
+      productConfidence: positionConfidence.product.confidence!,
+      priceConfidence: positionConfidence.price.confidence!,
       confidence: positionConfidence.confidence,
       shouldUseGroup: shouldUseGroup,
     );
@@ -846,8 +842,8 @@ final class ReceiptOptimizer implements Optimizer {
 }
 
 class _ConfidenceResult {
-  final int productConfidence;
-  final int priceConfidence;
+  final Confidence productConfidence;
+  final Confidence priceConfidence;
   final int confidence;
   final bool shouldUseGroup;
 

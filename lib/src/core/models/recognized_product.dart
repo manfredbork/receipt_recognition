@@ -5,8 +5,8 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 ///
 /// Contains the product description and methods to normalize and format it.
 final class RecognizedProduct extends RecognizedEntity<String> {
-  /// Confidence score for this recognition (0–100).
-  int confidence;
+  /// Confidence assessment for this product recognition, including value and weight.
+  Confidence? confidence;
 
   /// The position this product belongs to, if any.
   RecognizedPosition? position;
@@ -18,7 +18,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   RecognizedProduct({
     required super.line,
     required super.value,
-    this.confidence = 0,
+    this.confidence,
     this.position,
     ReceiptOptions? options,
   }) : options = options ?? ReceiptOptions.empty();
@@ -27,9 +27,9 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   factory RecognizedProduct.fromJson(Map<String, dynamic> json) {
     return RecognizedProduct(
       value: json['value'],
-      confidence: json['confidence'] ?? 0,
+      confidence: Confidence(value: json['confidence'] ?? 0),
       line: DummyTextLine(),
-      options: ReceiptOptions.empty(), // fallback when deserialized
+      options: ReceiptOptions.empty(),
     );
   }
 
@@ -37,7 +37,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   RecognizedProduct copyWith({
     String? value,
     TextLine? line,
-    int? confidence,
+    Confidence? confidence,
     RecognizedPosition? position,
     ReceiptOptions? options,
   }) {

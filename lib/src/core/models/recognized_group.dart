@@ -44,21 +44,22 @@ final class RecognizedGroup {
     }
   }
 
-  /// Calculates an adaptive confidence score for a product name based on similarity
-  /// to previously recognized group members.
+  /// Calculates an adaptive [Confidence] value for a product name based on its
+  /// similarity to previously recognized group members.
   ///
-  /// Uses fuzzy string matching full ratio and penalizes inconsistent matches
-  /// using the standard deviation of scores. This helps prioritize stable
-  /// and coherent groupings over noisy OCR data.
+  /// Uses fuzzy string matching (full ratio) and penalizes inconsistent matches
+  /// using the standard deviation of scores. This helps prioritize stable and
+  /// coherent groupings over noisy OCR data.
   ///
-  /// Returns an integer score between 0–100 indicating confidence.
-  int calculateProductConfidence(RecognizedProduct product) {
-    if (_members.isEmpty) return 0;
+  /// Returns a [Confidence] instance where the value represents recognition
+  /// certainty (0–100) and the weight reflects stability.
+  Confidence calculateProductConfidence(RecognizedProduct product) {
+    if (_members.isEmpty) return Confidence(value: 0);
 
     final scores =
         _members.map((b) => ratio(product.value, b.product.value)).toList();
 
-    if (scores.isEmpty) return 0;
+    if (scores.isEmpty) return Confidence(value: 0);
 
     final average = scores.reduce((a, b) => a + b) / scores.length;
 
@@ -71,15 +72,18 @@ final class RecognizedGroup {
     final stddev = sqrt(variance);
     final weight = stddev < 10 ? 1.0 : (100 - stddev) / 100;
 
-    return (average * weight).clamp(0, 100).toInt();
+    return Confidence(value: (average * weight).clamp(0, 100).toInt());
   }
 
-  /// Calculates confidence score for a price based on numeric similarity.
+  /// Calculates a [Confidence] value for a price based on numeric similarity.
   ///
-  /// Compares the price value with existing members using a ratio approach.
-  /// Returns a score from 0-100 indicating confidence level.
-  int calculatePriceConfidence(RecognizedPrice price) {
-    if (_members.isEmpty || price.value == 0) return 0;
+  /// Compares the given price with existing members using a ratio approach,
+  /// where smaller relative differences yield higher confidence.
+  ///
+  /// Returns a [Confidence] instance representing how reliably the price
+  /// matches the group’s consensus (0–100 scale).
+  Confidence calculatePriceConfidence(RecognizedPrice price) {
+    if (_members.isEmpty || price.value == 0) return Confidence(value: 0);
 
     final scores =
         _members.map((b) {
@@ -89,7 +93,7 @@ final class RecognizedGroup {
         }).toList();
 
     final average = scores.reduce((a, b) => a + b) / scores.length;
-    return average.toInt();
+    return Confidence(value: average.toInt());
   }
 
   /// Removes a leading amount pattern from [postfixText].

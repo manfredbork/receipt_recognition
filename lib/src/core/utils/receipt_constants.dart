@@ -36,6 +36,12 @@ class ReceiptConstants {
   /// Minimum confidence score (0–100) for groups to be stable.
   static const int optimizerConfidenceThreshold = 70;
 
+  /// Minimum confidence score (0–100) for groups to be very stable.
+  static const int optimizerHighConfidenceThreshold = 90;
+
+  /// Minimum confidence score (0–100) for groups to be almost perfect.
+  static const int optimizerHighestConfidenceThreshold = 98;
+
   /// Minimum stability score (0–100) required for groups.
   static const int optimizerStabilityThreshold = 50;
 

@@ -59,9 +59,24 @@ final class RecognizedPosition {
 
   /// Gets the overall confidence score for this position.
   ///
-  /// Calculated as the average of product and price confidence scores.
+  /// Calculated as the average of weighted product and price confidence.
   int get confidence {
-    final score = (product.confidence + price.confidence) / 2;
+    if (product.confidence == null || price.confidence == null) return 0;
+    final addedWeights = product.confidence!.weight + price.confidence!.weight;
+    final score =
+        (product.confidence!.value + price.confidence!.value) / addedWeights;
     return score.toInt();
+  }
+
+  /// Returns a stability score in percent (0–100) based on how many alternative
+  /// product texts have been cached relative to the optimizer’s maximum cache size.
+  ///
+  /// Higher values indicate that the product name has been recognized
+  /// consistently across multiple frames, implying greater recognition stability.
+  int get stability {
+    return (product.alternativeTexts.length /
+            ReceiptConstants.optimizerMaxCacheSize *
+            100)
+        .toInt();
   }
 }
