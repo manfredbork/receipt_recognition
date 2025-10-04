@@ -3,7 +3,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// A widget that visually displays a recognized receipt.
 ///
-/// Shows the company name, a list of recognized product positions with prices,
+/// Shows the store name, a list of recognized product positions with prices,
 /// and the total sum if available. An optional close button can be shown.
 class ReceiptWidget extends StatelessWidget {
   /// The recognized receipt data to display.

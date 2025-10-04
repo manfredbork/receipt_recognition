@@ -4,12 +4,12 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 /// A widget that overlays bounding boxes for recognized receipt elements.
 ///
 /// Displays visual rectangles on top of a camera or image preview to indicate
-/// the positions of products, the store/company, and the total sum.
+/// the positions of products, the store, and the total sum.
 class PositionOverlay extends StatelessWidget {
   /// List of recognized product-price positions to display.
   final List<RecognizedPosition> positions;
 
-  /// Optionally highlights the recognized store/company information.
+  /// Optionally highlights the recognized store information.
   final RecognizedStore? store;
 
   /// Optionally highlights the recognized sum label.
@@ -75,7 +75,7 @@ class _PositionPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
-    final paintCompany =
+    final paintStore =
         Paint()
           ..color = Colors.blueAccent.withAlpha(192)
           ..style = PaintingStyle.stroke
@@ -102,7 +102,7 @@ class _PositionPainter extends CustomPainter {
 
     if (store != null) {
       final rect = _scaleRect(store!.line.boundingBox);
-      canvas.drawRect(rect, paintCompany);
+      canvas.drawRect(rect, paintStore);
     }
 
     if (sumLabel != null) {
