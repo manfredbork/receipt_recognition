@@ -1,5 +1,74 @@
 {
-  "same_texts_but_different_items_single_scan": {
+  "three_items_same_text_two_groups_two_scans": {
+    "positions": [
+      {
+        "product": {
+          "value": "Sausage",
+          "confidence": 90
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Sausage",
+          "confidence": 85
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Sausage",
+          "confidence": 85
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00.001000Z"
+      }
+    ],
+    "sum": {
+      "value": 3.98
+    }
+  },
+  "two_items_same_text_same_price_two_groups_single_scan": {
+    "positions": [
+      {
+        "product": {
+          "value": "Banana",
+          "confidence": 90
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Banana",
+          "confidence": 85
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      }
+    ],
+    "sum": {
+      "value": 3.98
+    }
+  },
+  "two_items_same_text_two_groups_single_scan": {
     "positions": [
       {
         "product": {
@@ -28,7 +97,7 @@
       "value": 3.98
     }
   },
-  "similar_texts_but_different_items_single_scan": {
+  "two_items_similar_text_two_groups_single_scan": {
     "positions": [
       {
         "product": {
@@ -57,7 +126,7 @@
       "value": 3.98
     }
   },
-  "similar_texts_but_different_items_two_scans": {
+  "two_items_same_text_two_groups_two_scans": {
     "positions": [
       {
         "product": {
@@ -86,7 +155,7 @@
       "value": 4.98
     }
   },
-  "similar_texts_and_same_items_two_scans": {
+  "two_items_similar_text_single_group_two_scans": {
     "positions": [
       {
         "product": {
@@ -115,7 +184,7 @@
       "value": 3.98
     }
   },
-  "same_texts_and_same_items_two_scans": {
+  "two_items_same_text_single_group_two_scans": {
     "positions": [
       {
         "product": {
@@ -144,7 +213,7 @@
       "value": 3.98
     }
   },
-  "single_item_with_purchase_date": {
+  "single_item_purchase_date": {
     "positions": [
       {
         "product": {
@@ -163,7 +232,7 @@
     },
     "purchase_date": "2024-02-01"
   },
-  "multiple_items_with_purchase_date": {
+  "two_items_purchase_date": {
     "positions": [
       {
         "product": {
