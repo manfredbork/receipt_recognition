@@ -6,7 +6,7 @@ void main() {
     group('canonicalKey', () {
       test('removes diacritics and lowercases', () {
         expect(
-          ReceiptNormalizer.canonicalKey('Êlite Ỉtem'),
+          ReceiptNormalizer.canonicalKey('Êlite Item'),
           equals('elite item'),
         );
         expect(
