@@ -40,7 +40,7 @@ final class ReceiptOptimizer implements Optimizer {
   final int _stabilityThreshold;
   final int _confidenceThreshold;
   final int _maxCacheSize;
-  final int _maxGroupSize;
+  final int _maxGroups;
   final Duration _invalidateInterval;
   final double _ewmaAlpha;
   int _unchangedCount;
@@ -85,7 +85,7 @@ final class ReceiptOptimizer implements Optimizer {
            highPrecision == true
                ? ReceiptConstants.optimizerPrecisionHigh
                : ReceiptConstants.optimizerPrecisionNormal,
-       _maxGroupSize = ReceiptConstants.optimizerMaxGroupSize,
+       _maxGroups = ReceiptConstants.optimizerMaxGroups,
        _unchangedCount = 0,
        _shouldInitialize = false,
        _needsRegrouping = false;
@@ -363,7 +363,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// Removes empty / outlier / stale groups and trims to cap.
   void _cleanupGroups() {
     final now = DateTime.now();
-    final cap = _maxGroupSize;
+    final cap = _maxGroups;
     final doomed = <RecognizedGroup>[];
 
     final emptied = _groups.where((g) => g.members.isEmpty).toList();
@@ -424,13 +424,36 @@ final class ReceiptOptimizer implements Optimizer {
 
     final overCap = _groups.length > cap;
 
+    bool sumOverinflated = false;
+
+    double groupBestPrice(RecognizedGroup g) {
+      final best = maxBy(g.members, (p) => p.confidence);
+      return best?.price.value.toDouble() ?? 0.0;
+    }
+
+    try {
+      final calc = _groups.fold<double>(0.0, (a, g) => a + groupBestPrice(g));
+      final detectedSum = _sums.isNotEmpty ? _sums.last.value : 0.0;
+      if (detectedSum > 0 &&
+          calc > detectedSum * (1 + ReceiptConstants.heuristicQuarter)) {
+        sumOverinflated = true;
+        ReceiptLogger.log('group.overinflated', {
+          'calc': calc,
+          'detected': detectedSum,
+          'ratio': calc / detectedSum,
+        });
+      }
+    } catch (_) {}
+
     bool shouldKill(RecognizedGroup g) {
       final age = now.difference(g.timestamp);
       final tooOld = age >= _invalidateInterval;
       final tooWeak =
           g.stability < _stabilityThreshold ||
           g.confidence < _confidenceThreshold;
-      return overCap ? (tooOld || tooWeak) : (tooOld && tooWeak);
+
+      final trigger = overCap || sumOverinflated;
+      return trigger ? (tooOld || tooWeak) : (tooOld && tooWeak);
     }
 
     for (final g in _groups) {
@@ -441,6 +464,7 @@ final class ReceiptOptimizer implements Optimizer {
           'conf': g.confidence,
           'ageMs': now.difference(g.timestamp).inMilliseconds,
           'overCap': overCap,
+          'inflated': sumOverinflated,
         });
         doomed.add(g);
       }
@@ -712,7 +736,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
-    final newGroup = RecognizedGroup(maxGroupSize: _maxGroupSize);
+    final newGroup = RecognizedGroup(maxGroupSize: _maxCacheSize);
     position.group = newGroup;
     position.operation = Operation.added;
     newGroup.addMember(position);

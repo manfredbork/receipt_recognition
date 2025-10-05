@@ -40,7 +40,7 @@ class ReceiptConstants {
   static const int optimizerPrecisionHigh = 20;
 
   /// Max number of recognition groups kept before old ones are evicted.
-  static const int optimizerMaxGroupSize = 50;
+  static const int optimizerMaxGroups = 50;
 
   /// Minimum confidence score (0–100) for groups to be stable.
   static const int optimizerConfidenceThreshold = 70;
