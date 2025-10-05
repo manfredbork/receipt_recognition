@@ -34,10 +34,10 @@ class ReceiptConstants {
   static const int optimizerSumConfirmationThreshold = 3;
 
   /// Default maximum cache size for normal precision mode.
-  static const int optimizerPrecisionNormal = 15;
+  static const int optimizerPrecisionNormal = 10;
 
   /// Increased maximum cache size for high precision mode.
-  static const int optimizerPrecisionHigh = 25;
+  static const int optimizerPrecisionHigh = 20;
 
   /// Max number of recognition groups kept before old ones are evicted.
   static const int optimizerMaxGroupSize = 50;
