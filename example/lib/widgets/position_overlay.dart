@@ -18,6 +18,9 @@ class PositionOverlay extends StatelessWidget {
   /// Optionally highlights the recognized total sum.
   final RecognizedSum? sum;
 
+  /// Optionally highlights the recognized purchase date.
+  final RecognizedPurchaseDate? purchaseDate;
+
   /// Original size of the scanned image.
   final Size imageSize;
 
@@ -33,6 +36,7 @@ class PositionOverlay extends StatelessWidget {
     this.store,
     this.sumLabel,
     this.sum,
+    this.purchaseDate,
   });
 
   @override
@@ -45,6 +49,7 @@ class PositionOverlay extends StatelessWidget {
         store: store,
         sumLabel: sumLabel,
         sum: sum,
+        purchaseDate: purchaseDate,
       ),
     );
   }
@@ -55,6 +60,7 @@ class _PositionPainter extends CustomPainter {
   final RecognizedStore? store;
   final RecognizedSumLabel? sumLabel;
   final RecognizedSum? sum;
+  final RecognizedPurchaseDate? purchaseDate;
   final Size imageSize;
   final Size screenSize;
 
@@ -65,6 +71,7 @@ class _PositionPainter extends CustomPainter {
     this.store,
     this.sumLabel,
     this.sum,
+    this.purchaseDate,
   });
 
   @override
@@ -93,6 +100,12 @@ class _PositionPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
+    final paintPurchaseDate =
+        Paint()
+          ..color = Colors.amber.withAlpha(192)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2;
+
     for (final position in positions) {
       final productBox = _scaleRect(position.product.line.boundingBox);
       final priceBox = _scaleRect(position.price.line.boundingBox);
@@ -113,6 +126,11 @@ class _PositionPainter extends CustomPainter {
     if (sum != null) {
       final rect = _scaleRect(sum!.line.boundingBox);
       canvas.drawRect(rect, paintTotal);
+    }
+
+    if (purchaseDate != null) {
+      final rect = _scaleRect(purchaseDate!.line.boundingBox);
+      canvas.drawRect(rect, paintPurchaseDate);
     }
   }
 

@@ -215,6 +215,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                       store: _scanProgress?.mergedReceipt?.store,
                       sumLabel: _scanProgress?.mergedReceipt?.sumLabel,
                       sum: _scanProgress?.mergedReceipt?.sum,
+                      purchaseDate: _scanProgress?.mergedReceipt?.purchaseDate,
                     ),
                   if (_scanProgress != null &&
                       _maxProgress > 0 &&

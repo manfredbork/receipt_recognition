@@ -15,8 +15,8 @@ abstract class Optimizer {
 
   /// Processes a receipt and returns an optimized version.
   ///
-  /// Set [force] to true to always return a merged/optimized receipt.
-  RecognizedReceipt optimize(RecognizedReceipt receipt, {bool force = false});
+  /// Set [test] to true to always return a merged/optimized receipt.
+  RecognizedReceipt optimize(RecognizedReceipt receipt, {bool test = false});
 
   /// Releases resources used by the optimizer.
   void close();
@@ -39,10 +39,9 @@ final class ReceiptOptimizer implements Optimizer {
   final int _sumConfirmationThreshold;
   final int _stabilityThreshold;
   final int _confidenceThreshold;
+  final int _maxCacheSize;
   final Duration _invalidateInterval;
   final double _ewmaAlpha;
-
-  int _maxCacheSize;
   int _unchangedCount;
   bool _shouldInitialize;
   bool _needsRegrouping;
@@ -59,6 +58,7 @@ final class ReceiptOptimizer implements Optimizer {
     int? sumConfirmationThreshold,
     int? confidenceThreshold,
     int? stabilityThreshold,
+    bool? highPrecision,
     Duration? invalidateInterval,
   }) : _confidenceThreshold =
            confidenceThreshold ?? ReceiptConstants.optimizerConfidenceThreshold,
@@ -80,7 +80,10 @@ final class ReceiptOptimizer implements Optimizer {
              milliseconds: ReceiptConstants.optimizerInvalidateIntervalMs,
            ),
        _ewmaAlpha = ReceiptConstants.optimizerEwmaAlpha,
-       _maxCacheSize = ReceiptConstants.optimizerMaxCacheSize,
+       _maxCacheSize =
+           highPrecision == true
+               ? ReceiptConstants.optimizerPrecisionHigh
+               : ReceiptConstants.optimizerPrecisionNormal,
        _unchangedCount = 0,
        _shouldInitialize = false,
        _needsRegrouping = false;
@@ -92,13 +95,8 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   /// Processes a receipt and returns an optimized version.
-  ///
-  /// If [force] is false and the receipt is already valid, the input is returned.
   @override
-  RecognizedReceipt optimize(RecognizedReceipt receipt, {bool force = false}) {
-    if (force) {
-      _maxCacheSize = 1;
-    }
+  RecognizedReceipt optimize(RecognizedReceipt receipt, {bool test = false}) {
     if (!_checkConvergence(receipt)) {
       return receipt;
     }
@@ -115,7 +113,7 @@ final class ReceiptOptimizer implements Optimizer {
     _processPositions(receipt);
     _updateEntities(receipt);
 
-    if (!force && receipt.isValid) {
+    if (!test && receipt.isValid) {
       return receipt;
     } else {
       ReceiptLogger.log('opt.in', {
@@ -124,7 +122,7 @@ final class ReceiptOptimizer implements Optimizer {
         'sum?': receipt.sum?.value,
       });
 
-      final out = _createOptimizedReceipt(receipt);
+      final out = _createOptimizedReceipt(receipt, test: test);
 
       ReceiptLogger.log('opt.out', {
         'n': out.positions.length,
@@ -196,20 +194,15 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Updates purchase date cache.
-  void _updatePurchaseDate(RecognizedReceipt receipt) {
-    if (receipt.purchaseDate != null) {
-      _purchaseDate ??= receipt.purchaseDate;
-    }
-  }
-
   /// Updates sum history and confirms stable sum candidates.
   void _updateSums(RecognizedReceipt receipt) {
     if (receipt.sum == null) return;
 
     _sums.add(receipt.sum!);
 
-    final angleDeg = ReceiptSkewEstimator.estimateDegrees(receipt);
+    final angleDeg =
+        receipt.boundingBox?.skewAngle ??
+        ReceiptSkewEstimator.estimateDegrees(receipt);
     final rot = ReceiptRotator(angleDeg);
     final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
 
@@ -250,6 +243,13 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Updates purchase date cache.
+  void _updatePurchaseDate(RecognizedReceipt receipt) {
+    if (receipt.purchaseDate != null) {
+      _purchaseDate ??= receipt.purchaseDate;
+    }
+  }
+
   /// Fills missing store from frequency in history.
   void _optimizeStore(RecognizedReceipt receipt) {
     if (receipt.store == null && _stores.isNotEmpty) {
@@ -269,14 +269,92 @@ final class ReceiptOptimizer implements Optimizer {
     receipt.purchaseDate ??= _purchaseDate;
   }
 
-  /// Fills missing sum from frequency in history.
+  /// Fills or overwrites the receipt sum from history.
+  ///
+  /// - If a stable (confirmed) sum exists, always take the most frequent sum.
+  /// - Otherwise, only backfill when the receipt sum is null.
   void _optimizeSum(RecognizedReceipt receipt) {
-    if (receipt.sum == null && _sums.isNotEmpty) {
-      final sums = ReceiptNormalizer.sortByFrequency(
-        _sums.map((c) => c.formattedValue).toList(),
-      );
-      final parsed = ReceiptFormatter.parse(sums.last);
-      receipt.sum = _sums.last.copyWith(value: parsed);
+    final stable = minBy(
+      _sumCandidates.where(
+        (c) =>
+            c.confirmations >= _sumConfirmationThreshold &&
+            _isConfirmedSumValid(c, receipt),
+      ),
+      (c) => c.verticalDistance,
+    );
+    final hasConfirmed = stable != null;
+
+    if (_sums.isEmpty) {
+      ReceiptLogger.log('sum.opt', {
+        'status': 'no-sums-in-cache',
+        'receiptSum?': receipt.sum?.value,
+      });
+      return;
+    }
+
+    final freqSorted = ReceiptNormalizer.sortByFrequency(
+      _sums.map((s) => s.formattedValue).toList(),
+    );
+    final mostFrequentValue = freqSorted.isNotEmpty ? freqSorted.last : null;
+    final parsed =
+        mostFrequentValue != null
+            ? ReceiptFormatter.parse(mostFrequentValue)
+            : null;
+    final template = _sums.last;
+
+    if (hasConfirmed || receipt.sum == null) {
+      if (parsed != null) {
+        receipt.sum = template.copyWith(value: parsed);
+      }
+      if (hasConfirmed && receipt.sumLabel == null) {
+        receipt.sumLabel = stable.label;
+      }
+    }
+
+    if (hasConfirmed) {
+      _demoteOtherConfirmedSums(stable);
+    }
+
+    ReceiptLogger.log('sum.opt', {
+      'hasConfirmed': hasConfirmed,
+      'stable?':
+          hasConfirmed
+              ? {
+                'label': stable.label.value,
+                'sum': stable.sum.value,
+                'conf': stable.confirmations,
+                'vd': stable.verticalDistance,
+              }
+              : null,
+      'mostFreq': mostFrequentValue,
+      'parsed': parsed,
+      'receiptSumAfter': receipt.sum?.value,
+      'sumsCached': _sums.length,
+      'candidates': _sumCandidates.length,
+      'action':
+          hasConfirmed
+              ? 'overwrite-with-most-frequent+demote-others'
+              : (receipt.sum == null
+                  ? 'backfill-most-frequent'
+                  : 'keep-existing'),
+    });
+  }
+
+  /// Demotes all other confirmed sum candidates so only [keep] remains confirmed.
+  void _demoteOtherConfirmedSums(_SumCandidate keep) {
+    for (final c in _sumCandidates) {
+      if (!identical(c, keep) && c.confirmations >= _sumConfirmationThreshold) {
+        final old = c.confirmations;
+        c.confirmations = 1;
+        ReceiptLogger.log('sum.demote', {
+          'label': c.label.value,
+          'sum': c.sum.value,
+          'oldConf': old,
+          'newConf': c.confirmations,
+          'keptLabel': keep.label.value,
+          'keptSum': keep.sum.value,
+        });
+      }
     }
   }
 
@@ -537,8 +615,8 @@ final class ReceiptOptimizer implements Optimizer {
       'pos': ReceiptLogger.posKey(position),
       'grp': ReceiptLogger.grpKey(group),
       'price': position.price.value,
-      'prodC': productConfidence,
-      'priceC': priceConfidence,
+      'prodC': productConfidence.value,
+      'priceC': priceConfidence.value,
       'effThr': effectiveThreshold,
       'fuzzy':
           (() {
@@ -588,9 +666,14 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   /// Builds a merged, ordered receipt from stable groups and updates entities.
-  RecognizedReceipt _createOptimizedReceipt(RecognizedReceipt receipt) {
+  RecognizedReceipt _createOptimizedReceipt(
+    RecognizedReceipt receipt, {
+    bool test = false,
+  }) {
     final stableGroups =
-        _groups.where((g) => g.stability >= _stabilityThreshold).toList();
+        _groups
+            .where((g) => g.stability >= _stabilityThreshold || test)
+            .toList();
 
     _learnOrder(receipt);
 

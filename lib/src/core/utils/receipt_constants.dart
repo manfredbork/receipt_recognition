@@ -1,7 +1,7 @@
 /// Centralized constants shared between receipt parsing and optimization.
 class ReceiptConstants {
   /// Vertical tolerance (in pixels) for comparing bounding box alignment.
-  static const int boundingBoxBuffer = 30;
+  static const int boundingBoxBuffer = 20;
 
   /// Sum tolerance tight and more precise below 1 cent.
   static const double sumTolerance = 0.009;
@@ -28,10 +28,13 @@ class ReceiptConstants {
   static const int optimizerLoopThreshold = 10;
 
   /// Confirmations required before a sum is accepted.
-  static const int optimizerSumConfirmationThreshold = 2;
+  static const int optimizerSumConfirmationThreshold = 3;
 
-  /// Max number of cached items (stores, sums, groups).
-  static const int optimizerMaxCacheSize = 20;
+  /// Default maximum cache size for normal precision mode.
+  static const int optimizerPrecisionNormal = 10;
+
+  /// Increased maximum cache size for high precision mode.
+  static const int optimizerPrecisionHigh = 20;
 
   /// Minimum confidence score (0–100) for groups to be stable.
   static const int optimizerConfidenceThreshold = 70;
@@ -43,7 +46,7 @@ class ReceiptConstants {
   static const int optimizerHighestConfidenceThreshold = 98;
 
   /// Minimum stability score (0–100) required for groups.
-  static const int optimizerStabilityThreshold = 50;
+  static const int optimizerStabilityThreshold = 60;
 
   /// Expiration time (ms) after which unstable groups are removed.
   static const int optimizerInvalidateIntervalMs = 2000;
@@ -62,4 +65,7 @@ class ReceiptConstants {
 
   /// Minimum Jaccard similarity of product tokens required to merge items.
   static const double minProductSimToMerge = 0.5;
+
+  /// Generic quarter fraction (25%) used by multiple heuristics
+  static const double heuristicQuarter = 0.25;
 }

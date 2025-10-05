@@ -14,7 +14,7 @@ abstract class ReceiptPatterns {
 
   /// Pattern to identify ignorable keywords not related to products.
   static final RegExp ignoreKeywords = RegExp(
-    r'(E-Bon|Coupon|Eingabe|Posten|Stk|kg|Subtotal)',
+    r'(E-Bon|Coupon|Eingabe|Posten|Subtotal|Stk x)',
     caseSensitive: false,
   );
 

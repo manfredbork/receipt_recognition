@@ -36,6 +36,8 @@ final class ReceiptRecognizer {
   /// - [options]: Optional parsing options. If omitted, [ReceiptOptions.empty()]
   ///   is used and built-in defaults ([ReceiptPatterns]) will apply.
   /// - [singleScan]: Whether to perform only a single scan or keep scanning until valid.
+  /// - [highPrecision]: Enables larger cache sizes and stricter thresholds
+  ///   in the optimizer for improved accuracy on difficult receipts.
   /// - [minValidScans]: Number of valid scans required before a receipt is accepted.
   /// - [nearlyCompleteThreshold]: Percentage threshold for considering a receipt nearly complete.
   /// - [scanInterval]: Minimum time between scans.
@@ -48,12 +50,9 @@ final class ReceiptRecognizer {
     TextRecognizer? textRecognizer,
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
-
-    /// Optional user-defined parsing options.
-    /// Falls back to [ReceiptOptions.empty()] if not provided.
     ReceiptOptions? options,
-
     bool singleScan = false,
+    bool highPrecision = false,
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 100),
@@ -63,7 +62,7 @@ final class ReceiptRecognizer {
     Function(RecognizedScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
-       _optimizer = optimizer ?? ReceiptOptimizer(),
+       _optimizer = optimizer ?? ReceiptOptimizer(highPrecision: highPrecision),
        _options = options ?? ReceiptOptions.empty(),
        _singleScan = singleScan,
        _minValidScans = minValidScans,
@@ -108,6 +107,8 @@ final class ReceiptRecognizer {
     if (finalReceipt != null && finalReceipt.isValid) {
       ReceiptLogger.logReceipt(finalReceipt, validation);
       return Future.delayed(_scanCompleteDelay, () => finalReceipt);
+    } else {
+      ReceiptLogger.logReceipt(optimizedReceipt, validation);
     }
 
     return _singleScan ? optimizedReceipt : null;

@@ -1,5 +1,5 @@
 {
-  "same_texts_but_different_items_one_scan": {
+  "same_texts_but_different_items_single_scan": {
     "positions": [
       {
         "product": {
@@ -28,7 +28,7 @@
       "value": 3.98
     }
   },
-  "similar_texts_but_different_items_one_scan": {
+  "similar_texts_but_different_items_single_scan": {
     "positions": [
       {
         "product": {
@@ -143,5 +143,54 @@
     "sum": {
       "value": 3.98
     }
+  },
+  "single_item_with_purchase_date": {
+    "positions": [
+      {
+        "product": {
+          "value": "Bread",
+          "confidence": 95
+        },
+        "price": {
+          "value": 2.49,
+          "confidence": 88
+        },
+        "timestamp": "2024-02-01T10:00:00Z"
+      }
+    ],
+    "sum": {
+      "value": 2.49
+    },
+    "purchase_date": "2024-02-01"
+  },
+  "multiple_items_with_purchase_date": {
+    "positions": [
+      {
+        "product": {
+          "value": "Juice",
+          "confidence": 90
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 84
+        },
+        "timestamp": "2024-02-05T08:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Water",
+          "confidence": 88
+        },
+        "price": {
+          "value": 0.99,
+          "confidence": 82
+        },
+        "timestamp": "2024-02-05T08:00:00.500Z"
+      }
+    ],
+    "sum": {
+      "value": 2.98
+    },
+    "purchase_date": "2024-02-05"
   }
 }

@@ -18,7 +18,6 @@ final class ReceiptParser {
     ReceiptOptions options,
   ) {
     final lines = _convertText(text);
-
     final angleDeg = ReceiptSkewEstimator.estimateDegrees(_lastReceipt);
     final rot = ReceiptRotator(angleDeg);
 
@@ -49,7 +48,6 @@ final class ReceiptParser {
     if (lines.isEmpty) return [];
 
     final parsed = <RecognizedEntity>[];
-    final texts = lines.map((l) => l.text).toList();
     final minX = lines.map((l) => rot.xAtCenterLeft(l)).reduce(math.min);
     final maxX = lines.map((l) => rot.xAtCenterRight(l)).reduce(math.max);
     final receiptHalfX = (minX + maxX) / 2;
@@ -63,7 +61,7 @@ final class ReceiptParser {
     RecognizedSumLabel? detectedSumLabel;
     RecognizedAmount? detectedAmount;
 
-    _applyPurchaseDate(texts, parsed);
+    _applyPurchaseDate(lines, parsed);
     _applyBoundingBox(deskewedText, parsed, rot);
 
     for (final line in lines) {
@@ -255,24 +253,19 @@ final class ReceiptParser {
 
   /// Extracts and adds purchase date to the parsed entities if found in the text lines.
   static bool _applyPurchaseDate(
-    List<String> lines,
+    List<TextLine> lines,
     List<RecognizedEntity> parsed,
   ) {
-    String? purchaseDate = _extractDateFromLines(lines);
+    RecognizedPurchaseDate? purchaseDate = _extractDateFromLines(lines);
     if (purchaseDate != null) {
-      parsed.add(
-        RecognizedPurchaseDate(
-          value: purchaseDate,
-          line: _createTextLine(Rect.zero, 0.0),
-        ),
-      );
+      parsed.add(purchaseDate);
       return true;
     }
     return false;
   }
 
   /// Extracts the first date found in the given text lines.
-  static String? _extractDateFromLines(List<String> lines) {
+  static RecognizedPurchaseDate? _extractDateFromLines(List<TextLine> lines) {
     final datePatterns = [
       ReceiptPatterns.dateDayMonthYearNumeric,
       ReceiptPatterns.dateYearMonthDayNumeric,
@@ -280,19 +273,13 @@ final class ReceiptParser {
       ReceiptPatterns.dateMonthDayYearEn,
       ReceiptPatterns.dateDayMonthYearDe,
     ];
-
     for (final line in lines) {
       for (final p in datePatterns) {
-        final m = p.firstMatch(line);
-        if (m != null) {
-          return m.group(1);
+        final m = p.firstMatch(line.text);
+        if (m != null && m.groupCount >= 1) {
+          return RecognizedPurchaseDate(value: m.group(1)!, line: line);
         }
       }
-    }
-    final full = lines.join(' ');
-    for (final p in datePatterns) {
-      final m = p.firstMatch(full);
-      if (m != null) return m.group(1);
     }
     return null;
   }

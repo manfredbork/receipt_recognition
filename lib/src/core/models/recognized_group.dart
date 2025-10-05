@@ -126,10 +126,11 @@ final class RecognizedGroup {
     return (total / _members.length).toInt();
   }
 
-  /// Gets the stability score (0-100) based on current vs. maximum size.
-  ///
-  /// Higher stability indicates more consistent recognitions over time.
-  int get stability => (_members.length / _maxGroupSize * 100).toInt();
+  /// Gets the average stability score across all members.
+  int get stability {
+    final total = _members.fold(0, (a, b) => a + b.stability);
+    return (total / _members.length).toInt();
+  }
 
   /// Gets the most recent timestamp from all members.
   DateTime get timestamp {

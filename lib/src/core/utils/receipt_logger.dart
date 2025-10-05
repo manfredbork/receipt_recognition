@@ -23,7 +23,7 @@ final class ReceiptLogger {
   /// Generates a compact identifier string for a [RecognizedPosition],
   /// including product text, price, and timestamp.
   static String posKey(RecognizedPosition p) =>
-      '${p.product.normalizedText}|${p.price.value.toStringAsFixed(2)}|${p.timestamp.millisecondsSinceEpoch}';
+      '${p.product.text}|${p.price.value.toStringAsFixed(2)}|${p.timestamp.millisecondsSinceEpoch}';
 
   /// Generates a compact identifier string for a [RecognizedGroup],
   /// including its hash and current member count.
@@ -46,17 +46,22 @@ final class ReceiptLogger {
       debugPrint(
         '📅 Purchase date: ${optimizedReceipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
       );
-      const int padFullWidth = 30;
+      const int padFullWidth = 25;
       final int padHalfWidth = (padFullWidth / 2).toInt();
       for (final position in optimizedReceipt.positions) {
         final product = position.product.normalizedText;
         final price = position.price.formattedValue;
         final confidence = position.confidence;
         final stability = position.stability;
+        final distribution =
+            position.product.alternativeTextPercentages.entries
+                .map((e) => '${e.key} ${e.value}%')
+                .toList();
         debugPrint(
           '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padHalfWidth)}'
           '${'📈  $confidence % Confidence'.padRight(padFullWidth)}'
-          '${'⚖️  $stability % Stability'.padRight(padFullWidth)}',
+          '${'⚖️  $stability % Stability'.padRight(padFullWidth)}'
+          '${'📊  Distribution: $distribution '.padRight(padFullWidth)}',
         );
       }
       debugPrint(

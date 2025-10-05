@@ -83,6 +83,41 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   List<String> get alternativePostfixTexts =>
       position?.group?.alternativePostfixTexts ?? [];
 
+  /// The percentage frequency of the most common text among [alternativeTexts].
+  int get textConsensusRatio {
+    if (alternativeTexts.length <
+        ReceiptConstants.optimizerPrecisionHigh *
+            ReceiptConstants.heuristicQuarter) {
+      return 0;
+    }
+    final counts = <String, int>{};
+    for (final text in alternativeTexts) {
+      counts[text] = (counts[text] ?? 0) + 1;
+    }
+    final maxCount = counts.values.fold<int>(0, (a, b) => a > b ? a : b);
+    return ((maxCount / alternativeTexts.length) * 100).round();
+  }
+
+  /// Returns a map of each unique text in [alternativeTexts]
+  /// to its percentage frequency (0–100, rounded).
+  Map<String, int> get alternativeTextPercentages {
+    if (alternativeTexts.isEmpty) return {};
+
+    final total = alternativeTexts.length;
+    final counts = <String, int>{};
+
+    for (final text in alternativeTexts) {
+      counts[text] = (counts[text] ?? 0) + 1;
+    }
+
+    final percentages = <String, int>{};
+    for (final entry in counts.entries) {
+      percentages[entry.key] = ((entry.value / total) * 100).round();
+    }
+
+    return percentages;
+  }
+
   /// Whether this product is a cashback (negative price).
   bool get isCashback => (position?.price.value ?? 0.0) < 0;
 

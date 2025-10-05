@@ -68,15 +68,8 @@ final class RecognizedPosition {
     return score.toInt();
   }
 
-  /// Returns a stability score in percent (0–100) based on how many alternative
-  /// product texts have been cached relative to the optimizer’s maximum cache size.
-  ///
-  /// Higher values indicate that the product name has been recognized
-  /// consistently across multiple frames, implying greater recognition stability.
+  /// Gets the product text stability as a consensus percentage among alternatives.
   int get stability {
-    return (product.alternativeTexts.length /
-            ReceiptConstants.optimizerMaxCacheSize *
-            100)
-        .toInt();
+    return product.textConsensusRatio;
   }
 }

@@ -10,7 +10,8 @@ final class ReceiptOutlierRemover {
   static void removeOutliersToMatchSum(RecognizedReceipt receipt) {
     if (receipt.sum == null || receipt.positions.length <= 1) return;
 
-    final maxRemovals = receipt.positions.length / 4;
+    final maxRemovals =
+        receipt.positions.length * ReceiptConstants.heuristicQuarter;
     final detectedSum = receipt.sum!.value.toDouble();
     final calculatedSum = receipt.calculatedSum.value.toDouble();
     final prices =

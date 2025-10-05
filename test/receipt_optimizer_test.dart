@@ -14,22 +14,22 @@ void main() {
 
   test('Deposit items should be grouped separately', () {
     final receipt = RecognizedReceipt.fromJson(
-      testReceipts['same_texts_but_different_items_one_scan'],
+      testReceipts['same_texts_but_different_items_single_scan'],
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, force: true);
+    final result = optimizer.optimize(receipt, test: true);
 
     expect(result.positions.length, equals(2));
   });
 
   test('Coke items should be grouped separately', () {
     final receipt = RecognizedReceipt.fromJson(
-      testReceipts['similar_texts_but_different_items_one_scan'],
+      testReceipts['similar_texts_but_different_items_single_scan'],
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, force: true);
+    final result = optimizer.optimize(receipt, test: true);
 
     expect(result.positions.length, equals(2));
   });
@@ -40,7 +40,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, force: true);
+    final result = optimizer.optimize(receipt, test: true);
 
     expect(result.positions.length, equals(2));
   });
@@ -51,7 +51,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, force: true);
+    final result = optimizer.optimize(receipt, test: true);
 
     expect(result.positions.length, equals(1));
   });
@@ -62,8 +62,37 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, force: true);
+    final result = optimizer.optimize(receipt, test: true);
 
     expect(result.positions.length, equals(1));
+  });
+
+  test('Purchase date is recognized and parsed correctly from JSON', () {
+    final receipt = RecognizedReceipt.fromJson(
+      testReceipts['single_item_with_purchase_date'],
+    );
+
+    expect(receipt.purchaseDate, isNotNull);
+    expect(receipt.purchaseDate!.value, equals('2024-02-01'));
+
+    final dt = receipt.purchaseDate!.parsedDateTime!;
+
+    expect(dt.year, equals(2024));
+    expect(dt.month, equals(2));
+    expect(dt.day, equals(1));
+  });
+
+  test('Purchase date is preserved after optimization', () {
+    final receipt = RecognizedReceipt.fromJson(
+      testReceipts['multiple_items_with_purchase_date'],
+    );
+    final before = receipt.purchaseDate?.value;
+
+    final optimizer = ReceiptOptimizer();
+    final result = optimizer.optimize(receipt, test: true);
+
+    expect(result.purchaseDate, isNotNull);
+    expect(result.purchaseDate!.value, equals(before));
+    expect(result.purchaseDate!.parsedDateTime, isNotNull);
   });
 }
