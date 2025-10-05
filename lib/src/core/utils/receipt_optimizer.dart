@@ -40,6 +40,7 @@ final class ReceiptOptimizer implements Optimizer {
   final int _stabilityThreshold;
   final int _confidenceThreshold;
   final int _maxCacheSize;
+  final int _maxGroupSize;
   final Duration _invalidateInterval;
   final double _ewmaAlpha;
   int _unchangedCount;
@@ -84,6 +85,7 @@ final class ReceiptOptimizer implements Optimizer {
            highPrecision == true
                ? ReceiptConstants.optimizerPrecisionHigh
                : ReceiptConstants.optimizerPrecisionNormal,
+       _maxGroupSize = ReceiptConstants.optimizerMaxGroupSize,
        _unchangedCount = 0,
        _shouldInitialize = false,
        _needsRegrouping = false;
@@ -358,59 +360,127 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Removes stale or weak groups and cleans stats (with debug reasons).
+  /// Removes empty / outlier / stale groups and trims to cap.
   void _cleanupGroups() {
-    if (_groups.length >= _maxCacheSize) {
-      final now = DateTime.now();
-      final doomed = <RecognizedGroup>[];
-
-      for (final g in _groups) {
-        final ttl = _invalidateInterval;
-        final age = now.difference(g.timestamp);
-        final tooOld = age >= ttl;
-        final tooWeak =
-            g.stability < _stabilityThreshold ||
-            g.confidence < _confidenceThreshold;
-        final kill = tooOld && tooWeak;
-
-        if (kill) {
-          ReceiptLogger.log('group.kill', {
-            'grp': ReceiptLogger.grpKey(g),
-            'stb': g.stability,
-            'conf': g.confidence,
-            'ageMs': now.difference(g.timestamp).inMilliseconds,
-            'neg?': g.members.any((p) => p.product.isCashback),
-          });
-          doomed.add(g);
-        }
-      }
-
-      if (doomed.isNotEmpty) {
-        final doomedSet = doomed.toSet();
-        _groups.removeWhere(doomedSet.contains);
-
-        for (final g in doomedSet) {
-          _orderStats.remove(g);
-        }
-        for (final s in _orderStats.values) {
-          for (final g in doomedSet) {
-            s.aboveCounts.remove(g);
-          }
-        }
-      }
-    }
+    final now = DateTime.now();
+    final cap = _maxGroupSize;
+    final doomed = <RecognizedGroup>[];
 
     final emptied = _groups.where((g) => g.members.isEmpty).toList();
-
     for (final g in emptied) {
       ReceiptLogger.log('group.empty', {'grp': ReceiptLogger.grpKey(g)});
     }
-
-    _groups.removeWhere((g) => g.members.isEmpty);
-    for (final g in emptied) {
-      _orderStats.remove(g);
+    if (emptied.isNotEmpty) {
+      final emptiedSet = emptied.toSet();
+      _groups.removeWhere(emptiedSet.contains);
+      for (final g in emptiedSet) {
+        _orderStats.remove(g);
+      }
       for (final s in _orderStats.values) {
-        s.aboveCounts.remove(g);
+        for (final g in emptiedSet) {
+          s.aboveCounts.remove(g);
+        }
+      }
+    }
+
+    bool isEarlyOutlier(RecognizedGroup g) {
+      final grace = _invalidateInterval ~/ 8;
+      final staleForAWhile = now.difference(g.timestamp) >= grace;
+
+      final veryWeak =
+          g.stability < (_stabilityThreshold * 0.5) &&
+          g.confidence < (_confidenceThreshold * 0.5);
+
+      final tiny = g.members.length <= 1;
+
+      return staleForAWhile && veryWeak && tiny;
+    }
+
+    for (final g in _groups) {
+      if (isEarlyOutlier(g)) {
+        ReceiptLogger.log('group.outlier', {
+          'grp': ReceiptLogger.grpKey(g),
+          'stb': g.stability,
+          'conf': g.confidence,
+          'ageMs': now.difference(g.timestamp).inMilliseconds,
+        });
+        doomed.add(g);
+      }
+    }
+
+    if (doomed.isNotEmpty) {
+      final doomedSet = doomed.toSet();
+      _groups.removeWhere(doomedSet.contains);
+      for (final g in doomedSet) {
+        _orderStats.remove(g);
+      }
+      for (final s in _orderStats.values) {
+        for (final g in doomedSet) {
+          s.aboveCounts.remove(g);
+        }
+      }
+      doomed.clear();
+    }
+
+    final overCap = _groups.length > cap;
+
+    bool shouldKill(RecognizedGroup g) {
+      final age = now.difference(g.timestamp);
+      final tooOld = age >= _invalidateInterval;
+      final tooWeak =
+          g.stability < _stabilityThreshold ||
+          g.confidence < _confidenceThreshold;
+      return overCap ? (tooOld || tooWeak) : (tooOld && tooWeak);
+    }
+
+    for (final g in _groups) {
+      if (shouldKill(g)) {
+        ReceiptLogger.log('group.kill', {
+          'grp': ReceiptLogger.grpKey(g),
+          'stb': g.stability,
+          'conf': g.confidence,
+          'ageMs': now.difference(g.timestamp).inMilliseconds,
+          'overCap': overCap,
+        });
+        doomed.add(g);
+      }
+    }
+
+    if (doomed.isNotEmpty) {
+      final doomedSet = doomed.toSet();
+      _groups.removeWhere(doomedSet.contains);
+      for (final g in doomedSet) {
+        _orderStats.remove(g);
+      }
+      for (final s in _orderStats.values) {
+        for (final g in doomedSet) {
+          s.aboveCounts.remove(g);
+        }
+      }
+    }
+
+    if (_groups.length > cap) {
+      double evictScore(RecognizedGroup g) {
+        final isOld =
+            now.difference(g.timestamp) >= _invalidateInterval ? 1 : 0;
+        final weakStab = g.stability < _stabilityThreshold ? 1 : 0;
+        final weakConf = g.confidence < _confidenceThreshold ? 1 : 0;
+        return isOld * 2 + weakStab + weakConf + (_groups.indexOf(g) * 1e-6);
+      }
+
+      _groups.sort((a, b) => evictScore(b).compareTo(evictScore(a)));
+      while (_groups.length > cap) {
+        final g = _groups.removeLast();
+        ReceiptLogger.log('group.evict', {
+          'grp': ReceiptLogger.grpKey(g),
+          'stb': g.stability,
+          'conf': g.confidence,
+          'ageMs': now.difference(g.timestamp).inMilliseconds,
+        });
+        _orderStats.remove(g);
+        for (final s in _orderStats.values) {
+          s.aboveCounts.remove(g);
+        }
       }
     }
   }
@@ -588,7 +658,7 @@ final class ReceiptOptimizer implements Optimizer {
     final sameBrand = brand(repText) == brand(incText);
     final variantDifferent =
         sameBrand && repTok.isNotEmpty && incTok.isNotEmpty && repTok != incTok;
-    final baseMin = ReceiptConstants.minProductSimToMerge;
+    final baseMin = ReceiptConstants.optimizerMinProductSimToMerge;
     final minNeeded =
         variantDifferent ? ReceiptConstants.optimizerVariantMinSim : baseMin;
 
@@ -642,7 +712,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
-    final newGroup = RecognizedGroup(maxGroupSize: _maxCacheSize);
+    final newGroup = RecognizedGroup(maxGroupSize: _maxGroupSize);
     position.group = newGroup;
     position.operation = Operation.added;
     newGroup.addMember(position);

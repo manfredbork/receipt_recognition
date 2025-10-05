@@ -9,6 +9,9 @@ class ReceiptConstants {
   /// A literal that won't ever occur in receipt text → safe never-match regex.
   static const String neverMatchLiteral = r'___NEVER_MATCH___';
 
+  /// Generic quarter fraction (25%) used by multiple heuristics
+  static const double heuristicQuarter = 0.25;
+
   /// Allowed tolerance in cents when matching delta between sums.
   static const int outlierTau = 1;
 
@@ -35,6 +38,9 @@ class ReceiptConstants {
 
   /// Increased maximum cache size for high precision mode.
   static const int optimizerPrecisionHigh = 25;
+
+  /// Max number of recognition groups kept before old ones are evicted.
+  static const int optimizerMaxGroupSize = 50;
 
   /// Minimum confidence score (0–100) for groups to be stable.
   static const int optimizerConfidenceThreshold = 70;
@@ -64,8 +70,5 @@ class ReceiptConstants {
   static const double optimizerVariantMinSim = 0.85;
 
   /// Minimum Jaccard similarity of product tokens required to merge items.
-  static const double minProductSimToMerge = 0.5;
-
-  /// Generic quarter fraction (25%) used by multiple heuristics
-  static const double heuristicQuarter = 0.25;
+  static const double optimizerMinProductSimToMerge = 0.5;
 }

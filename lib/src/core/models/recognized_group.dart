@@ -122,12 +122,14 @@ final class RecognizedGroup {
 
   /// Gets the average confidence score across all members.
   int get confidence {
+    if (_members.isEmpty) return 0;
     final total = _members.fold(0, (a, b) => a + b.confidence);
     return (total / _members.length).toInt();
   }
 
   /// Gets the average stability score across all members.
   int get stability {
+    if (_members.isEmpty) return 0;
     final total = _members.fold(0, (a, b) => a + b.stability);
     return (total / _members.length).toInt();
   }
