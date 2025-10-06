@@ -37,19 +37,13 @@ class ReceiptConstants {
   static const int optimizerPrecisionNormal = 20;
 
   /// Increased maximum cache size for high precision mode.
-  static const int optimizerPrecisionHigh = 30;
+  static const int optimizerPrecisionHigh = 20;
 
   /// Max number of recognition groups kept before old ones are evicted.
   static const int optimizerMaxGroups = 50;
 
   /// Minimum confidence score (0–100) for groups to be stable.
   static const int optimizerConfidenceThreshold = 70;
-
-  /// Minimum confidence score (0–100) for groups to be very stable.
-  static const int optimizerHighConfidenceThreshold = 90;
-
-  /// Minimum confidence score (0–100) for groups to be almost perfect.
-  static const int optimizerHighestConfidenceThreshold = 98;
 
   /// Minimum stability score (0–100) required for groups.
   static const int optimizerStabilityThreshold = 60;
