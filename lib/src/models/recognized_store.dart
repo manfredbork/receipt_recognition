@@ -1,5 +1,5 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:receipt_recognition/src/models_public/recognized_base.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 /// Store name recognized from a receipt.
 final class RecognizedStore extends RecognizedEntity<String> {

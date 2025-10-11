@@ -1,4 +1,4 @@
-export 'src/models_public/index.dart'
+export 'src/models/index.dart'
     show
         /// Foundations
         Valuable,
