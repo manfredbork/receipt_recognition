@@ -94,6 +94,7 @@ class ReceiptSkewEstimator {
   }
 }
 
+/// Weighted sample point used for the skew fit (x, y, with weight w).
 class _WPoint {
   final double x;
   final double y;
@@ -102,6 +103,7 @@ class _WPoint {
   _WPoint({required this.x, required this.y, required this.w});
 }
 
+/// Weighted least-squares line parameters for x = a*y + b.
 class _LineFit {
   final double a;
   final double b;

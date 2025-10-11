@@ -461,11 +461,12 @@ final class ReceiptOptimizer implements Optimizer {
 
     final repText = _groupRepresentativeText(group);
     final incText = position.product.normalizedText;
-    final fuzzy = fuzzySimOcr(repText, incText);
+    final fuzzy = ReceiptOcrText.similarity(repText, incText);
 
-    final repTok = ocrTokens(repText);
-    final incTok = ocrTokens(incText);
-    final sameBrand = ocrBrand(repText) == ocrBrand(incText);
+    final repTok = ReceiptOcrText.tokens(repText);
+    final incTok = ReceiptOcrText.tokens(incText);
+    final sameBrand =
+        ReceiptOcrText.brand(repText) == ReceiptOcrText.brand(incText);
     final variantDifferent =
         sameBrand &&
         repTok.isNotEmpty &&
