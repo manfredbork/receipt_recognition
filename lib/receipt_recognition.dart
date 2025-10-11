@@ -25,5 +25,4 @@ export 'src/models/index.dart'
         RecognizedScanProgress,
         ReceiptValidationResult,
         ReceiptCompleteness;
-export 'src/receipt_core.dart';
-export 'src/receipt_test.dart';
+export 'src/test/index.dart';
