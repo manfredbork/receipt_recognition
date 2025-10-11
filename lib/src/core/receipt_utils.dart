@@ -1,8 +1,8 @@
-export '../logging/receipt_logger.dart';
-export '../normalize/receipt_formatter.dart';
-export '../normalize/receipt_normalizer.dart';
-export '../normalize/receipt_options.dart';
-export '../normalize/receipt_patterns.dart';
+export 'utils/logging/receipt_logger.dart';
+export 'utils/normalize/receipt_formatter.dart';
+export 'utils/normalize/receipt_normalizer.dart';
+export 'utils/normalize/receipt_options.dart';
+export 'utils/normalize/receipt_patterns.dart';
 export 'utils/receipt_constants.dart';
 export 'utils/receipt_optimizer.dart';
 export 'utils/receipt_outlier_remover.dart';
