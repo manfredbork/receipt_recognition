@@ -5,7 +5,7 @@ import 'package:receipt_recognition/src/services/parser/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Parses OCR text into structured receipt data on a background isolate.
-class ReceiptTextProcessor {
+final class ReceiptTextProcessor {
   /// Runs parsing off the UI thread and returns a structured receipt.
   static Future<RecognizedReceipt> processText(
     RecognizedText text,
@@ -17,14 +17,14 @@ class ReceiptTextProcessor {
     );
   }
 
-  /// Isolate entry that delegates to the parser.
+  /// Isolate entry point: parses OCR [args.text] with given [args.options].
   static RecognizedReceipt _parseTextInBackground(_ParseArgs args) {
     return ReceiptParser.processText(args.text, args.options);
   }
 }
 
 /// Typed container for isolate arguments.
-class _ParseArgs {
+final class _ParseArgs {
   final RecognizedText text;
   final ReceiptOptions options;
 
