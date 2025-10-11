@@ -29,11 +29,14 @@ abstract class Optimizer {
 /// - Applying confidence thresholds
 /// - Merging data from multiple scans
 final class ReceiptOptimizer implements Optimizer {
+  // --- Caches & state ---
   final List<RecognizedGroup> _groups = [];
   final List<RecognizedStore> _stores = [];
   final List<RecognizedSum> _sums = [];
   final List<_SumCandidate> _sumCandidates = [];
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
+
+  // --- Config ---
   final ReceiptThresholder _thresholder;
   final int _loopThreshold;
   final int _sumConfirmationThreshold;
@@ -43,9 +46,11 @@ final class ReceiptOptimizer implements Optimizer {
   final int _maxGroups;
   final Duration _invalidateInterval;
   final double _ewmaAlpha;
-  int _unchangedCount;
-  bool _shouldInitialize;
-  bool _needsRegrouping;
+
+  // --- Ephemeral ---
+  int _unchangedCount = 0;
+  bool _shouldInitialize = false;
+  bool _needsRegrouping = false;
   String? _lastFingerprint;
   double? _lastAngleRad;
   double? _lastAngleDeg;
@@ -85,25 +90,19 @@ final class ReceiptOptimizer implements Optimizer {
            highPrecision == true
                ? ReceiptConstants.optimizerPrecisionHigh
                : ReceiptConstants.optimizerPrecisionNormal,
-       _maxGroups = ReceiptConstants.optimizerMaxGroups,
-       _unchangedCount = 0,
-       _shouldInitialize = false,
-       _needsRegrouping = false;
+       _maxGroups = ReceiptConstants.optimizerMaxGroups;
+
+  // ===== Optimizer API =====
 
   /// Marks the optimizer for reinitialization on next optimization.
   @override
-  void init() {
-    _shouldInitialize = true;
-  }
+  void init() => _shouldInitialize = true;
 
   /// Processes a receipt and returns an optimized version.
   @override
   RecognizedReceipt optimize(RecognizedReceipt receipt, {bool test = false}) {
-    if (!_checkConvergence(receipt)) {
-      return receipt;
-    }
-
     _initializeIfNeeded();
+    _checkConvergence(receipt);
     _updateStores(receipt);
     _updateSums(receipt);
     _updatePurchaseDate(receipt);
@@ -114,47 +113,37 @@ final class ReceiptOptimizer implements Optimizer {
     _resetOperations();
     _processPositions(receipt);
     _updateEntities(receipt);
-
-    if (!test && receipt.isValid) {
-      return receipt;
-    } else {
-      ReceiptLogger.log('opt.in', {
-        'n': receipt.positions.length,
-        'calc': receipt.calculatedSum.value.toStringAsFixed(2),
-        'sum?': receipt.sum?.value,
-      });
-
-      final out = _createOptimizedReceipt(receipt, test: test);
-
-      ReceiptLogger.log('opt.out', {
-        'n': out.positions.length,
-        'calc': out.calculatedSum.value.toStringAsFixed(2),
-        'sum?': out.sum?.value,
-      });
-      return out;
-    }
+    return _createOptimizedReceipt(receipt, test: test);
   }
+
+  /// Releases all resources used by the optimizer.
+  @override
+  void close() {
+    _shouldInitialize = true;
+    _initializeIfNeeded();
+  }
+
+  // ===== Private helpers =====
 
   /// Clears caches and resets internal state if flagged.
   void _initializeIfNeeded() {
-    if (_shouldInitialize) {
-      _groups.clear();
-      _stores.clear();
-      _sums.clear();
-      _sumCandidates.clear();
-      _orderStats.clear();
-      _lastAngleRad = null;
-      _lastAngleDeg = null;
-      _shouldInitialize = false;
-      _needsRegrouping = false;
-      _unchangedCount = 0;
-      _lastFingerprint = null;
-      _purchaseDate = null;
-    }
+    if (!_shouldInitialize) return;
+    _groups.clear();
+    _stores.clear();
+    _sums.clear();
+    _sumCandidates.clear();
+    _orderStats.clear();
+    _lastAngleRad = null;
+    _lastAngleDeg = null;
+    _shouldInitialize = false;
+    _needsRegrouping = false;
+    _unchangedCount = 0;
+    _lastFingerprint = null;
+    _purchaseDate = null;
   }
 
   /// Tracks convergence to avoid infinite loops and trigger regrouping.
-  bool _checkConvergence(RecognizedReceipt receipt) {
+  void _checkConvergence(RecognizedReceipt receipt) {
     final positionsHash = receipt.positions
         .map((p) => '${p.product.normalizedText}:${p.price.value}')
         .join(',');
@@ -163,18 +152,12 @@ final class ReceiptOptimizer implements Optimizer {
 
     if (_lastFingerprint == fingerprint) {
       _unchangedCount++;
-      if (_unchangedCount == (_loopThreshold ~/ 2)) {
-        _needsRegrouping = true;
-      }
-      if (_unchangedCount >= _loopThreshold) {
-        return false;
-      }
+      if (_unchangedCount == (_loopThreshold ~/ 2)) _needsRegrouping = true;
+      if (_unchangedCount >= _loopThreshold) return;
     } else {
       _unchangedCount = 0;
     }
-
     _lastFingerprint = fingerprint;
-    return true;
   }
 
   /// Forces regrouping of all positions into fresh groups.
@@ -188,19 +171,17 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Updates store history cache for later normalization.
   void _updateStores(RecognizedReceipt receipt) {
-    if (receipt.store != null) {
-      _stores.add(receipt.store!);
-    }
-    if (_stores.length > _maxCacheSize) {
-      _stores.removeAt(0);
-    }
+    final store = receipt.store;
+    if (store != null) _stores.add(store);
+    if (_stores.length > _maxCacheSize) _stores.removeAt(0);
   }
 
   /// Updates sum history and confirms stable sum candidates.
   void _updateSums(RecognizedReceipt receipt) {
-    if (receipt.sum == null) return;
+    final sum = receipt.sum;
+    if (sum == null) return;
 
-    _sums.add(receipt.sum!);
+    _sums.add(sum);
 
     final angleDeg =
         receipt.boundingBox?.skewAngle ??
@@ -211,79 +192,56 @@ final class ReceiptOptimizer implements Optimizer {
     final sumLabel = receipt.entities
         ?.whereType<RecognizedSumLabel>()
         .firstWhereOrNull((label) {
-          final dy =
-              (rot.yCenter(label.line) - rot.yCenter(receipt.sum!.line)).abs();
+          final dy = (rot.yCenter(label.line) - rot.yCenter(sum.line)).abs();
           final isRightOfLabel =
-              rot.xCenter(receipt.sum!.line) >=
-              rot.maxXOf(label.line.boundingBox) - tol;
+              rot.xCenter(sum.line) >= rot.maxXOf(label.line.boundingBox) - tol;
           return dy <= tol && isRightOfLabel;
         });
 
-    if (sumLabel != null) {
-      final vd =
-          (rot.yCenter(sumLabel.line) - rot.yCenter(receipt.sum!.line))
-              .abs()
-              .round();
+    if (sumLabel == null) return;
 
-      final candidate = _SumCandidate(
-        label: sumLabel,
-        sum: receipt.sum!,
-        verticalDistance: vd,
-      );
-
-      final existing =
-          _sumCandidates.where((c) => c.matches(candidate)).firstOrNull;
-      if (existing != null) {
-        existing.confirm();
-      } else {
-        _sumCandidates.add(candidate);
-      }
-
-      if (_sumCandidates.length > _maxCacheSize) {
-        _sumCandidates.removeAt(0);
-      }
-    }
+    final vd =
+        (rot.yCenter(sumLabel.line) - rot.yCenter(sum.line)).abs().round();
+    final candidate = _SumCandidate(
+      label: sumLabel,
+      sum: sum,
+      verticalDistance: vd,
+    );
+    final existing =
+        _sumCandidates.where((c) => c.matches(candidate)).firstOrNull;
+    existing != null ? existing.confirm() : _sumCandidates.add(candidate);
+    if (_sumCandidates.length > _maxCacheSize) _sumCandidates.removeAt(0);
   }
 
   /// Updates purchase date cache.
   void _updatePurchaseDate(RecognizedReceipt receipt) {
-    if (receipt.purchaseDate != null) {
-      _purchaseDate ??= receipt.purchaseDate;
-    }
+    final pd = receipt.purchaseDate;
+    if (pd != null) _purchaseDate ??= pd;
   }
 
   /// Fills missing store from frequency in history.
   void _optimizeStore(RecognizedReceipt receipt) {
-    if (receipt.store == null && _stores.isNotEmpty) {
-      final lastStore = _stores.lastOrNull;
-      if (lastStore != null) {
-        final mostFrequent =
-            ReceiptNormalizer.sortByFrequency(
-              _stores.map((c) => c.value).toList(),
-            ).lastOrNull;
-        receipt.store = lastStore.copyWith(value: mostFrequent);
-      }
+    if (receipt.store != null || _stores.isEmpty) return;
+    final lastStore = _stores.lastOrNull;
+    final mostFrequent =
+        ReceiptNormalizer.sortByFrequency(
+          _stores.map((c) => c.value).toList(),
+        ).lastOrNull;
+    if (lastStore != null) {
+      receipt.store = lastStore.copyWith(value: mostFrequent);
     }
   }
 
   /// Fills missing purchase date from cache.
-  void _optimizePurchaseDate(RecognizedReceipt receipt) {
-    receipt.purchaseDate ??= _purchaseDate;
-  }
+  void _optimizePurchaseDate(RecognizedReceipt receipt) =>
+      receipt.purchaseDate ??= _purchaseDate;
 
   /// Fills or overwrites the receipt sum from history.
   ///
   /// - If a stable (confirmed) sum exists, always take the most frequent sum.
   /// - Otherwise, only backfill when the receipt sum is null.
   void _optimizeSum(RecognizedReceipt receipt) {
-    final stable = minBy(
-      _sumCandidates.where(
-        (c) =>
-            c.confirmations >= _sumConfirmationThreshold &&
-            _isConfirmedSumValid(c, receipt),
-      ),
-      (c) => c.verticalDistance,
-    );
+    final stable = _pickStableSum(receipt);
     final hasConfirmed = stable != null;
 
     if (_sums.isEmpty) {
@@ -305,17 +263,12 @@ final class ReceiptOptimizer implements Optimizer {
     final template = _sums.last;
 
     if (hasConfirmed || receipt.sum == null) {
-      if (parsed != null) {
-        receipt.sum = template.copyWith(value: parsed);
-      }
-      if (hasConfirmed && receipt.sumLabel == null) {
+      if (parsed != null) receipt.sum = template.copyWith(value: parsed);
+      if (hasConfirmed && receipt.sumLabel == null)
         receipt.sumLabel = stable.label;
-      }
     }
 
-    if (hasConfirmed) {
-      _demoteOtherConfirmedSums(stable);
-    }
+    if (hasConfirmed) _demoteOtherConfirmedSums(stable);
 
     ReceiptLogger.log('sum.opt', {
       'hasConfirmed': hasConfirmed,
@@ -364,86 +317,36 @@ final class ReceiptOptimizer implements Optimizer {
   void _cleanupGroups() {
     final now = DateTime.now();
     final cap = _maxGroups;
-    final doomed = <RecognizedGroup>[];
 
     final emptied = _groups.where((g) => g.members.isEmpty).toList();
-    for (final g in emptied) {
-      ReceiptLogger.log('group.empty', {'grp': ReceiptLogger.grpKey(g)});
-    }
     if (emptied.isNotEmpty) {
-      final emptiedSet = emptied.toSet();
-      _groups.removeWhere(emptiedSet.contains);
-      for (final g in emptiedSet) {
-        _orderStats.remove(g);
+      for (final g in emptied) {
+        ReceiptLogger.log('group.empty', {'grp': ReceiptLogger.grpKey(g)});
       }
-      for (final s in _orderStats.values) {
-        for (final g in emptiedSet) {
-          s.aboveCounts.remove(g);
-        }
-      }
+      _purgeGroups(emptied.toSet());
     }
 
-    bool isEarlyOutlier(RecognizedGroup g) {
-      final grace = _invalidateInterval ~/ 8;
-      final staleForAWhile = now.difference(g.timestamp) >= grace;
-
-      final veryWeak =
-          g.stability < (_stabilityThreshold * 0.5) &&
-          g.confidence < (_confidenceThreshold * 0.5);
-
-      final tiny = g.members.length <= 1;
-
-      return staleForAWhile && veryWeak && tiny;
-    }
-
-    for (final g in _groups) {
-      if (isEarlyOutlier(g)) {
-        ReceiptLogger.log('group.outlier', {
-          'grp': ReceiptLogger.grpKey(g),
-          'stb': g.stability,
-          'conf': g.confidence,
-          'ageMs': now.difference(g.timestamp).inMilliseconds,
-        });
-        doomed.add(g);
-      }
-    }
-
-    if (doomed.isNotEmpty) {
-      final doomedSet = doomed.toSet();
-      _groups.removeWhere(doomedSet.contains);
-      for (final g in doomedSet) {
-        _orderStats.remove(g);
-      }
-      for (final s in _orderStats.values) {
-        for (final g in doomedSet) {
-          s.aboveCounts.remove(g);
-        }
-      }
-      doomed.clear();
-    }
+    final earlyOutliers =
+        _groups.where((g) => _isEarlyOutlier(g, now)).toList();
+    if (earlyOutliers.isNotEmpty) _purgeGroups(earlyOutliers.toSet());
 
     final overCap = _groups.length > cap;
 
     bool sumOverinflated = false;
+    double groupBestPrice(RecognizedGroup g) =>
+        (maxBy(g.members, (p) => p.confidence)?.price.value.toDouble()) ?? 0.0;
 
-    double groupBestPrice(RecognizedGroup g) {
-      final best = maxBy(g.members, (p) => p.confidence);
-      return best?.price.value.toDouble() ?? 0.0;
+    final calc = _groups.fold<double>(0.0, (a, g) => a + groupBestPrice(g));
+    final detectedSum = _sums.isNotEmpty ? _sums.last.value : 0.0;
+    if (detectedSum > 0 &&
+        calc > detectedSum * (1 + ReceiptConstants.heuristicQuarter)) {
+      sumOverinflated = true;
+      ReceiptLogger.log('group.overinflated', {
+        'calc': calc,
+        'detected': detectedSum,
+        'ratio': calc / detectedSum,
+      });
     }
-
-    try {
-      final calc = _groups.fold<double>(0.0, (a, g) => a + groupBestPrice(g));
-      final detectedSum = _sums.isNotEmpty ? _sums.last.value : 0.0;
-      if (detectedSum > 0 &&
-          calc > detectedSum * (1 + ReceiptConstants.heuristicQuarter)) {
-        sumOverinflated = true;
-        ReceiptLogger.log('group.overinflated', {
-          'calc': calc,
-          'detected': detectedSum,
-          'ratio': calc / detectedSum,
-        });
-      }
-    } catch (_) {}
 
     bool shouldKill(RecognizedGroup g) {
       final age = now.difference(g.timestamp);
@@ -451,37 +354,12 @@ final class ReceiptOptimizer implements Optimizer {
       final tooWeak =
           g.stability < _stabilityThreshold ||
           g.confidence < _confidenceThreshold;
-
       final trigger = overCap || sumOverinflated;
       return trigger ? (tooOld || tooWeak) : (tooOld && tooWeak);
     }
 
-    for (final g in _groups) {
-      if (shouldKill(g)) {
-        ReceiptLogger.log('group.kill', {
-          'grp': ReceiptLogger.grpKey(g),
-          'stb': g.stability,
-          'conf': g.confidence,
-          'ageMs': now.difference(g.timestamp).inMilliseconds,
-          'overCap': overCap,
-          'inflated': sumOverinflated,
-        });
-        doomed.add(g);
-      }
-    }
-
-    if (doomed.isNotEmpty) {
-      final doomedSet = doomed.toSet();
-      _groups.removeWhere(doomedSet.contains);
-      for (final g in doomedSet) {
-        _orderStats.remove(g);
-      }
-      for (final s in _orderStats.values) {
-        for (final g in doomedSet) {
-          s.aboveCounts.remove(g);
-        }
-      }
-    }
+    final doomed = _groups.where(shouldKill).toList();
+    if (doomed.isNotEmpty) _purgeGroups(doomed.toSet());
 
     if (_groups.length > cap) {
       double evictScore(RecognizedGroup g) {
@@ -565,15 +443,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Processes positions, optionally respecting a confirmed stable sum.
   void _processPositions(RecognizedReceipt receipt) {
-    final stableSum = minBy(
-      _sumCandidates.where(
-        (c) =>
-            c.confirmations >= _sumConfirmationThreshold &&
-            _isConfirmedSumValid(c, receipt),
-      ),
-      (c) => c.verticalDistance,
-    );
-
+    final stableSum = _pickStableSum(receipt);
     final isStableSumConfirmed = stableSum != null;
 
     ReceiptLogger.log('sum.candidates', {
@@ -601,10 +471,8 @@ final class ReceiptOptimizer implements Optimizer {
         final matchesStableSum =
             (position.price.value - stableSum.sum.value).abs() <=
             ReceiptConstants.sumTolerance;
-
         if (matchesStableSum) continue;
       }
-
       _processPosition(position);
     }
 
@@ -647,21 +515,20 @@ final class ReceiptOptimizer implements Optimizer {
     RecognizedGroup group,
     int currentBestConfidence,
   ) {
-    Confidence productConfidence = group.calculateProductConfidence(
+    final productConfidence = group.calculateProductConfidence(
       position.product,
     );
-    Confidence priceConfidence = group.calculatePriceConfidence(position.price);
+    final priceConfidence = group.calculatePriceConfidence(position.price);
 
     final positionConfidence = position.copyWith(
       product: position.product.copyWith(confidence: productConfidence),
       price: position.price.copyWith(confidence: priceConfidence),
     );
 
-    final bool sameTimestamp = group.members.any(
+    final sameTimestamp = group.members.any(
       (p) => position.timestamp == p.timestamp,
     );
-
-    int effectiveThreshold = _thresholder.threshold;
+    final effectiveThreshold = _thresholder.threshold;
 
     final repText = _groupRepresentativeText(group);
     final incText = position.product.normalizedText;
@@ -685,7 +552,6 @@ final class ReceiptOptimizer implements Optimizer {
     final baseMin = ReceiptConstants.optimizerMinProductSimToMerge;
     final minNeeded =
         variantDifferent ? ReceiptConstants.optimizerVariantMinSim : baseMin;
-
     final looksDissimilar = fuzzy < minNeeded;
 
     final shouldUseGroup =
@@ -764,13 +630,20 @@ final class ReceiptOptimizer implements Optimizer {
     RecognizedReceipt receipt, {
     bool test = false,
   }) {
+    if (!test && receipt.isValid) return receipt;
+
+    ReceiptLogger.log('opt.in', {
+      'n': receipt.positions.length,
+      'calc': receipt.calculatedSum.value.toStringAsFixed(2),
+      'sum?': receipt.sum?.value,
+    });
+
     final stableGroups =
         _groups
             .where((g) => g.stability >= _stabilityThreshold || test)
             .toList();
 
     _learnOrder(receipt);
-
     stableGroups.sort(_compareGroupsForOrder);
 
     final mergedReceipt = RecognizedReceipt.empty();
@@ -778,22 +651,21 @@ final class ReceiptOptimizer implements Optimizer {
     for (final group in stableGroups) {
       final best = maxBy(group.members, (p) => p.confidence);
       final latest = maxBy(group.members, (p) => p.timestamp);
+      if (best == null || latest == null) continue;
 
-      if (best != null && latest != null) {
-        final patched = best.copyWith(
-          product: best.product.copyWith(line: latest.product.line),
-          price: best.price.copyWith(line: latest.price.line),
-        )..operation = latest.operation;
+      final patched = best.copyWith(
+        product: best.product.copyWith(line: latest.product.line),
+        price: best.price.copyWith(line: latest.price.line),
+      )..operation = latest.operation;
 
-        ReceiptLogger.log('merge.keep', {
-          'grp': ReceiptLogger.grpKey(group),
-          'pos': ReceiptLogger.posKey(patched),
-          'bestC': best.confidence,
-          'latestTs': latest.timestamp.millisecondsSinceEpoch,
-        });
+      ReceiptLogger.log('merge.keep', {
+        'grp': ReceiptLogger.grpKey(group),
+        'pos': ReceiptLogger.posKey(patched),
+        'bestC': best.confidence,
+        'latestTs': latest.timestamp.millisecondsSinceEpoch,
+      });
 
-        mergedReceipt.positions.add(patched);
-      }
+      mergedReceipt.positions.add(patched);
     }
 
     mergedReceipt.store ??= receipt.store;
@@ -802,26 +674,22 @@ final class ReceiptOptimizer implements Optimizer {
     mergedReceipt.purchaseDate ??= receipt.purchaseDate;
     mergedReceipt.boundingBox ??= receipt.boundingBox;
 
-    final stableSum = minBy(
-      _sumCandidates.where(
-        (c) =>
-            c.confirmations >= _sumConfirmationThreshold &&
-            _isConfirmedSumValid(c, mergedReceipt),
-      ),
-      (c) => c.verticalDistance,
-    );
-
+    final stableSum = _pickStableSum(mergedReceipt);
     ReceiptLogger.log('out.gate', {
       'enabled': stableSum != null,
       'sum': stableSum?.sum.value,
       'vd': stableSum?.verticalDistance,
     });
 
-    if (stableSum != null) {
-      _removeOutliersToMatchSum(mergedReceipt);
-    }
+    if (stableSum != null) _removeOutliersToMatchSum(mergedReceipt);
 
     _updateEntities(mergedReceipt);
+
+    ReceiptLogger.log('opt.out', {
+      'n': mergedReceipt.positions.length,
+      'calc': mergedReceipt.calculatedSum.value.toStringAsFixed(2),
+      'sum?': mergedReceipt.sum?.value,
+    });
 
     return mergedReceipt;
   }
@@ -832,57 +700,49 @@ final class ReceiptOptimizer implements Optimizer {
     final prices = receipt.positions.map((p) => p.price);
 
     receipt.entities?.clear();
-    if (receipt.store != null) {
+    final store = receipt.store;
+    if (store != null) {
       receipt.entities?.add(
-        RecognizedStore(value: receipt.store!.value, line: receipt.store!.line),
+        RecognizedStore(value: store.value, line: store.line),
       );
     }
     receipt.entities?.addAll(
-      products.map(
-        (product) =>
-            RecognizedProduct(value: product.value, line: product.line),
-      ),
+      products.map((p) => RecognizedProduct(value: p.value, line: p.line)),
     );
     receipt.entities?.addAll(
-      prices.map(
-        (price) => RecognizedPrice(value: price.value, line: price.line),
-      ),
+      prices.map((pr) => RecognizedPrice(value: pr.value, line: pr.line)),
     );
-    if (receipt.sum != null) {
+
+    final sum = receipt.sum;
+    if (sum != null) {
+      receipt.entities?.add(RecognizedSum(value: sum.value, line: sum.line));
+    }
+
+    final sumLabel = receipt.sumLabel;
+    if (sumLabel != null) {
       receipt.entities?.add(
-        RecognizedSum(value: receipt.sum!.value, line: receipt.sum!.line),
+        RecognizedSumLabel(value: sumLabel.value, line: sumLabel.line),
       );
     }
-    if (receipt.sumLabel != null) {
+
+    final pd = receipt.purchaseDate;
+    if (pd != null) {
       receipt.entities?.add(
-        RecognizedSumLabel(
-          value: receipt.sumLabel!.value,
-          line: receipt.sumLabel!.line,
-        ),
+        RecognizedPurchaseDate(value: pd.value, line: pd.line),
       );
     }
-    if (receipt.purchaseDate != null) {
+
+    final bb = receipt.boundingBox;
+    if (bb != null) {
       receipt.entities?.add(
-        RecognizedPurchaseDate(
-          value: receipt.purchaseDate!.value,
-          line: receipt.purchaseDate!.line,
-        ),
-      );
-    }
-    if (receipt.boundingBox != null) {
-      receipt.entities?.add(
-        RecognizedBoundingBox(
-          value: receipt.boundingBox!.value,
-          line: receipt.boundingBox!.line,
-        ),
+        RecognizedBoundingBox(value: bb.value, line: bb.line),
       );
     }
   }
 
   /// Applies the outlier-removal step to make sums consistent.
-  void _removeOutliersToMatchSum(RecognizedReceipt receipt) {
-    ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
-  }
+  void _removeOutliersToMatchSum(RecognizedReceipt receipt) =>
+      ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
 
   /// Checks whether a confirmed sum candidate is plausible for the receipt.
   bool _isConfirmedSumValid(
@@ -890,7 +750,6 @@ final class ReceiptOptimizer implements Optimizer {
     RecognizedReceipt receipt,
   ) {
     if (receipt.positions.length < 2) return false;
-
     final calculated = receipt.calculatedSum.value;
     return (candidate.sum.value - calculated).abs() <=
         ReceiptConstants.sumTolerance;
@@ -899,7 +758,6 @@ final class ReceiptOptimizer implements Optimizer {
   /// Learns vertical ordering of groups using skew-aware projection.
   void _learnOrder(RecognizedReceipt receipt) {
     final angleDeg = ReceiptSkewEstimator.estimateDegrees(receipt);
-
     if (angleDeg.abs() < 0.5) {
       _lastAngleDeg = 0.0;
       _lastAngleRad = null;
@@ -937,9 +795,7 @@ final class ReceiptOptimizer implements Optimizer {
       );
       s.orderY = s.hasY ? (1 - _ewmaAlpha) * s.orderY + _ewmaAlpha * o.y : o.y;
       s.hasY = true;
-      if (s.firstSeen.isAfter(o.ts)) {
-        s.firstSeen = o.ts;
-      }
+      if (s.firstSeen.isAfter(o.ts)) s.firstSeen = o.ts;
     }
 
     for (int i = 0; i < observed.length; i++) {
@@ -978,7 +834,7 @@ final class ReceiptOptimizer implements Optimizer {
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
     final tiePx =
         (_lastAngleDeg?.abs() ?? 0) < 0.5
-            ? (ReceiptConstants.boundingBoxBuffer * 0.8).round()
+            ? (ReceiptConstants.boundingBoxBuffer ~/ 2)
             : ReceiptConstants.boundingBoxBuffer;
 
     final sa = _orderStats[a];
@@ -996,12 +852,11 @@ final class ReceiptOptimizer implements Optimizer {
       if (t != 0) return t;
     }
 
-    final angleRad = _lastAngleRad;
     double medianProjectedY(RecognizedGroup g) {
       if (g.members.isEmpty) return double.infinity;
       final ys =
           g.members
-              .map((p) => _projectedYFromLine(p.product.line, angleRad))
+              .map((p) => _projectedYFromLine(p.product.line, _lastAngleRad))
               .toList()
             ..sort();
       return ys[ys.length ~/ 2];
@@ -1023,6 +878,17 @@ final class ReceiptOptimizer implements Optimizer {
     return at.compareTo(bt);
   }
 
+  /// Detects very early weak outliers.
+  bool _isEarlyOutlier(RecognizedGroup g, DateTime now) {
+    final grace = _invalidateInterval ~/ 8;
+    final staleForAWhile = now.difference(g.timestamp) >= grace;
+    final veryWeak =
+        g.stability < (_stabilityThreshold ~/ 2) &&
+        g.confidence < (_confidenceThreshold ~/ 2);
+    final tiny = g.members.length <= 1;
+    return staleForAWhile && veryWeak && tiny;
+  }
+
   /// Projects a line’s center onto Y using an optional skew angle.
   double _projectedYFromLine(TextLine line, double? angleRad) {
     final c = line.boundingBox.center;
@@ -1031,19 +897,34 @@ final class ReceiptOptimizer implements Optimizer {
     return c.dx * sinA + c.dy * cosA;
   }
 
-  /// Releases all resources used by the optimizer.
-  @override
-  void close() {
-    _groups.clear();
-    _stores.clear();
-    _sums.clear();
-    _shouldInitialize = false;
-  }
+  /// Picks the best currently confirmed sum candidate for [receipt].
+  _SumCandidate? _pickStableSum(RecognizedReceipt receipt) => minBy(
+    _sumCandidates.where(
+      (c) =>
+          c.confirmations >= _sumConfirmationThreshold &&
+          _isConfirmedSumValid(c, receipt),
+    ),
+    (c) => c.verticalDistance,
+  );
 
+  /// Returns a representative product text for a group.
   String _groupRepresentativeText(RecognizedGroup g) {
     final best = maxBy(g.members, (p) => p.confidence);
     return (best?.product.normalizedText ??
         g.members.first.product.normalizedText);
+  }
+
+  /// Removes [toRemove] from `_groups` and cleans dependent structures.
+  void _purgeGroups(Set<RecognizedGroup> toRemove) {
+    _groups.removeWhere(toRemove.contains);
+    for (final g in toRemove) {
+      _orderStats.remove(g);
+    }
+    for (final s in _orderStats.values) {
+      for (final g in toRemove) {
+        s.aboveCounts.remove(g);
+      }
+    }
   }
 }
 

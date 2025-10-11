@@ -1,11 +1,9 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
-/// Represents a product name recognized from a receipt.
-///
-/// Contains the product description and methods to normalize and format it.
+/// Product name recognized from a receipt.
 final class RecognizedProduct extends RecognizedEntity<String> {
-  /// Confidence assessment for this product recognition, including value and weight.
+  /// Confidence for this product recognition.
   Confidence? confidence;
 
   /// The position this product belongs to, if any.
@@ -14,7 +12,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   /// Parsing options (user config or defaults).
   final ReceiptOptions options;
 
-  /// Creates a recognized product from [value] and source [line].
+  /// Creates a recognized product from [value] and [line].
   RecognizedProduct({
     required super.line,
     required super.value,
@@ -23,17 +21,23 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     ReceiptOptions? options,
   }) : options = options ?? ReceiptOptions.empty();
 
-  /// Creates a product entity from a JSON map.
+  /// Creates a recognized product from JSON.
   factory RecognizedProduct.fromJson(Map<String, dynamic> json) {
+    final rawValue = json['value'];
+    final value = (rawValue is String) ? rawValue : (rawValue ?? '').toString();
+    final conf = json['confidence'];
+    final confValue =
+        conf is int ? conf : int.tryParse(conf?.toString() ?? '0') ?? 0;
+
     return RecognizedProduct(
-      value: json['value'],
-      confidence: Confidence(value: json['confidence'] ?? 0),
+      value: value,
+      confidence: Confidence(value: confValue),
       line: DummyTextLine(),
       options: ReceiptOptions.empty(),
     );
   }
 
-  /// Creates a copy with optionally updated properties.
+  /// Returns a copy with updated fields.
   RecognizedProduct copyWith({
     String? value,
     TextLine? line,
@@ -50,11 +54,10 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     );
   }
 
-  /// Formats the product text by trimming it.
   @override
   String format(String value) => ReceiptFormatter.trim(value);
 
-  /// The formatted product text.
+  /// Formatted product text.
   String get text => formattedValue;
 
   /// Normalized product text using group alternatives.
@@ -83,39 +86,37 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   List<String> get alternativePostfixTexts =>
       position?.group?.alternativePostfixTexts ?? [];
 
-  /// The percentage frequency of the most common text among [alternativeTexts].
+  /// Percentage frequency of the most common alternative text.
   int get textConsensusRatio {
-    if (alternativeTexts.length <
+    final alts = alternativeTexts;
+    if (alts.length <
         ReceiptConstants.optimizerPrecisionHigh *
             ReceiptConstants.heuristicQuarter) {
       return 0;
     }
     final counts = <String, int>{};
-    for (final text in alternativeTexts) {
-      counts[text] = (counts[text] ?? 0) + 1;
+    for (final t in alts) {
+      counts[t] = (counts[t] ?? 0) + 1;
     }
-    final maxCount = counts.values.fold<int>(0, (a, b) => a > b ? a : b);
-    return ((maxCount / alternativeTexts.length) * 100).round();
+    var maxCount = 0;
+    for (final v in counts.values) {
+      if (v > maxCount) maxCount = v;
+    }
+    return ((maxCount / alts.length) * 100).round();
   }
 
-  /// Returns a map of each unique text in [alternativeTexts]
-  /// to its percentage frequency (0–100, rounded).
+  /// Map of each unique alternative text to its percentage frequency.
   Map<String, int> get alternativeTextPercentages {
-    if (alternativeTexts.isEmpty) return {};
-
-    final total = alternativeTexts.length;
+    final alts = alternativeTexts;
+    if (alts.isEmpty) return const {};
+    final total = alts.length;
     final counts = <String, int>{};
-
-    for (final text in alternativeTexts) {
-      counts[text] = (counts[text] ?? 0) + 1;
+    for (final t in alts) {
+      counts[t] = (counts[t] ?? 0) + 1;
     }
-
-    final percentages = <String, int>{};
-    for (final entry in counts.entries) {
-      percentages[entry.key] = ((entry.value / total) * 100).round();
-    }
-
-    return percentages;
+    final result = <String, int>{};
+    counts.forEach((k, v) => result[k] = ((v / total) * 100).round());
+    return result;
   }
 
   /// Whether this product is a cashback (negative price).

@@ -1,7 +1,7 @@
 /// Centralized constants shared between receipt parsing and optimization.
 class ReceiptConstants {
   /// Vertical tolerance (in pixels) for comparing bounding box alignment.
-  static const int boundingBoxBuffer = 20;
+  static const int boundingBoxBuffer = 25;
 
   /// Sum tolerance tight and more precise below 1 cent.
   static const double sumTolerance = 0.009;
