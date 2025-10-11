@@ -1,5 +1,5 @@
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/test/index.dart';
+import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
 /// Complete recognized receipt (positions, totals, store, date, bounds, entities).
 class RecognizedReceipt {
@@ -57,7 +57,7 @@ class RecognizedReceipt {
     if (rawSum is Map<String, dynamic>) {
       final v = rawSum['value'];
       final numValue = v is num ? v : num.tryParse(v?.toString() ?? '') ?? 0;
-      sum = RecognizedSum(value: numValue, line: DummyTextLine());
+      sum = RecognizedSum(value: numValue, line: ReceiptTextLine());
     }
 
     final rawPd = json['purchase_date'];
@@ -65,7 +65,7 @@ class RecognizedReceipt {
     if (rawPd != null) {
       purchaseDate = RecognizedPurchaseDate(
         value: rawPd.toString(),
-        line: DummyTextLine(),
+        line: ReceiptTextLine(),
       );
     }
 

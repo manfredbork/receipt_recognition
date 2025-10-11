@@ -1,7 +1,6 @@
 part of 'receipt_optimizer.dart';
 
 /// Result of evaluating how well a position fits a group.
-@immutable
 final class _ConfidenceResult {
   /// Product-side confidence computed by the group.
   final Confidence productConfidence;

@@ -8,6 +8,7 @@ import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/parser/index.dart';
 import 'package:receipt_recognition/src/utils/geometry/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
+import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
 /// Parses OCR output into a structured receipt by deskewing, extracting entities,
 /// filtering spatial outliers, and assembling positions, sum, store, and bounds.
@@ -427,16 +428,8 @@ final class ReceiptParser {
   }
 
   /// Creates a minimal TextLine shell for synthetic entities.
-  static TextLine _createTextLine(Rect boundingBox, double angleDeg) {
-    return TextLine(
-      text: '',
-      elements: [],
-      boundingBox: boundingBox,
-      recognizedLanguages: const [],
-      cornerPoints: const [],
-      confidence: null,
-      angle: angleDeg,
-    );
+  static TextLine _createTextLine(Rect deskewed, double angleDeg) {
+    return ReceiptTextLine.fromRect(deskewed, angle: angleDeg);
   }
 
   /// Constructs a position from matched product text and amount.

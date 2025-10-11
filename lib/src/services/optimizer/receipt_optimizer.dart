@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/optimizer/index.dart';

@@ -1,7 +1,7 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/test/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
+import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
 /// Price recognized from a receipt, with numeric value and confidence score.
 final class RecognizedPrice extends RecognizedEntity<num> {
@@ -34,7 +34,7 @@ final class RecognizedPrice extends RecognizedEntity<num> {
     return RecognizedPrice(
       value: parsedValue,
       confidence: Confidence(value: confValue),
-      line: DummyTextLine(),
+      line: ReceiptTextLine(),
     );
   }
 
