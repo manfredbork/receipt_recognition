@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 void main() {
   group('ReceiptFormatter', () {

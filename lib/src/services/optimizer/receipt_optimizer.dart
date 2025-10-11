@@ -3,7 +3,12 @@ import 'dart:math' as math;
 import 'package:collection/collection.dart';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart' as fw;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/optimizer/index.dart';
+import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/geometry/index.dart';
+import 'package:receipt_recognition/src/utils/logging/index.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Interface for receipt optimization components.
 ///
@@ -264,8 +269,9 @@ final class ReceiptOptimizer implements Optimizer {
 
     if (hasConfirmed || receipt.sum == null) {
       if (parsed != null) receipt.sum = template.copyWith(value: parsed);
-      if (hasConfirmed && receipt.sumLabel == null)
+      if (hasConfirmed && receipt.sumLabel == null) {
         receipt.sumLabel = stable.label;
+      }
     }
 
     if (hasConfirmed) _demoteOtherConfirmedSums(stable);

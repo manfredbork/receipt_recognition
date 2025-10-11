@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 void main() {
   group('ReceiptNormalizer', () {
@@ -40,7 +40,13 @@ void main() {
 
       group('normalizeSpecialSpaces', () {
         test('should merge when equal content ignoring spaces', () {
-          final alts = ['BLATT SALAT', 'BLATT SALAT', 'BLATT SALAT', 'BLATTSALAT', 'BLATTSALA#'];
+          final alts = [
+            'BLATT SALAT',
+            'BLATT SALAT',
+            'BLATT SALAT',
+            'BLATTSALAT',
+            'BLATTSALA#',
+          ];
           final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
           expect(result, 'BLATTSALAT');
         });
@@ -51,7 +57,6 @@ void main() {
           expect(result, 'BROCCOLI SALAT');
         });
       });
-
     });
 
     group('normalizeByAlternativeTexts with diacritics/spacing', () {

@@ -1,7 +1,8 @@
 import 'dart:math';
 
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/parser/index.dart';
 
 /// Line item position on a receipt (product + price).
 final class RecognizedPosition {

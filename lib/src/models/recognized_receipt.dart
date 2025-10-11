@@ -1,4 +1,5 @@
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/test/index.dart';
 
 /// Complete recognized receipt (positions, totals, store, date, bounds, entities).
 class RecognizedReceipt {

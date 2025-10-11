@@ -1,4 +1,4 @@
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
 /// Utility for normalizing and standardizing recognized text from receipts.

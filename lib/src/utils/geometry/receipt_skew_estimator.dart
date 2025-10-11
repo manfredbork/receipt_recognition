@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/models/index.dart';
 
 /// Estimates the skew angle (degrees) of a receipt from its product/price columns.
 /// Positive angle means the receipt drifts to the right as Y increases (clockwise tilt).

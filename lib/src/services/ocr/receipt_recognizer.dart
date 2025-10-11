@@ -1,6 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/ocr/index.dart';
+import 'package:receipt_recognition/src/services/optimizer/index.dart';
+import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/logging/index.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Main class for recognizing receipts from images.
 ///

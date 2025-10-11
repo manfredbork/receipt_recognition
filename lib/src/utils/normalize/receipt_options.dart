@@ -1,4 +1,4 @@
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/services/parser/index.dart';
 
 /// A typed wrapper for "label -> canonical" maps with a precompiled regex.
 final class DetectionMap {

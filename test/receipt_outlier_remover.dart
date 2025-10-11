@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/optimizer/index.dart';
 
 /// Returns a RecognizedReceipt from json[key], or null if missing.
 RecognizedReceipt? _receiptFrom(Map<String, dynamic> json, String key) {

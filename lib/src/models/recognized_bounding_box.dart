@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/models/index.dart';
 
 /// Outer bounds and skew angle of the receipt.
 final class RecognizedBoundingBox extends RecognizedEntity<Rect> {

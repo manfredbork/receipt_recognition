@@ -1,3 +1,11 @@
+/// Public API for the `receipt_recognition` package.
+///
+/// Note: Files under `lib/src/**` must NOT import this file.
+/// They should import specific internal files instead, e.g.
+/// `package:receipt_recognition/src/...`.
+library;
+
+/// ── Public models (foundations → low-level → line items → receipt-level) ──
 export 'src/models/index.dart'
     show
         /// Foundations
@@ -25,4 +33,9 @@ export 'src/models/index.dart'
         RecognizedScanProgress,
         ReceiptValidationResult,
         ReceiptCompleteness;
-export 'src/test/index.dart';
+/// High-level recognizer (public entry point)
+export 'src/services/ocr/receipt_recognizer.dart' show ReceiptRecognizer;
+/// ── Public services ──
+/// Optimizer interface + default implementation
+export 'src/services/optimizer/receipt_optimizer.dart'
+    show Optimizer, ReceiptOptimizer;

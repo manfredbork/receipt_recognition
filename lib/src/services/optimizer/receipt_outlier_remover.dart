@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/logging/index.dart';
 
 /// Static utility to remove outlier positions (wrong items, duplicates, metadata)
 /// so that the calculated sum matches the detected receipt sum.
