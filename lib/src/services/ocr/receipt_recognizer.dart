@@ -3,8 +3,8 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/services/optimizer/index.dart';
+import 'package:receipt_recognition/src/services/parser/index.dart';
 import 'package:receipt_recognition/src/utils/logging/index.dart';
-import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Main orchestrator for recognizing receipts from images.
 ///
@@ -48,7 +48,7 @@ final class ReceiptRecognizer {
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(highPrecision: highPrecision),
-       _options = options ?? ReceiptOptions.empty(),
+       _options = options ?? ReceiptOptionsMerger.withDefaults(options),
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,

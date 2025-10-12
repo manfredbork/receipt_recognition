@@ -22,7 +22,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     this.confidence,
     this.position,
     ReceiptOptions? options,
-  }) : options = options ?? ReceiptOptions.empty();
+  }) : options = options ?? ReceiptOptionsMerger.defaults();
 
   /// Creates a recognized product from JSON.
   factory RecognizedProduct.fromJson(Map<String, dynamic> json) {
@@ -36,7 +36,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       value: value,
       confidence: Confidence(value: confValue),
       line: ReceiptTextLine(),
-      options: ReceiptOptions.empty(),
+      options: ReceiptOptionsMerger.defaults(),
     );
   }
 
@@ -53,7 +53,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       line: line ?? this.line,
       confidence: confidence ?? this.confidence,
       position: position ?? this.position,
-      options: options ?? this.options,
+      options: options ?? ReceiptOptionsMerger.defaults(),
     );
   }
 
@@ -76,9 +76,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   String get normalizedPostfixText => alternativePostfixTexts.firstWhere(
     (postfixText) =>
         options.foodKeywords.hasMatch(postfixText) ||
-        options.nonFoodKeywords.hasMatch(postfixText) ||
-        ReceiptPatterns.foodKeywords.hasMatch(postfixText) ||
-        ReceiptPatterns.nonFoodKeywords.hasMatch(postfixText),
+        options.nonFoodKeywords.hasMatch(postfixText),
     orElse: () => '',
   );
 
@@ -126,23 +124,14 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   bool get isCashback => (position?.price.value ?? 0.0) < 0;
 
   /// Whether this product is classified as food.
-  bool get isFood =>
-      options.foodKeywords.hasMatch(normalizedPostfixText) ||
-      ReceiptPatterns.foodKeywords.hasMatch(normalizedPostfixText);
+  bool get isFood => options.foodKeywords.hasMatch(normalizedPostfixText);
 
   /// Whether this product is classified as non-food.
-  bool get isNonFood =>
-      options.nonFoodKeywords.hasMatch(normalizedPostfixText) ||
-      ReceiptPatterns.nonFoodKeywords.hasMatch(normalizedPostfixText);
+  bool get isNonFood => options.nonFoodKeywords.hasMatch(normalizedPostfixText);
 
   /// Whether this product represents a discount.
-  bool get isDiscount =>
-      isCashback &&
-      (options.discountKeywords.hasMatch(text) ||
-          ReceiptPatterns.discountKeywords.hasMatch(text));
+  bool get isDiscount => isCashback && options.discountKeywords.hasMatch(text);
 
   /// Whether this product represents a deposit.
-  bool get isDeposit =>
-      (options.depositKeywords.hasMatch(text) ||
-          ReceiptPatterns.depositKeywords.hasMatch(text));
+  bool get isDeposit => options.depositKeywords.hasMatch(text);
 }

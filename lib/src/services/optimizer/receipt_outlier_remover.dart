@@ -9,7 +9,10 @@ import 'package:receipt_recognition/src/utils/logging/index.dart';
 final class ReceiptOutlierRemover {
   /// Modifies [RecognizedReceipt.positions] in-place by removing a minimal subset of items
   /// whose total (±ReceiptConstants.outlierTau cents) closes the gap between calculated and detected sum.
-  static void removeOutliersToMatchSum(RecognizedReceipt receipt) {
+  static void removeOutliersToMatchSum(
+    RecognizedReceipt receipt, {
+    ReceiptOptions? options,
+  }) {
     if (receipt.sum == null || receipt.positions.length <= 1) return;
 
     final maxRemovals =
@@ -43,7 +46,14 @@ final class ReceiptOutlierRemover {
     });
 
     final candidates = List<_Cand>.of(
-      _rankPool(_selectPool(receipt, deltaCents, useDeltaGate: true)),
+      _rankPool(
+        _selectPool(
+          receipt,
+          deltaCents,
+          options ?? ReceiptOptionsMerger.defaults(),
+          useDeltaGate: true,
+        ),
+      ),
     );
 
     ReceiptLogger.log('out.candidates', {
@@ -64,7 +74,12 @@ final class ReceiptOutlierRemover {
 
     if (candidates.isEmpty) {
       final fallback = _rankPool(
-        _selectPool(receipt, deltaCents, useDeltaGate: false),
+        _selectPool(
+          receipt,
+          deltaCents,
+          options ?? ReceiptOptionsMerger.defaults(),
+          useDeltaGate: false,
+        ),
       );
       if (fallback.isEmpty) return;
       candidates.addAll(fallback);
@@ -197,7 +212,8 @@ final class ReceiptOutlierRemover {
   /// Selects potential removal candidates based on confidence, probes, and delta.
   static List<_Cand> _selectPool(
     RecognizedReceipt receipt,
-    int deltaCents, {
+    int deltaCents,
+    ReceiptOptions options, {
     required bool useDeltaGate,
   }) {
     if (receipt.sum == null) return <_Cand>[];
@@ -220,7 +236,7 @@ final class ReceiptOutlierRemover {
         continue;
       }
 
-      final suspect = _isSuspectKeyword(_safeProductText(pos));
+      final suspect = _isSuspectKeyword(_safeProductText(pos), options);
       final score =
           (100 - conf) + (suspect ? ReceiptConstants.outlierSuspectBonus : 0);
 
@@ -273,8 +289,8 @@ final class ReceiptOutlierRemover {
   }
 
   /// True if [s] looks like a sum/label keyword.
-  static bool _isSuspectKeyword(String s) =>
-      ReceiptPatterns.sumLabels.hasMatch(s);
+  static bool _isSuspectKeyword(String s, ReceiptOptions options) =>
+      options.totalLabels.hasMatch(s);
 
   /// Safely returns product text for a position or empty string on error.
   static String _safeProductText(RecognizedPosition p) {

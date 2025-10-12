@@ -22,7 +22,11 @@ abstract class Optimizer {
   /// Processes a receipt and returns an optimized version.
   ///
   /// Set [test] to true to always return a merged/optimized receipt.
-  RecognizedReceipt optimize(RecognizedReceipt receipt, {bool test = false});
+  RecognizedReceipt optimize(
+    RecognizedReceipt receipt, {
+    ReceiptOptions? options,
+    bool test = false,
+  });
 
   /// Releases resources used by the optimizer.
   void close();
@@ -94,7 +98,11 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Processes a receipt and returns an optimized version.
   @override
-  RecognizedReceipt optimize(RecognizedReceipt receipt, {bool test = false}) {
+  RecognizedReceipt optimize(
+    RecognizedReceipt receipt, {
+    ReceiptOptions? options,
+    bool test = false,
+  }) {
     _initializeIfNeeded();
     _checkConvergence(receipt);
     _updateStores(receipt);
@@ -107,7 +115,7 @@ final class ReceiptOptimizer implements Optimizer {
     _resetOperations();
     _processPositions(receipt);
     _updateEntities(receipt);
-    return _createOptimizedReceipt(receipt, test: test);
+    return _createOptimizedReceipt(receipt, options: options, test: test);
   }
 
   /// Releases all resources used by the optimizer.
@@ -540,6 +548,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// Builds a merged, ordered receipt from stable groups and updates entities.
   RecognizedReceipt _createOptimizedReceipt(
     RecognizedReceipt receipt, {
+    ReceiptOptions? options,
     bool test = false,
   }) {
     if (!test && receipt.isValid) return receipt;
@@ -593,7 +602,8 @@ final class ReceiptOptimizer implements Optimizer {
       'vd': stableSum?.verticalDistance,
     });
 
-    if (stableSum != null) _removeOutliersToMatchSum(mergedReceipt);
+    if (stableSum != null)
+      _removeOutliersToMatchSum(mergedReceipt, options: options);
 
     _updateEntities(mergedReceipt);
 
@@ -653,8 +663,11 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   /// Applies the outlier-removal step to make sums consistent.
-  void _removeOutliersToMatchSum(RecognizedReceipt receipt) =>
-      ReceiptOutlierRemover.removeOutliersToMatchSum(receipt);
+  void _removeOutliersToMatchSum(
+    RecognizedReceipt receipt, {
+    ReceiptOptions? options,
+  }) =>
+      ReceiptOutlierRemover.removeOutliersToMatchSum(receipt, options: options);
 
   /// Learns vertical ordering of groups using skew-aware projection.
   void _learnOrder(RecognizedReceipt receipt) {

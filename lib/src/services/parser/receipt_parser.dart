@@ -156,12 +156,6 @@ final class ReceiptParser {
         parsed.add(RecognizedStore(line: line, value: customStore));
         return true;
       }
-
-      final store = ReceiptPatterns.storeNames.stringMatch(text);
-      if (store != null) {
-        parsed.add(RecognizedStore(line: line, value: store));
-        return true;
-      }
     }
     return false;
   }
@@ -187,34 +181,17 @@ final class ReceiptParser {
         return true;
       }
     }
-
-    final match = ReceiptPatterns.sumLabels.firstMatch(text);
-    if (match != null) {
-      final matchedValue = ReceiptFormatter.trim(match.group(0)!);
-      parsed.add(RecognizedSumLabel(line: line, value: matchedValue));
-      return true;
-    }
-
-    for (final label in _knownSumLabels(ReceiptPatterns.sumLabels.pattern)) {
-      final threshold = _adaptiveThreshold(label);
-      if (ratio(text, label) >= threshold) {
-        parsed.add(RecognizedSumLabel(line: line, value: label));
-        return true;
-      }
-    }
     return false;
   }
 
   /// Returns true if the line matches ignore keywords.
   static bool _shouldIgnoreLine(TextLine line, ReceiptOptions options) {
-    return options.ignoreKeywords.hasMatch(line.text) ||
-        ReceiptPatterns.ignoreKeywords.hasMatch(line.text);
+    return options.ignoreKeywords.hasMatch(line.text);
   }
 
   /// Returns true if the line matches stop keywords.
   static bool _shouldStopParsing(TextLine line, ReceiptOptions options) {
-    return options.stopKeywords.hasMatch(line.text) ||
-        ReceiptPatterns.stopKeywords.hasMatch(line.text);
+    return options.stopKeywords.hasMatch(line.text);
   }
 
   /// Recognizes right-side numeric lines as amounts and parses values.
@@ -391,7 +368,7 @@ final class ReceiptParser {
     _sortByDistance(entity.line.boundingBox, yUnknowns, rot);
 
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(entity, yUnknown, forbidden, rot)) {
+      if (_isMatchingUnknown(entity, yUnknown, forbidden, rot, options)) {
         final position = _createPosition(
           yUnknown,
           entity,
@@ -411,9 +388,10 @@ final class ReceiptParser {
     RecognizedUnknown unknown,
     List<RecognizedUnknown> forbidden,
     ReceiptRotator rot,
+    ReceiptOptions options,
   ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
-    final isLikelyLabel = ReceiptPatterns.sumLabels.hasMatch(unknownText);
+    final isLikelyLabel = options.totalLabels.hasMatch(unknownText);
     if (forbidden.contains(unknown) || isLikelyLabel) return false;
 
     final amountBox = amount.line.boundingBox;
@@ -658,7 +636,10 @@ final class ReceiptParser {
   }
 
   /// Prunes low-confidence positions to bring the total closer to the target sum.
-  static void _trimToMatchSum(RecognizedReceipt receipt) {
+  static void _trimToMatchSum(
+    RecognizedReceipt receipt,
+    ReceiptOptions options,
+  ) {
     final target = receipt.sum?.value;
     if (target == null || receipt.positions.length <= 1) return;
 
@@ -667,7 +648,7 @@ final class ReceiptParser {
           receipt.sum != null &&
           (pos.price.value - receipt.sum!.value).abs() <
               ReceiptConstants.sumTolerance &&
-          ReceiptPatterns.sumLabels.hasMatch(pos.product.value),
+          options.totalLabels.hasMatch(pos.product.value),
     );
 
     final positions = [...receipt.positions]
@@ -817,7 +798,7 @@ final class ReceiptParser {
     _processPurchaseDate(purchaseDate, receipt);
     _processBoundingBox(boundingBox, receipt);
     _filterSuspiciousProducts(receipt);
-    _trimToMatchSum(receipt);
+    _trimToMatchSum(receipt, options);
 
     return receipt.copyWith(entities: entities);
   }
