@@ -17,17 +17,24 @@ class ScanController extends ChangeNotifier {
   RecognizedScanProgress? _progress;
   bool _busy = false;
 
-  RecognizedReceipt get lastReceipt => _lastReceipt;
+  double _bestPercent = 0;
 
-  RecognizedScanProgress? get progress => _progress;
+  double get bestPercent => _bestPercent;
+
+  void resetBestPercent() {
+    _bestPercent = 0;
+    notifyListeners();
+  }
+
+  RecognizedReceipt get lastReceipt => _lastReceipt;
 
   double get progressPercent =>
       (_progress?.estimatedPercentage ?? 0).toDouble();
 
+  RecognizedScanProgress? get progress => _progress;
+
   bool get busy => _busy;
 
-  /// Feed one frame; returns the latest recognized receipt snapshot.
-  /// Caller decides whether to navigate (receipt.isValid && receipt.isConfirmed).
   Future<RecognizedReceipt> processImage(InputImage image) async {
     if (_busy) return _lastReceipt;
 
@@ -37,35 +44,37 @@ class ScanController extends ChangeNotifier {
       notifyListeners();
       return _lastReceipt;
     } catch (e) {
-      debugPrint('processImage error: $e');
       return _lastReceipt;
     } finally {
       _busy = false;
     }
   }
 
-  /// Optional manual accept: promotes current merged receipt to accepted.
   Future<RecognizedReceipt> acceptCurrent() async {
     final accepted = _recognizer.acceptReceipt(_lastReceipt);
     _lastReceipt = accepted;
+    _bestPercent = _bestPercent < 100 ? 100 : _bestPercent;
     notifyListeners();
     return accepted;
   }
 
   Future<void> disposeAsync() => _recognizer.close();
 
+  void clearOverlay() {
+    _progress = null;
+    notifyListeners();
+  }
+
   void _onScanUpdate(RecognizedScanProgress p) {
     _progress = p;
-
     final merged = p.mergedReceipt;
-    if (merged != null) {
-      _lastReceipt = merged;
-    }
+    if (merged != null) _lastReceipt = merged;
     notifyListeners();
   }
 
   void _onScanComplete(RecognizedReceipt r) {
     _lastReceipt = r;
+    if (_bestPercent < 100) _bestPercent = 100;
     notifyListeners();
   }
 

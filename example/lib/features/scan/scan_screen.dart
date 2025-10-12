@@ -1,9 +1,11 @@
 import 'package:camera/camera.dart';
+import 'package:example/features/overlay/overlay_screen.dart';
 import 'package:example/features/scan/scan_controller.dart';
 import 'package:example/services/camera_handler_mixin.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -28,6 +30,7 @@ class _ScanScreenState extends State<ScanScreen>
       final cameras = await availableCameras();
       await initCamera(cameras);
       await startLiveFeed(_handleInputImage);
+      _ctrl.resetBestPercent();
       if (mounted) setState(() {});
     });
   }
@@ -39,13 +42,11 @@ class _ScanScreenState extends State<ScanScreen>
     super.dispose();
   }
 
-  /// Called for every camera frame as an MLKit [InputImage].
   Future<void> _handleInputImage(InputImage input) async {
+    final router = GoRouter.of(context);
     final receipt = await _ctrl.processImage(input);
-    if (!mounted) return;
-
     if (receipt.isValid && receipt.isConfirmed) {
-      context.goNamed('result', extra: receipt);
+      router.goNamed('result', extra: receipt);
     }
   }
 
@@ -75,6 +76,18 @@ class _ScanScreenState extends State<ScanScreen>
     }
   }
 
+  Size? _previewImageSizePortrait() {
+    final cc = cameraController;
+    if (cc == null || !cc.value.isInitialized) return null;
+
+    final s = cc.value.previewSize;
+    if (s == null) return null;
+
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
+    return isPortrait ? Size(s.height, s.width) : Size(s.width, s.height);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -88,7 +101,6 @@ class _ScanScreenState extends State<ScanScreen>
             onPressed: () async {
               final router = GoRouter.of(context);
               final r = await _ctrl.acceptCurrent();
-              if (!mounted) return;
               if (r.isValid && r.isConfirmed) {
                 router.goNamed('result', extra: r);
               }
@@ -105,20 +117,66 @@ class _ScanScreenState extends State<ScanScreen>
           return Stack(
             fit: StackFit.expand,
             children: [
-              if (cc != null && cc.value.isInitialized)
-                CameraPreview(cc)
-              else
+              if (cc != null && cc.value.isInitialized) ...[
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final imageSize = _previewImageSizePortrait();
+                    if (imageSize == null) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+
+                    final progress = _ctrl.progress;
+                    final merged = progress?.mergedReceipt;
+                    final positions =
+                        merged?.positions ?? const <RecognizedPosition>[];
+                    final added =
+                        (progress?.addedPositions ??
+                                const <RecognizedPosition>[])
+                            .toSet();
+
+                    final scene = SizedBox(
+                      width: imageSize.width,
+                      height: imageSize.height,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CameraPreview(cc),
+                          OverlayScreen(
+                            positions: positions,
+                            added: added,
+                            imageSize: imageSize,
+                            screenSize: imageSize,
+                            store: merged?.store,
+                            sumLabel: merged?.sumLabel,
+                            sum: merged?.sum,
+                            purchaseDate: merged?.purchaseDate,
+                          ),
+                        ],
+                      ),
+                    );
+                    return FittedBox(
+                      fit: BoxFit.cover,
+                      clipBehavior: Clip.hardEdge,
+                      child: scene,
+                    );
+                  },
+                ),
+              ] else
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
                     child: CircularProgressIndicator(),
                   ),
                 ),
-
               Positioned(
                 left: 16,
                 right: 16,
-                bottom: 24,
+                bottom: 16,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -139,25 +197,29 @@ class _ScanScreenState extends State<ScanScreen>
           );
         },
       ),
-      floatingActionButton: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        transitionBuilder:
-            (child, anim) => FadeTransition(opacity: anim, child: child),
-        child:
-            _isStreamingNow
-                ? FloatingActionButton.extended(
-                  key: const ValueKey('pauseFab'),
-                  onPressed: _pause,
-                  icon: const Icon(Icons.pause),
-                  label: const Text('Pause'),
-                )
-                : FloatingActionButton.extended(
-                  key: const ValueKey('resumeFab'),
-                  onPressed: _resume,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Resume'),
-                ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder:
+              (child, anim) => FadeTransition(opacity: anim, child: child),
+          child:
+              _isStreamingNow
+                  ? FloatingActionButton.extended(
+                    key: const ValueKey('pauseFab'),
+                    onPressed: _pause,
+                    icon: const Icon(Icons.pause),
+                    label: const Text('Pause'),
+                  )
+                  : FloatingActionButton.extended(
+                    key: const ValueKey('resumeFab'),
+                    onPressed: _resume,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Resume'),
+                  ),
+        ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

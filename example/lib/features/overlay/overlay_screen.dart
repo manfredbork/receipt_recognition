@@ -3,6 +3,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 class OverlayScreen extends StatelessWidget {
   final List<RecognizedPosition> positions;
+  final Set<RecognizedPosition> added;
   final RecognizedStore? store;
   final RecognizedSumLabel? sumLabel;
   final RecognizedSum? sum;
@@ -15,6 +16,7 @@ class OverlayScreen extends StatelessWidget {
     required this.positions,
     required this.imageSize,
     required this.screenSize,
+    this.added = const {},
     this.store,
     this.sumLabel,
     this.sum,
@@ -26,6 +28,7 @@ class OverlayScreen extends StatelessWidget {
     return CustomPaint(
       painter: _PositionPainter(
         positions: positions,
+        added: added,
         imageSize: imageSize,
         screenSize: screenSize,
         store: store,
@@ -39,6 +42,7 @@ class OverlayScreen extends StatelessWidget {
 
 class _PositionPainter extends CustomPainter {
   final List<RecognizedPosition> positions;
+  final Set<RecognizedPosition> added;
   final RecognizedStore? store;
   final RecognizedSumLabel? sumLabel;
   final RecognizedSum? sum;
@@ -48,6 +52,7 @@ class _PositionPainter extends CustomPainter {
 
   _PositionPainter({
     required this.positions,
+    required this.added,
     required this.imageSize,
     required this.screenSize,
     this.store,
@@ -58,11 +63,17 @@ class _PositionPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paintProduct =
+    final paintDefault =
         Paint()
           ..color = Colors.orange.withAlpha(192)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
+
+    final paintAdded =
+        Paint()
+          ..color = Colors.greenAccent.withAlpha(220)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5;
 
     final paintStore =
         Paint()
@@ -89,44 +100,44 @@ class _PositionPainter extends CustomPainter {
           ..strokeWidth = 2;
 
     for (final position in positions) {
-      final productBox = _scaleRect(position.product.line.boundingBox);
-      final priceBox = _scaleRect(position.price.line.boundingBox);
-      canvas.drawRect(productBox, paintProduct);
-      canvas.drawRect(priceBox, paintProduct);
+      final rectProduct = _scale(position.product.line.boundingBox);
+      final rectPrice = _scale(position.price.line.boundingBox);
+      final p = added.contains(position) ? paintAdded : paintDefault;
+      canvas.drawRect(rectProduct, p);
+      canvas.drawRect(rectPrice, p);
     }
 
     if (store != null) {
-      final rect = _scaleRect(store!.line.boundingBox);
-      canvas.drawRect(rect, paintStore);
+      canvas.drawRect(_scale(store!.line.boundingBox), paintStore);
     }
-
     if (sumLabel != null) {
-      final rect = _scaleRect(sumLabel!.line.boundingBox);
-      canvas.drawRect(rect, paintTotalLabel);
+      canvas.drawRect(_scale(sumLabel!.line.boundingBox), paintTotalLabel);
     }
-
     if (sum != null) {
-      final rect = _scaleRect(sum!.line.boundingBox);
-      canvas.drawRect(rect, paintTotal);
+      canvas.drawRect(_scale(sum!.line.boundingBox), paintTotal);
     }
-
     if (purchaseDate != null) {
-      final rect = _scaleRect(purchaseDate!.line.boundingBox);
-      canvas.drawRect(rect, paintPurchaseDate);
+      canvas.drawRect(
+        _scale(purchaseDate!.line.boundingBox),
+        paintPurchaseDate,
+      );
     }
   }
 
-  Rect _scaleRect(Rect rect) {
-    final scaleX = screenSize.width / imageSize.width;
-    final scaleY = screenSize.height / imageSize.height;
-    return Rect.fromLTRB(
-      rect.left * scaleX,
-      rect.top * scaleY,
-      rect.right * scaleX,
-      rect.bottom * scaleY,
-    );
+  Rect _scale(Rect r) {
+    final sx = screenSize.width / imageSize.width;
+    final sy = screenSize.height / imageSize.height;
+    return Rect.fromLTRB(r.left * sx, r.top * sy, r.right * sx, r.bottom * sy);
   }
 
   @override
-  bool shouldRepaint(covariant _PositionPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _PositionPainter old) =>
+      old.positions != positions ||
+      old.added != added ||
+      old.imageSize != imageSize ||
+      old.screenSize != screenSize ||
+      old.store != store ||
+      old.sumLabel != sumLabel ||
+      old.sum != sum ||
+      old.purchaseDate != purchaseDate;
 }
