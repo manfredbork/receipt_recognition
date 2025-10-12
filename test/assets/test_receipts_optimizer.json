@@ -36,7 +36,7 @@
       }
     ],
     "sum": {
-      "value": 3.98
+      "value": 2.00
     }
   },
   "two_items_same_text_same_price_two_groups_single_scan": {
@@ -65,7 +65,7 @@
       }
     ],
     "sum": {
-      "value": 3.98
+      "value": 2.00
     }
   },
   "two_items_same_text_two_groups_single_scan": {
@@ -94,7 +94,7 @@
       }
     ],
     "sum": {
-      "value": 3.98
+      "value": -1.50
     }
   },
   "two_items_similar_text_two_groups_single_scan": {
@@ -181,7 +181,7 @@
       }
     ],
     "sum": {
-      "value": 3.98
+      "value": 1.99
     }
   },
   "two_items_same_text_single_group_two_scans": {
@@ -210,7 +210,7 @@
       }
     ],
     "sum": {
-      "value": 3.98
+      "value": 1.99
     }
   },
   "single_item_purchase_date": {
