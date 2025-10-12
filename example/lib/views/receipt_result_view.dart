@@ -5,15 +5,15 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 ///
 /// Shows the store name, a list of recognized product positions with prices,
 /// and the total sum if available. An optional close button can be shown.
-class ReceiptWidget extends StatelessWidget {
+class ReceiptResultView extends StatelessWidget {
   /// The recognized receipt data to display.
   final RecognizedReceipt receipt;
 
   /// Optional callback triggered when the close icon is tapped.
   final VoidCallback? onClose;
 
-  /// Creates a [ReceiptWidget] with a given [receipt] and optional [onClose] handler.
-  const ReceiptWidget({super.key, required this.receipt, this.onClose});
+  /// Creates a [ReceiptResultView] with a given [receipt] and optional [onClose] handler.
+  const ReceiptResultView({super.key, required this.receipt, this.onClose});
 
   @override
   Widget build(BuildContext context) {

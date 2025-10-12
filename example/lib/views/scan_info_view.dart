@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 ///
 /// Displays best practices for scanning, such as lighting, alignment,
 /// and stability, with a call-to-action button to start scanning.
-class ScanInfoScreen extends StatelessWidget {
+class ScanInfoView extends StatelessWidget {
   /// Callback triggered when the user taps the "Start scanning" button.
   final VoidCallback onStartScan;
 
-  /// Creates a [ScanInfoScreen] with a required [onStartScan] callback.
-  const ScanInfoScreen({super.key, required this.onStartScan});
+  /// Creates a [ScanInfoView] with a required [onStartScan] callback.
+  const ScanInfoView({super.key, required this.onStartScan});
 
   @override
   Widget build(BuildContext context) {

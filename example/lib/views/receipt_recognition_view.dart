@@ -1,9 +1,9 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:example/services/camera_handler_mixin.dart';
-import 'package:example/widgets/position_overlay.dart';
-import 'package:example/widgets/receipt_widget.dart';
-import 'package:example/widgets/scan_info_screen.dart';
+import 'package:example/views/position_overlay_view.dart';
+import 'package:example/views/receipt_result_view.dart';
+import 'package:example/views/scan_info_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -204,7 +204,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
                   CameraPreview(cameraController!),
                   if (_scanProgress?.positions.isNotEmpty == true &&
                       _receipt == null)
-                    PositionOverlay(
+                    PositionOverlayView(
                       positions:
                           isScanInProgress ? _scanProgress!.positions : [],
                       imageSize: Size(
@@ -252,7 +252,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
             else if (!isControllerDisposed && cameraBack == null)
               const Center(child: CircularProgressIndicator())
             else if (_receipt == null && _errorMessage == null)
-              ScanInfoScreen(
+              ScanInfoView(
                 onStartScan: () async {
                   setState(() {
                     _receipt = null;
@@ -280,7 +280,7 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
               switchOutCurve: Curves.easeInOut,
               child:
                   (_receipt != null && !_canProcess)
-                      ? ReceiptWidget(
+                      ? ReceiptResultView(
                         key: ValueKey(_receipt),
                         receipt: _receipt!,
                         onClose: () {

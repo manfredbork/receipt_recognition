@@ -5,7 +5,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 ///
 /// Displays visual rectangles on top of a camera or image preview to indicate
 /// the positions of products, the store, and the total sum.
-class PositionOverlay extends StatelessWidget {
+class PositionOverlayView extends StatelessWidget {
   /// List of recognized product-price positions to display.
   final List<RecognizedPosition> positions;
 
@@ -27,8 +27,8 @@ class PositionOverlay extends StatelessWidget {
   /// Target screen size to scale the bounding boxes onto.
   final Size screenSize;
 
-  /// Creates a [PositionOverlay] to visualize recognized receipt data.
-  const PositionOverlay({
+  /// Creates a [PositionOverlayView] to visualize recognized receipt data.
+  const PositionOverlayView({
     super.key,
     required this.positions,
     required this.imageSize,
