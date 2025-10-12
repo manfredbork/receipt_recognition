@@ -602,8 +602,9 @@ final class ReceiptOptimizer implements Optimizer {
       'vd': stableSum?.verticalDistance,
     });
 
-    if (stableSum != null)
+    if (stableSum != null) {
       _removeOutliersToMatchSum(mergedReceipt, options: options);
+    }
 
     _updateEntities(mergedReceipt);
 
