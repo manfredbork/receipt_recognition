@@ -141,9 +141,8 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       (options.discountKeywords.hasMatch(text) ||
           ReceiptPatterns.discountKeywords.hasMatch(text));
 
-  /// Whether this product represents a deposit return.
+  /// Whether this product represents a deposit.
   bool get isDeposit =>
-      isCashback &&
       (options.depositKeywords.hasMatch(text) ||
           ReceiptPatterns.depositKeywords.hasMatch(text));
 }
