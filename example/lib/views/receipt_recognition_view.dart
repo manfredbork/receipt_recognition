@@ -131,14 +131,14 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
             : inputImage;
 
     try {
-      final receipt = await _receiptRecognizer?.processImage(
-        processedMlkitImage,
-      );
+      final receipt =
+          await _receiptRecognizer?.processImage(processedMlkitImage) ??
+          RecognizedReceipt.empty();
 
       if (!_canProcess || _didComplete) return;
 
-      if (_isValidReceipt(receipt)) {
-        await _handleSuccessfulScan(receipt!);
+      if (_isValidAndConfirmedReceipt(receipt)) {
+        await _handleSuccessfulScan(receipt);
       }
     } catch (e, st) {
       _handleProcessingError(e, st);
@@ -148,8 +148,8 @@ class _ReceiptRecognitionViewState extends State<ReceiptRecognitionView>
     }
   }
 
-  bool _isValidReceipt(RecognizedReceipt? receipt) {
-    return receipt != null && receipt.isValid;
+  bool _isValidAndConfirmedReceipt(RecognizedReceipt receipt) {
+    return receipt.isValid && receipt.isConfirmed;
   }
 
   Future<void> _handleSuccessfulScan(RecognizedReceipt receipt) async {

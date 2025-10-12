@@ -16,8 +16,6 @@ final class ReceiptRecognizer {
   /// Parser options.
   final ReceiptOptions _options;
 
-  final bool _singleScan;
-  final int _minValidScans;
   final int _nearlyCompleteThreshold;
   final Duration _scanInterval;
   final Duration _scanTimeout;
@@ -26,9 +24,9 @@ final class ReceiptRecognizer {
   final Function(RecognizedScanProgress)? _onScanUpdate;
   final Function(RecognizedReceipt)? _onScanComplete;
 
-  int _validScans;
   DateTime? _initializedScan;
   DateTime? _lastScan;
+  RecognizedReceipt _lastReceipt;
 
   /// Creates a receipt recognizer with configurable parameters and callbacks.
   ReceiptRecognizer({
@@ -36,8 +34,10 @@ final class ReceiptRecognizer {
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
     ReceiptOptions? options,
-    bool singleScan = false,
     bool highPrecision = false,
+    @Deprecated('No longer used; auto-completion is handled internally.')
+    bool singleScan = false,
+    @Deprecated('No longer used; stability/confirmation rules replace it.')
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 100),
@@ -49,8 +49,6 @@ final class ReceiptRecognizer {
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(highPrecision: highPrecision),
        _options = options ?? ReceiptOptions.empty(),
-       _singleScan = singleScan,
-       _minValidScans = minValidScans,
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
@@ -58,30 +56,34 @@ final class ReceiptRecognizer {
        _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
        _onScanComplete = onScanComplete,
-       _validScans = 0;
+       _lastReceipt = RecognizedReceipt.empty();
 
-  /// Processes an image and returns a recognized receipt when validation passes.
-  Future<RecognizedReceipt?> processImage(InputImage inputImage) async {
+  /// Processes an image and returns a recognized receipt.
+  Future<RecognizedReceipt> processImage(InputImage inputImage) async {
     final now = DateTime.now();
-    if (_shouldThrottle(now)) return null;
+    if (_shouldThrottle(now)) return _lastReceipt;
 
     _lastScan = now;
 
     final receipt = await _recognizeReceipt(inputImage, _options);
     final optimized = _optimizer.optimize(receipt);
 
-    if (optimized.isValid) _validScans++;
-
     final validation = _validateReceipt(optimized);
     final accepted = _handleValidationResult(now, optimized, validation);
 
-    if (accepted != null && accepted.isValid) {
+    if (accepted.isValid && accepted.isConfirmed) {
       ReceiptLogger.logReceipt(accepted, validation);
+
+      _lastReceipt = accepted;
+
       return Future.delayed(_scanCompleteDelay, () => accepted);
     }
 
     ReceiptLogger.logReceipt(optimized, validation);
-    return _singleScan ? optimized : null;
+
+    _lastReceipt = optimized;
+
+    return optimized;
   }
 
   /// Manually accepts a receipt and resets internal state.
@@ -94,7 +96,7 @@ final class ReceiptRecognizer {
   void init() {
     _initializedScan = null;
     _lastScan = null;
-    _validScans = 0;
+    _lastReceipt = RecognizedReceipt.empty();
     _optimizer.init();
   }
 
@@ -114,7 +116,7 @@ final class ReceiptRecognizer {
   }
 
   /// Routes based on [validation] to either final acceptance or continued scanning.
-  RecognizedReceipt? _handleValidationResult(
+  RecognizedReceipt _handleValidationResult(
     DateTime now,
     RecognizedReceipt receipt,
     ReceiptValidationResult validation,
@@ -168,16 +170,13 @@ final class ReceiptRecognizer {
     if (calc <= 0 || decl <= 0) return 0;
 
     final ratio = calc < decl ? (calc / decl) : (decl / calc);
-    final pct = (ratio * 100).clamp(0.0, 100.0);
-    final adjusted = pct.toInt() - _minValidScans + _validScans;
-    return adjusted.clamp(0, 100);
+    final pct = (ratio * 100).clamp(0.0, 100.0).toInt();
+    return pct;
   }
 
   /// Returns whether a scan should be throttled due to [_scanInterval].
   bool _shouldThrottle(DateTime now) =>
-      !_singleScan &&
-      _lastScan != null &&
-      now.difference(_lastScan!) < _scanInterval;
+      _lastScan != null && now.difference(_lastScan!) < _scanInterval;
 
   /// Handles a valid receipt: emits updates, possibly completes the session.
   RecognizedReceipt _handleValidReceipt(
@@ -185,31 +184,27 @@ final class ReceiptRecognizer {
     ReceiptValidationResult validation,
   ) {
     _handleOnScanUpdate(receipt, validation);
-    if (_validScans >= _minValidScans || _singleScan) {
-      _initializedScan = null;
-      _optimizer.init();
+    if (receipt.isValid && receipt.isConfirmed) {
+      init();
       _onScanComplete?.call(receipt);
     }
     return receipt;
   }
 
   /// Handles an incomplete/invalid receipt: updates progress and enforces timeout.
-  RecognizedReceipt? _handleIncompleteReceipt(
+  RecognizedReceipt _handleIncompleteReceipt(
     DateTime now,
     RecognizedReceipt receipt,
     ReceiptValidationResult validation,
   ) {
     _handleOnScanUpdate(receipt, validation);
     _initializedScan ??= now;
-
     if (_initializedScan != null &&
         now.difference(_initializedScan!) >= _scanTimeout) {
-      _initializedScan = null;
-      _optimizer.init();
+      init();
       _onScanTimeout?.call();
-      _validScans = 0;
     }
-    return null;
+    return receipt;
   }
 
   /// Emits a progress update via [_onScanUpdate].

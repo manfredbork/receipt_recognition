@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/parser/index.dart';
 import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
 /// Complete recognized receipt (positions, totals, store, date, bounds, entities).
@@ -131,6 +134,16 @@ class RecognizedReceipt {
   bool get isValid =>
       calculatedSum.formattedValue == sum?.formattedValue &&
       calculatedSum.value > 0.0;
+
+  /// True when grouping looks stable—i.e., the smallest group size exceeds
+  bool get isConfirmed {
+    final lengths = positions.map((p) => p.group?.members.length ?? 0);
+    if (lengths.isEmpty) return false;
+    final minLen = lengths.reduce(math.min);
+    final maxLen = lengths.reduce(math.max);
+    return minLen >
+        math.max(maxLen ~/ 4, ReceiptConstants.optimizerPrecisionNormal ~/ 4);
+  }
 }
 
 /// Progress snapshot of an ongoing receipt scan.

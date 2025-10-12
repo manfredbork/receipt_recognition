@@ -17,7 +17,7 @@ final class ReceiptTextProcessor {
     );
   }
 
-  /// Isolate entry point: parses OCR [args.text] with given [args.options].
+  /// Isolate entry point: parses OCR [_ParseArgs.text] with given [_ParseArgs.options].
   static RecognizedReceipt _parseTextInBackground(_ParseArgs args) {
     return ReceiptParser.processText(args.text, args.options);
   }
