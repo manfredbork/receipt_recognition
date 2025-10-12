@@ -41,7 +41,7 @@ abstract class ReceiptPatterns {
 
   /// Pattern to identify deposit keywords related to products.
   static final RegExp depositKeywords = RegExp(
-    r'(Leerg.MW|Leergut|Einweg|Pfand|Deposit)',
+    r'(Leerg.|Leergut|Einweg|Pfand|Deposit)',
     caseSensitive: false,
   );
 
