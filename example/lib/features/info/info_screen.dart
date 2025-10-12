@@ -1,27 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
-/// A screen that provides guidance on how to scan receipts effectively.
-///
-/// Displays best practices for scanning, such as lighting, alignment,
-/// and stability, with a call-to-action button to start scanning.
-class ScanInfoView extends StatelessWidget {
-  /// Callback triggered when the user taps the "Start scanning" button.
-  final VoidCallback onStartScan;
-
-  /// Creates a [ScanInfoView] with a required [onStartScan] callback.
-  const ScanInfoView({super.key, required this.onStartScan});
+class InfoScreen extends StatelessWidget {
+  const InfoScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.black,
-      child: SafeArea(
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 25),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const Text(
                   'Best Practices',
@@ -70,12 +63,12 @@ class ScanInfoView extends StatelessWidget {
                       'Hold steady for 1–2 seconds when the receipt is framed clearly.',
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: const EdgeInsets.all(25),
                   child: Center(
                     child: SizedBox(
-                      width: 240,
+                      width: 250,
                       child: ElevatedButton.icon(
-                        onPressed: onStartScan,
+                        onPressed: () => context.goNamed('scan'),
                         icon: const Icon(Icons.document_scanner_outlined),
                         label: const Text(
                           'Start scanning',
