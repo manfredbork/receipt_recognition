@@ -25,6 +25,12 @@ final class ReceiptFormatter {
     );
   }
 
+  /// Normalizes a raw amount string: trims, unifies dashes to '-', decimals to '.', and strips non [0-9.-] chars.
+  static String normalizeAmount(String amount) => trim(amount)
+      .replaceAll(RegExp(r'[-−–—]'), '-')
+      .replaceAll(RegExp(r'[.,‚،٫·]'), '.')
+      .replaceAll(RegExp(r'[^\d.-]'), '');
+
   /// Parses a date string (EN/DE, numeric/textual) into a [DateTime], or null if unsupported.
   static DateTime? parseDate(String raw) {
     final s = raw

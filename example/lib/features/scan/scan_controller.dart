@@ -17,9 +17,9 @@ class ScanController extends ChangeNotifier {
   RecognizedScanProgress? _progress;
   bool _busy = false;
 
-  double _bestPercent = 0;
+  int _bestPercent = 0;
 
-  double get bestPercent => _bestPercent;
+  int get bestPercent => _bestPercent;
 
   void resetBestPercent() {
     _bestPercent = 0;
@@ -28,8 +28,7 @@ class ScanController extends ChangeNotifier {
 
   RecognizedReceipt get lastReceipt => _lastReceipt;
 
-  double get progressPercent =>
-      (_progress?.estimatedPercentage ?? 0).toDouble();
+  int get progressPercent => (_progress?.estimatedPercentage ?? 0);
 
   RecognizedScanProgress? get progress => _progress;
 
@@ -60,11 +59,6 @@ class ScanController extends ChangeNotifier {
 
   Future<void> disposeAsync() => _recognizer.close();
 
-  void clearOverlay() {
-    _progress = null;
-    notifyListeners();
-  }
-
   void _onScanUpdate(RecognizedScanProgress p) {
     _progress = p;
     final merged = p.mergedReceipt;
@@ -79,6 +73,6 @@ class ScanController extends ChangeNotifier {
   }
 
   void _onScanTimeout() {
-    notifyListeners();
+    acceptCurrent();
   }
 }

@@ -67,7 +67,6 @@ final class ReceiptRecognizer {
 
     final receipt = await _recognizeReceipt(inputImage, _options);
     final optimized = _optimizer.optimize(receipt);
-
     final validation = _validateReceipt(optimized);
     final accepted = _handleValidationResult(now, optimized, validation);
 

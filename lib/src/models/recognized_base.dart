@@ -48,10 +48,10 @@ enum Operation {
 /// Weighted confidence score used to evaluate recognition reliability.
 final class Confidence extends Valuable<int> {
   /// Relative influence of this confidence value when aggregated with others.
-  final int weight;
+  int weight;
 
   /// Creates a confidence from numeric [value] and optional [weight].
-  const Confidence({required super.value, this.weight = 1});
+  Confidence({required super.value, this.weight = 1});
 
   @override
   String format(int value) => '$value%';

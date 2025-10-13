@@ -205,10 +205,7 @@ final class ReceiptParser {
     if (amount != null) {
       final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
       if (rot.xCenter(line) > receiptHalfX - tol) {
-        final trimmedAmount = ReceiptFormatter.trim(amount)
-            .replaceAll(RegExp(r'[-−–—]'), '-')
-            .replaceAll(RegExp(r'[.,‚،٫·]'), '.')
-            .replaceAll(RegExp(r'[^\d.-]'), '');
+        final trimmedAmount = ReceiptFormatter.normalizeAmount(amount);
         final value = double.parse(trimmedAmount);
         parsed.add(RecognizedAmount(line: line, value: value));
         return true;
@@ -306,7 +303,12 @@ final class ReceiptParser {
     RecognizedSumLabel? sumLabel,
     RecognizedReceipt receipt,
   ) {
-    receipt.sumLabel = sumLabel;
+    receipt.sumLabel = sumLabel ?? _lastReceipt.sumLabel;
+  }
+
+  /// Applies the parsed sum to the receipt.
+  static void _processSum(RecognizedSum? sum, RecognizedReceipt receipt) {
+    receipt.sum = sum ?? _lastReceipt.sum;
   }
 
   /// Applies the parsed purchase date to the receipt.
@@ -314,7 +316,7 @@ final class ReceiptParser {
     RecognizedPurchaseDate? purchaseDate,
     RecognizedReceipt receipt,
   ) {
-    receipt.purchaseDate = purchaseDate;
+    receipt.purchaseDate = purchaseDate ?? _lastReceipt.purchaseDate;
   }
 
   /// Applies the parsed bounding box to the receipt.
@@ -322,12 +324,12 @@ final class ReceiptParser {
     RecognizedBoundingBox? boundingBox,
     RecognizedReceipt receipt,
   ) {
-    receipt.boundingBox = boundingBox;
+    receipt.boundingBox = boundingBox ?? _lastReceipt.boundingBox;
   }
 
   /// Applies the parsed store to the receipt.
   static void _processStore(RecognizedStore? store, RecognizedReceipt receipt) {
-    receipt.store = store;
+    receipt.store = store ?? _lastReceipt.store;
   }
 
   /// Pairs amounts with nearest left-side unknowns to create positions.
@@ -443,6 +445,7 @@ final class ReceiptParser {
     if (sumLabel == null) return null;
 
     final amounts = entities.whereType<RecognizedAmount>().toList();
+
     if (amounts.isEmpty) return null;
 
     final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
@@ -471,18 +474,6 @@ final class ReceiptParser {
     }
 
     return RecognizedSum(value: pick.value, line: pick.line);
-  }
-
-  /// Sets the receipt’s sum using the best matching amount for the label.
-  static void _setSum(
-    List<RecognizedEntity> entities,
-    RecognizedSumLabel? sumLabel,
-    RecognizedReceipt receipt,
-    ReceiptRotator rot,
-  ) {
-    RecognizedSum? sum = _findSum(entities, sumLabel, rot);
-    if (sum == null) return;
-    receipt.sum = sum;
   }
 
   /// Extracts known labels from a regex alternation source.
@@ -788,13 +779,14 @@ final class ReceiptParser {
     final List<RecognizedUnknown> forbidden = [];
     final store = _findStore(entities);
     final sumLabel = _findSumLabel(entities);
+    final sum = _findSum(entities, sumLabel, rot);
     final purchaseDate = _findPurchaseDate(entities);
     final boundingBox = _findBoundingBox(entities);
 
-    _setSum(entities, sumLabel, receipt, rot);
     _processAmounts(entities, yUnknowns, receipt, forbidden, rot, options);
     _processStore(store, receipt);
     _processSumLabel(sumLabel, receipt);
+    _processSum(sum, receipt);
     _processPurchaseDate(purchaseDate, receipt);
     _processBoundingBox(boundingBox, receipt);
     _filterSuspiciousProducts(receipt);

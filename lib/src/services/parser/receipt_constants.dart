@@ -31,7 +31,7 @@ class ReceiptConstants {
   static const int optimizerLoopThreshold = 10;
 
   /// Confirmations required before a sum is accepted.
-  static const int optimizerSumConfirmationThreshold = 3;
+  static const int optimizerSumConfirmationThreshold = 1;
 
   /// Default maximum cache size for normal precision mode.
   static const int optimizerPrecisionNormal = 20;
@@ -43,13 +43,13 @@ class ReceiptConstants {
   static const int optimizerMaxGroups = 50;
 
   /// Minimum confidence score (0–100) for groups to be stable.
-  static const int optimizerConfidenceThreshold = 70;
+  static const int optimizerConfidenceThreshold = 90;
 
   /// Minimum stability score (0–100) required for groups.
-  static const int optimizerStabilityThreshold = 60;
+  static const int optimizerStabilityThreshold = 50;
 
   /// Expiration time (ms) after which unstable groups are removed.
-  static const int optimizerInvalidateIntervalMs = 2000;
+  static const int optimizerInvalidateIntervalMs = 3000;
 
   /// EWMA smoothing factor for vertical order learning.
   static const double optimizerEwmaAlpha = 0.3;

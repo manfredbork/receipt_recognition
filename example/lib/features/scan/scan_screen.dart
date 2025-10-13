@@ -21,6 +21,9 @@ class _ScanScreenState extends State<ScanScreen>
   bool get _isStreamingNow =>
       cameraController?.value.isStreamingImages ?? false;
 
+  bool get _isReceiptFullyScanned =>
+      _ctrl.lastReceipt.isValid && _ctrl.lastReceipt.isConfirmed;
+
   @override
   void initState() {
     super.initState();
@@ -43,10 +46,14 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _handleInputImage(InputImage input) async {
-    final router = GoRouter.of(context);
+    if (_isReceiptFullyScanned) return;
+
     final receipt = await _ctrl.processImage(input);
-    if (receipt.isValid && receipt.isConfirmed) {
-      router.goNamed('result', extra: receipt);
+
+    if (_isReceiptFullyScanned) {
+      await stopLiveFeed();
+      if (!mounted) return;
+      GoRouter.of(context).goNamed('result', extra: receipt);
     }
   }
 
@@ -92,22 +99,6 @@ class _ScanScreenState extends State<ScanScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Scan'),
-        actions: [
-          IconButton(
-            tooltip: 'Accept current',
-            icon: const Icon(Icons.check),
-            onPressed: () async {
-              final router = GoRouter.of(context);
-              final r = await _ctrl.acceptCurrent();
-              if (r.isValid && r.isConfirmed) {
-                router.goNamed('result', extra: r);
-              }
-            },
-          ),
-        ],
-      ),
       body: AnimatedBuilder(
         animation: _ctrl,
         builder: (context, _) {
@@ -134,11 +125,6 @@ class _ScanScreenState extends State<ScanScreen>
                     final merged = progress?.mergedReceipt;
                     final positions =
                         merged?.positions ?? const <RecognizedPosition>[];
-                    final added =
-                        (progress?.addedPositions ??
-                                const <RecognizedPosition>[])
-                            .toSet();
-
                     final scene = SizedBox(
                       width: imageSize.width,
                       height: imageSize.height,
@@ -148,7 +134,6 @@ class _ScanScreenState extends State<ScanScreen>
                           CameraPreview(cc),
                           OverlayScreen(
                             positions: positions,
-                            added: added,
                             imageSize: imageSize,
                             screenSize: imageSize,
                             store: merged?.store,

@@ -9,8 +9,9 @@ class ResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: CustomScrollView(
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: CustomScrollView(
         slivers: <Widget>[
           SliverPadding(
             padding: const EdgeInsets.symmetric(

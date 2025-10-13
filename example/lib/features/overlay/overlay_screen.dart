@@ -3,7 +3,6 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 class OverlayScreen extends StatelessWidget {
   final List<RecognizedPosition> positions;
-  final Set<RecognizedPosition> added;
   final RecognizedStore? store;
   final RecognizedSumLabel? sumLabel;
   final RecognizedSum? sum;
@@ -16,7 +15,6 @@ class OverlayScreen extends StatelessWidget {
     required this.positions,
     required this.imageSize,
     required this.screenSize,
-    this.added = const {},
     this.store,
     this.sumLabel,
     this.sum,
@@ -28,7 +26,6 @@ class OverlayScreen extends StatelessWidget {
     return CustomPaint(
       painter: _PositionPainter(
         positions: positions,
-        added: added,
         imageSize: imageSize,
         screenSize: screenSize,
         store: store,
@@ -42,7 +39,6 @@ class OverlayScreen extends StatelessWidget {
 
 class _PositionPainter extends CustomPainter {
   final List<RecognizedPosition> positions;
-  final Set<RecognizedPosition> added;
   final RecognizedStore? store;
   final RecognizedSumLabel? sumLabel;
   final RecognizedSum? sum;
@@ -52,7 +48,6 @@ class _PositionPainter extends CustomPainter {
 
   _PositionPainter({
     required this.positions,
-    required this.added,
     required this.imageSize,
     required this.screenSize,
     this.store,
@@ -63,17 +58,11 @@ class _PositionPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paintDefault =
+    final paintPosition =
         Paint()
           ..color = Colors.orange.withAlpha(192)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
-
-    final paintAdded =
-        Paint()
-          ..color = Colors.greenAccent.withAlpha(220)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5;
 
     final paintStore =
         Paint()
@@ -102,9 +91,8 @@ class _PositionPainter extends CustomPainter {
     for (final position in positions) {
       final rectProduct = _scale(position.product.line.boundingBox);
       final rectPrice = _scale(position.price.line.boundingBox);
-      final p = added.contains(position) ? paintAdded : paintDefault;
-      canvas.drawRect(rectProduct, p);
-      canvas.drawRect(rectPrice, p);
+      canvas.drawRect(rectProduct, paintPosition);
+      canvas.drawRect(rectPrice, paintPosition);
     }
 
     if (store != null) {
@@ -133,7 +121,6 @@ class _PositionPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _PositionPainter old) =>
       old.positions != positions ||
-      old.added != added ||
       old.imageSize != imageSize ||
       old.screenSize != screenSize ||
       old.store != store ||

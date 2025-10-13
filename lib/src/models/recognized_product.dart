@@ -93,7 +93,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     if (alts.length <
         ReceiptConstants.optimizerPrecisionHigh *
             ReceiptConstants.heuristicQuarter) {
-      return 0;
+      return (alts.length * 100) ~/ ReceiptConstants.optimizerPrecisionNormal;
     }
     final counts = <String, int>{};
     for (final t in alts) {
@@ -103,7 +103,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     for (final v in counts.values) {
       if (v > maxCount) maxCount = v;
     }
-    return ((maxCount / alts.length) * 100).round();
+    return (maxCount * 100) ~/ alts.length;
   }
 
   /// Map of each unique alternative text to its percentage frequency.

@@ -96,10 +96,10 @@ final class RecognizedGroup {
 
   /// Calculates an adaptive confidence for a product name based on similarity to group members.
   Confidence calculateProductConfidence(RecognizedProduct product) {
-    if (_members.isEmpty) return const Confidence(value: 0);
+    if (_members.isEmpty) return Confidence(value: 0);
     final scores =
         _members.map((b) => ratio(product.value, b.product.value)).toList();
-    if (scores.isEmpty) return const Confidence(value: 0);
+    if (scores.isEmpty) return Confidence(value: 0);
 
     var sum = 0.0, sumSq = 0.0;
     for (final s in scores) {
@@ -117,7 +117,7 @@ final class RecognizedGroup {
 
   /// Calculates a confidence for a price based on numeric similarity.
   Confidence calculatePriceConfidence(RecognizedPrice price) {
-    if (_members.isEmpty || price.value == 0) return const Confidence(value: 0);
+    if (_members.isEmpty || price.value == 0) return Confidence(value: 0);
     final scores =
         _members.map((b) {
           final diff = (price.value - b.price.value).abs();
