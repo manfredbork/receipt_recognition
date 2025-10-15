@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/services/optimizer/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
@@ -45,11 +44,6 @@ final class ReceiptOptimizer implements Optimizer {
   /// Ordering stats by group.
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
 
-  /// Adaptive thresholder (baseline is read from runtime tuning at call time).
-  late ReceiptThresholder _thresholder = ReceiptThresholder(
-    baseThreshold: ReceiptRuntime.tuning.optimizerConfidenceThreshold,
-  );
-
   /// Internal convergence bookkeeping.
   int _unchangedCount = 0;
 
@@ -75,11 +69,6 @@ final class ReceiptOptimizer implements Optimizer {
   }) {
     return ReceiptRuntime.runWithOptions(options, () {
       _initializeIfNeeded();
-
-      _thresholder = ReceiptThresholder(
-        baseThreshold: ReceiptRuntime.tuning.optimizerConfidenceThreshold,
-      );
-
       _checkConvergence(receipt);
       _updateStores(receipt);
       _updateSums(receipt);
@@ -325,11 +314,11 @@ final class ReceiptOptimizer implements Optimizer {
             : baseMin;
 
     final looksDissimilar = fuzzy < minNeeded;
-
+    final thr = ReceiptRuntime.tuning.optimizerConfidenceThreshold;
     final shouldUseGroup =
         !sameTimestamp &&
         !looksDissimilar &&
-        positionConfidence.confidence >= _thresholder.threshold &&
+        positionConfidence.confidence >= thr &&
         positionConfidence.confidence > currentBestConfidence;
 
     ReceiptLogger.log('conf', {
@@ -338,7 +327,7 @@ final class ReceiptOptimizer implements Optimizer {
       'price': position.price.value,
       'prodC': productConfidence.value,
       'priceC': priceConfidence.value,
-      'effThr': _thresholder.threshold,
+      'thr': thr,
       'fuzzy': fuzzy,
       'use': shouldUseGroup,
       'why':
@@ -346,7 +335,7 @@ final class ReceiptOptimizer implements Optimizer {
               ? 'same-ts'
               : looksDissimilar
               ? 'lex-low'
-              : positionConfidence.confidence < _thresholder.threshold
+              : positionConfidence.confidence < thr
               ? 'conf-low'
               : positionConfidence.confidence <= currentBestConfidence
               ? 'not-best'
