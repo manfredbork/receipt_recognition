@@ -36,6 +36,14 @@ export 'src/models/index.dart'
 /// High-level recognizer (public entry point)
 export 'src/services/ocr/receipt_recognizer.dart' show ReceiptRecognizer;
 /// ── Public services ──
-/// Optimizer interface + default implementation
 export 'src/services/optimizer/receipt_optimizer.dart'
     show Optimizer, ReceiptOptimizer;
+/// ── Configuration & runtime ──
+/// Options + tuning + merge semantics + default baseline
+export 'src/utils/configuration/index.dart'
+    show
+        ReceiptOptions,
+        ReceiptTuning,
+        MergePolicy,
+        kReceiptDefaultOptions,
+        ReceiptRuntime;
