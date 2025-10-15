@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/optimizer/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 
 void main() {
   late Map<String, dynamic> testReceipts;
@@ -19,7 +20,11 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, test: true);
+    final result = optimizer.optimize(
+      receipt,
+      ReceiptOptions.defaults(),
+      test: true,
+    );
 
     expect(result.positions.length, equals(2));
     expect(result.sum?.value, result.calculatedSum.value);
@@ -31,7 +36,11 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, test: true);
+    final result = optimizer.optimize(
+      receipt,
+      ReceiptOptions.defaults(),
+      test: true,
+    );
 
     expect(result.positions.length, equals(2));
     expect(result.sum?.value, result.calculatedSum.value);
@@ -43,7 +52,11 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, test: true);
+    final result = optimizer.optimize(
+      receipt,
+      ReceiptOptions.defaults(),
+      test: true,
+    );
 
     expect(result.positions.length, equals(2));
     expect(result.sum?.value, result.calculatedSum.value);
@@ -55,7 +68,11 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, test: true);
+    final result = optimizer.optimize(
+      receipt,
+      ReceiptOptions.defaults(),
+      test: true,
+    );
 
     expect(result.positions.length, equals(2));
     expect(result.sum?.value, result.calculatedSum.value);
@@ -67,7 +84,11 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, test: true);
+    final result = optimizer.optimize(
+      receipt,
+      ReceiptOptions.defaults(),
+      test: true,
+    );
 
     expect(result.positions.length, equals(2));
     expect(result.sum?.value, result.calculatedSum.value);
@@ -79,7 +100,11 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, test: true);
+    final result = optimizer.optimize(
+      receipt,
+      ReceiptOptions.defaults(),
+      test: true,
+    );
 
     expect(result.positions.length, equals(1));
     expect(result.sum?.value, result.calculatedSum.value);
@@ -91,7 +116,11 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(receipt, test: true);
+    final result = optimizer.optimize(
+      receipt,
+      ReceiptOptions.defaults(),
+      test: true,
+    );
 
     expect(result.positions.length, equals(1));
     expect(result.sum?.value, result.calculatedSum.value);
@@ -119,7 +148,11 @@ void main() {
     final before = receipt.purchaseDate?.value;
 
     final optimizer = ReceiptOptimizer();
-    final result = optimizer.optimize(receipt, test: true);
+    final result = optimizer.optimize(
+      receipt,
+      ReceiptOptions.defaults(),
+      test: true,
+    );
 
     expect(result.purchaseDate, isNotNull);
     expect(result.purchaseDate!.value, equals(before));

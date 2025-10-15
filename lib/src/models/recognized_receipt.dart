@@ -1,5 +1,5 @@
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
 /// Complete recognized receipt (positions, totals, store, date, bounds, entities).
@@ -133,16 +133,18 @@ class RecognizedReceipt {
       calculatedSum.formattedValue == sum?.formattedValue &&
       calculatedSum.value > 0.0;
 
-  /// True if the average group size exceeds one quarter of [ReceiptConstants.optimizerPrecisionNormal].
+  /// True if the average group size exceeds one quarter of the configured precision.
+  ///
+  /// Uses `ReceiptRuntime.tuning.optimizerPrecisionNormal` to avoid hardcoding.
   bool get isConfirmed {
     final lengths = positions.map((p) => p.group?.members.length ?? 0).toList();
-
     if (lengths.isEmpty) return false;
 
-    final sum = lengths.fold<int>(0, (a, b) => a + b);
-    final avg = sum ~/ lengths.length;
+    final total = lengths.fold<int>(0, (a, b) => a + b);
+    final avg = total ~/ lengths.length;
 
-    return avg > ReceiptConstants.optimizerPrecisionNormal ~/ 4;
+    final quarter = ReceiptRuntime.tuning.optimizerPrecisionNormal ~/ 4;
+    return avg > quarter;
   }
 }
 

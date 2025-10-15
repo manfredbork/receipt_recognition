@@ -4,15 +4,13 @@ import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
 /// Parses OCR output into a structured receipt by extracting entities,
 /// ordering by vertical position, filtering outliers, and assembling positions, sum, store, and bounds.
 final class ReceiptParser {
-  /// Common tolerance as double.
-  static double get _tol => ReceiptConstants.boundingBoxBuffer.toDouble();
-
   /// Center-Y of a TextLine.
   static double _cyL(TextLine l) => l.boundingBox.center.dy;
 
@@ -64,21 +62,29 @@ final class ReceiptParser {
     return c != 0 ? c : _leftL(a).compareTo(_leftL(b));
   }
 
+  /// Effective geometric tolerance as double from runtime.
+  static double get _tol => ReceiptRuntime.tuning.boundingBoxBuffer.toDouble();
+
+  /// Shorthand for the active parser options provided by [ReceiptRuntime].
+  static ReceiptOptions get _opts => ReceiptRuntime.options;
+
   /// Parses [text] with [options] and returns a structured [RecognizedReceipt].
   /// Performs line ordering, entity extraction, geometric filtering, and building.
   static RecognizedReceipt processText(
     RecognizedText text,
     ReceiptOptions options,
   ) {
-    final lines = _convertText(text);
-    lines.sort(_cmpCyThenCx);
+    return ReceiptRuntime.runWithOptions(options, () {
+      final lines = _convertText(text);
+      lines.sort(_cmpCyThenCx);
 
-    final parsed = _parseLines(lines, options);
-    final prunedU = _filterUnknownLeftAlignmentOutliers(parsed);
-    final prunedA = _filterAmountXOutliers(prunedU);
-    final filtered = _filterIntermediaryEntities(prunedA);
+      final parsed = _parseLines(lines);
+      final prunedU = _filterUnknownLeftAlignmentOutliers(parsed);
+      final prunedA = _filterAmountXOutliers(prunedU);
+      final filtered = _filterIntermediaryEntities(prunedA);
 
-    return _buildReceipt(filtered, options);
+      return _buildReceipt(filtered);
+    });
   }
 
   /// Flattens text blocks to lines sorted by top Y (and left X).
@@ -88,10 +94,7 @@ final class ReceiptParser {
   }
 
   /// Extracts entities from sorted lines using geometry, patterns, and options.
-  static List<RecognizedEntity> _parseLines(
-    List<TextLine> lines,
-    ReceiptOptions options,
-  ) {
+  static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
     if (lines.isEmpty) return <RecognizedEntity>[];
 
     final parsed = <RecognizedEntity>[];
@@ -111,8 +114,8 @@ final class ReceiptParser {
 
     for (final line in lines) {
       if (_shouldExitIfValidSum(parsed, detectedSumLabel)) break;
-      if (_shouldStopParsing(line, options)) break;
-      if (_shouldIgnoreLine(line, options)) continue;
+      if (_shouldStopParsing(line)) break;
+      if (_shouldIgnoreLine(line)) continue;
       if (_shouldSkipLine(line, detectedSumLabel)) continue;
 
       if (_tryParseStore(
@@ -120,20 +123,20 @@ final class ReceiptParser {
         parsed,
         detectedStore,
         detectedAmount,
-        options.storeNames,
+        _opts.storeNames,
       )) {
         detectedStore = parsed.last as RecognizedStore;
         continue;
       }
 
       final text = ReceiptFormatter.trim(line.text);
-      final customSumLabel = options.totalLabels.detect(text);
+      final customSumLabel = _opts.totalLabels.detect(text);
       if (customSumLabel != null) {
         parsed.add(RecognizedSumLabel(line: line, value: customSumLabel));
         detectedSumLabel = parsed.last as RecognizedSumLabel;
         continue;
       }
-      for (final label in options.totalLabels.mapping.keys) {
+      for (final label in _opts.totalLabels.mapping.keys) {
         if (ratio(text, label) >= thr(label)) {
           parsed.add(RecognizedSumLabel(line: line, value: label));
           detectedSumLabel = parsed.last as RecognizedSumLabel;
@@ -194,12 +197,12 @@ final class ReceiptParser {
   }
 
   /// Returns true if the line matches ignore keywords.
-  static bool _shouldIgnoreLine(TextLine line, ReceiptOptions options) =>
-      options.ignoreKeywords.hasMatch(line.text);
+  static bool _shouldIgnoreLine(TextLine line) =>
+      _opts.ignoreKeywords.hasMatch(line.text);
 
   /// Returns true if the line matches stop keywords.
-  static bool _shouldStopParsing(TextLine line, ReceiptOptions options) =>
-      options.stopKeywords.hasMatch(line.text);
+  static bool _shouldStopParsing(TextLine line) =>
+      _opts.stopKeywords.hasMatch(line.text);
 
   /// Recognizes right-side numeric lines as amounts and parses values.
   static bool _tryParseAmount(
@@ -365,12 +368,11 @@ final class ReceiptParser {
     List<RecognizedUnknown> yUnknowns,
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
-    ReceiptOptions options,
   ) {
     for (final entity in entities) {
       if (entity is! RecognizedAmount) continue;
       if (receipt.sum?.line == entity.line) continue;
-      _createPositionForAmount(entity, yUnknowns, receipt, forbidden, options);
+      _createPositionForAmount(entity, yUnknowns, receipt, forbidden);
     }
   }
 
@@ -380,19 +382,13 @@ final class ReceiptParser {
     List<RecognizedUnknown> yUnknowns,
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
-    ReceiptOptions options,
   ) {
     if (entity == receipt.sum) return;
     _sortByDistance(entity.line.boundingBox, yUnknowns);
 
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(entity, yUnknown, forbidden, options)) {
-        final position = _createPosition(
-          yUnknown,
-          entity,
-          receipt.timestamp,
-          options,
-        );
+      if (_isMatchingUnknown(entity, yUnknown, forbidden)) {
+        final position = _createPosition(yUnknown, entity, receipt.timestamp);
         receipt.positions.add(position);
         forbidden.add(yUnknown);
         break;
@@ -405,10 +401,9 @@ final class ReceiptParser {
     RecognizedAmount amount,
     RecognizedUnknown unknown,
     List<RecognizedUnknown> forbidden,
-    ReceiptOptions options,
   ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
-    final isLikelyLabel = options.totalLabels.hasMatch(unknownText);
+    final isLikelyLabel = _opts.totalLabels.hasMatch(unknownText);
     if (forbidden.contains(unknown) || isLikelyLabel) return false;
 
     final isLeftOfAmount = _right(unknown) <= _left(amount);
@@ -422,12 +417,11 @@ final class ReceiptParser {
     RecognizedUnknown unknown,
     RecognizedAmount amount,
     DateTime timestamp,
-    ReceiptOptions options,
   ) {
     final product = RecognizedProduct(
       value: unknown.value,
       line: unknown.line,
-      options: options,
+      options: _opts,
     );
     final price = RecognizedPrice(line: amount.line, value: amount.value);
     final position = RecognizedPosition(
@@ -569,9 +563,7 @@ final class ReceiptParser {
 
       final dyU = (_cy(entity) - _cy(leftUnknown)).abs();
       final dyA = (_cy(entity) - _cy(rightAmount)).abs();
-      final verticallyAligned =
-          dyU < ReceiptConstants.boundingBoxBuffer ||
-          dyA < ReceiptConstants.boundingBoxBuffer;
+      final verticallyAligned = dyU < _tol || dyA < _tol;
 
       final betweenUnknownAndAmount = horizontallyBetween && verticallyAligned;
 
@@ -676,10 +668,7 @@ final class ReceiptParser {
   }
 
   /// Builds a complete receipt from entities and post-filters.
-  static RecognizedReceipt _buildReceipt(
-    List<RecognizedEntity> entities,
-    ReceiptOptions options,
-  ) {
+  static RecognizedReceipt _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final receipt = RecognizedReceipt.empty();
     final forbidden = <RecognizedUnknown>[];
@@ -689,14 +678,14 @@ final class ReceiptParser {
     final purchaseDate = _findPurchaseDate(entities);
     final boundingBox = _findBoundingBox(entities);
 
-    _processAmounts(entities, yUnknowns, receipt, forbidden, options);
+    _processAmounts(entities, yUnknowns, receipt, forbidden);
     _processStore(store, receipt);
     _processSumLabel(sumLabel, receipt);
     _processSum(sum, receipt);
     _processPurchaseDate(purchaseDate, receipt);
     _processBoundingBox(boundingBox, receipt);
     _filterSuspiciousProducts(receipt);
-    _trimToMatchSum(receipt, options);
+    _trimToMatchSum(receipt);
 
     return receipt.copyWith(entities: entities);
   }
@@ -720,19 +709,17 @@ final class ReceiptParser {
   }
 
   /// Prunes low-confidence positions to bring the total closer to the target sum.
-  static void _trimToMatchSum(
-    RecognizedReceipt receipt,
-    ReceiptOptions options,
-  ) {
+  static void _trimToMatchSum(RecognizedReceipt receipt) {
     final target = receipt.sum?.value;
     if (target == null || receipt.positions.length <= 1) return;
+
+    final tol = _opts.tuning.sumTolerance;
 
     receipt.positions.removeWhere(
       (pos) =>
           receipt.sum != null &&
-          (pos.price.value - receipt.sum!.value).abs() <
-              ReceiptConstants.sumTolerance &&
-          options.totalLabels.hasMatch(pos.product.value),
+          (pos.price.value - receipt.sum!.value).abs() <= tol &&
+          _opts.totalLabels.hasMatch(pos.product.value),
     );
 
     final positions = List<RecognizedPosition>.from(receipt.positions)
@@ -740,7 +727,7 @@ final class ReceiptParser {
     num currentSum = receipt.calculatedSum.value;
 
     for (final pos in positions) {
-      if ((currentSum - target).abs() <= ReceiptConstants.sumTolerance) break;
+      if ((currentSum - target).abs() <= tol) break;
 
       final newSum = currentSum - pos.price.value;
       final improvement = (currentSum - target).abs() - (newSum - target).abs();

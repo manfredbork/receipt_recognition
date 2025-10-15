@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
 /// Build options from simple keyword lists, but ensure defaults DO NOT apply.
@@ -20,6 +20,7 @@ ReceiptOptions makeOptionsFromLists({
     nonFoodKeywords: KeywordSet.fromList(nonFood),
     discountKeywords: KeywordSet.fromList(discount),
     depositKeywords: KeywordSet.fromList(deposit),
+    tuning: ReceiptOptions.defaults().tuning,
   );
 
   return ReceiptOptions.userOnly(raw);

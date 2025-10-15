@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 
 /// Parses OCR text into structured receipt data on a background isolate.
 final class ReceiptTextProcessor {

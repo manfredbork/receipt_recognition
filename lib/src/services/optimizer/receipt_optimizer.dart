@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:collection/collection.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/optimizer/index.dart';
-import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
@@ -14,11 +14,10 @@ abstract class Optimizer {
 
   /// Processes a receipt and returns an optimized version.
   ///
-  /// Pass [options] to provide parser/label defaults (merged elsewhere).
   /// Set [test] to true to always return a merged/optimized receipt.
   RecognizedReceipt optimize(
-    RecognizedReceipt receipt, {
-    ReceiptOptions? options,
+    RecognizedReceipt receipt,
+    ReceiptOptions options, {
     bool test = false,
   });
 
@@ -27,92 +26,75 @@ abstract class Optimizer {
 }
 
 /// Default implementation of receipt optimizer that uses confidence scoring and grouping.
-/// Options (if provided) are cached per run for option-dependent heuristics.
 final class ReceiptOptimizer implements Optimizer {
+  /// Working position groups.
   final List<RecognizedGroup> _groups = [];
+
+  /// Cache of stores from recent frames.
   final List<RecognizedStore> _stores = [];
+
+  /// Cache of sums from recent frames.
   final List<RecognizedSum> _sums = [];
+
+  /// Cache of sum labels from recent frames.
   final List<RecognizedSumLabel> _sumLabels = [];
+
+  /// Cache of purchase dates from recent frames.
   final List<RecognizedPurchaseDate> _purchaseDates = [];
+
+  /// Ordering stats by group.
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
 
-  final ReceiptThresholder _thresholder;
-  final int _loopThreshold;
-  final int _stabilityThreshold;
-  final int _confidenceThreshold;
-  final int _maxCacheSize;
-  final Duration _invalidateInterval;
-  final double _ewmaAlpha;
+  /// Adaptive thresholder (baseline is read from runtime tuning at call time).
+  late ReceiptThresholder _thresholder = ReceiptThresholder(
+    baseThreshold: ReceiptRuntime.tuning.optimizerConfidenceThreshold,
+  );
 
+  /// Internal convergence bookkeeping.
   int _unchangedCount = 0;
+
+  /// Whether a full reinit is needed.
   bool _shouldInitialize = false;
+
+  /// Whether we should force a regroup step.
   bool _needsRegrouping = false;
+
+  /// Last fingerprint to detect stalling.
   String? _lastFingerprint;
-
-  /// Effective options for the current run (defaults if none provided).
-  ReceiptOptions _options = ReceiptOptions.defaults();
-
-  /// Creates a new receipt optimizer with configurable thresholds.
-  ReceiptOptimizer({
-    int? loopThreshold,
-    int? confidenceThreshold,
-    int? stabilityThreshold,
-    bool? highPrecision,
-    Duration? invalidateInterval,
-  }) : _confidenceThreshold =
-           confidenceThreshold ?? ReceiptConstants.optimizerConfidenceThreshold,
-       _thresholder = ReceiptThresholder(
-         baseThreshold:
-             confidenceThreshold ??
-             ReceiptConstants.optimizerConfidenceThreshold,
-       ),
-       _loopThreshold =
-           loopThreshold ?? ReceiptConstants.optimizerLoopThreshold,
-       _stabilityThreshold =
-           stabilityThreshold ?? ReceiptConstants.optimizerStabilityThreshold,
-       _invalidateInterval =
-           invalidateInterval ??
-           Duration(
-             milliseconds: ReceiptConstants.optimizerInvalidateIntervalMs,
-           ),
-       _ewmaAlpha = ReceiptConstants.optimizerEwmaAlpha,
-       _maxCacheSize =
-           highPrecision == true
-               ? ReceiptConstants.optimizerPrecisionHigh
-               : ReceiptConstants.optimizerPrecisionNormal;
 
   /// Marks the optimizer for reinitialization on next optimization.
   @override
   void init() => _shouldInitialize = true;
 
-  /// Processes a receipt and returns an optimized version.
-  ///
-  /// The provided [options] (or defaults) are cached on the instance and can be
-  /// used by option-driven heuristics. Behavior is unchanged if no heuristics
-  /// consult options yet.
+  /// Processes a receipt and returns an optimized version driven by [options] tuning.
   @override
   RecognizedReceipt optimize(
-    RecognizedReceipt receipt, {
-    ReceiptOptions? options,
+    RecognizedReceipt receipt,
+    ReceiptOptions options, {
     bool test = false,
   }) {
-    _options = options ?? ReceiptOptions.defaults();
+    return ReceiptRuntime.runWithOptions(options, () {
+      _initializeIfNeeded();
 
-    _initializeIfNeeded();
-    _checkConvergence(receipt);
-    _updateStores(receipt);
-    _updateSums(receipt);
-    _updateSumLabels(receipt);
-    _updatePurchaseDates(receipt);
-    _optimizeStore(receipt);
-    _optimizeSum(receipt);
-    _optimizeSumLabel(receipt);
-    _optimizePurchaseDate(receipt);
-    _cleanupGroups();
-    _resetOperations();
-    _processPositions(receipt);
-    _updateEntities(receipt);
-    return _createOptimizedReceipt(receipt, options: _options, test: test);
+      _thresholder = ReceiptThresholder(
+        baseThreshold: ReceiptRuntime.tuning.optimizerConfidenceThreshold,
+      );
+
+      _checkConvergence(receipt);
+      _updateStores(receipt);
+      _updateSums(receipt);
+      _updateSumLabels(receipt);
+      _updatePurchaseDates(receipt);
+      _optimizeStore(receipt);
+      _optimizeSum(receipt);
+      _optimizeSumLabel(receipt);
+      _optimizePurchaseDate(receipt);
+      _cleanupGroups();
+      _resetOperations();
+      _processPositions(receipt);
+      _updateEntities(receipt);
+      return _createOptimizedReceipt(receipt, test: test);
+    });
   }
 
   /// Releases all resources used by the optimizer.
@@ -145,10 +127,12 @@ final class ReceiptOptimizer implements Optimizer {
     final sumHash = receipt.sum?.formattedValue ?? '';
     final fingerprint = '$positionsHash|$sumHash';
 
+    final loopThreshold = ReceiptRuntime.tuning.optimizerLoopThreshold;
+
     if (_lastFingerprint == fingerprint) {
       _unchangedCount++;
-      if (_unchangedCount == (_loopThreshold ~/ 2)) _needsRegrouping = true;
-      if (_unchangedCount >= _loopThreshold) return;
+      if (_unchangedCount == (loopThreshold ~/ 2)) _needsRegrouping = true;
+      if (_unchangedCount >= loopThreshold) return;
     } else {
       _unchangedCount = 0;
     }
@@ -168,28 +152,36 @@ final class ReceiptOptimizer implements Optimizer {
   void _updateStores(RecognizedReceipt receipt) {
     final store = receipt.store;
     if (store != null) _stores.add(store);
-    if (_stores.length > _maxCacheSize) _stores.removeAt(0);
+    _trimCache(_stores);
   }
 
   /// Updates sums history cache for later normalization.
   void _updateSums(RecognizedReceipt receipt) {
     final sum = receipt.sum;
     if (sum != null) _sums.add(sum);
-    if (_sums.length > _maxCacheSize) _sums.removeAt(0);
+    _trimCache(_sums);
   }
 
   /// Updates sum labels history cache for later normalization.
   void _updateSumLabels(RecognizedReceipt receipt) {
     final sumLabel = receipt.sumLabel;
     if (sumLabel != null) _sumLabels.add(sumLabel);
-    if (_sumLabels.length > _maxCacheSize) _sumLabels.removeAt(0);
+    _trimCache(_sumLabels);
   }
 
   /// Updates purchase dates history cache for later normalization.
   void _updatePurchaseDates(RecognizedReceipt receipt) {
     final purchaseDate = receipt.purchaseDate;
     if (purchaseDate != null) _purchaseDates.add(purchaseDate);
-    if (_purchaseDates.length > _maxCacheSize) _purchaseDates.removeAt(0);
+    _trimCache(_purchaseDates);
+  }
+
+  /// Trims a cache list to the configured precision size.
+  void _trimCache(List list) {
+    final maxCacheSize = ReceiptRuntime.tuning.optimizerPrecisionNormal;
+    while (list.length > maxCacheSize) {
+      list.removeAt(0);
+    }
   }
 
   /// Fills store with the most frequent value in history.
@@ -237,7 +229,6 @@ final class ReceiptOptimizer implements Optimizer {
   /// Removes empty groups and very early weak outliers based on grace/thresholds.
   void _cleanupGroups() {
     final now = DateTime.now();
-
     final emptied = _groups.where((g) => g.members.isEmpty).toList();
     if (emptied.isNotEmpty) {
       for (final g in emptied) {
@@ -313,7 +304,6 @@ final class ReceiptOptimizer implements Optimizer {
     final sameTimestamp = group.members.any(
       (p) => position.timestamp == p.timestamp,
     );
-    final effectiveThreshold = _thresholder.threshold;
 
     final repText = _groupRepresentativeText(group);
     final incText = position.product.normalizedText;
@@ -328,15 +318,18 @@ final class ReceiptOptimizer implements Optimizer {
         repTok.isNotEmpty &&
         incTok.isNotEmpty &&
         !const SetEquality().equals(repTok, incTok);
-    final baseMin = ReceiptConstants.optimizerMinProductSimToMerge;
+    final baseMin = ReceiptRuntime.tuning.optimizerMinProductSimToMerge;
     final minNeeded =
-        variantDifferent ? ReceiptConstants.optimizerVariantMinSim : baseMin;
+        variantDifferent
+            ? ReceiptRuntime.tuning.optimizerVariantMinSim
+            : baseMin;
+
     final looksDissimilar = fuzzy < minNeeded;
 
     final shouldUseGroup =
         !sameTimestamp &&
         !looksDissimilar &&
-        positionConfidence.confidence >= effectiveThreshold &&
+        positionConfidence.confidence >= _thresholder.threshold &&
         positionConfidence.confidence > currentBestConfidence;
 
     ReceiptLogger.log('conf', {
@@ -345,7 +338,7 @@ final class ReceiptOptimizer implements Optimizer {
       'price': position.price.value,
       'prodC': productConfidence.value,
       'priceC': priceConfidence.value,
-      'effThr': effectiveThreshold,
+      'effThr': _thresholder.threshold,
       'fuzzy': fuzzy,
       'use': shouldUseGroup,
       'why':
@@ -353,7 +346,7 @@ final class ReceiptOptimizer implements Optimizer {
               ? 'same-ts'
               : looksDissimilar
               ? 'lex-low'
-              : positionConfidence.confidence < effectiveThreshold
+              : positionConfidence.confidence < _thresholder.threshold
               ? 'conf-low'
               : positionConfidence.confidence <= currentBestConfidence
               ? 'not-best'
@@ -370,7 +363,8 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
-    final newGroup = RecognizedGroup(maxGroupSize: _maxCacheSize);
+    final maxCacheSize = ReceiptRuntime.tuning.optimizerPrecisionNormal;
+    final newGroup = RecognizedGroup(maxGroupSize: maxCacheSize);
     position.group = newGroup;
     position.operation = Operation.added;
     newGroup.addMember(position);
@@ -396,7 +390,6 @@ final class ReceiptOptimizer implements Optimizer {
   /// Builds a merged, ordered receipt from stable groups and updates entities.
   RecognizedReceipt _createOptimizedReceipt(
     RecognizedReceipt receipt, {
-    ReceiptOptions? options,
     bool test = false,
   }) {
     if (!test && receipt.isValid) return receipt;
@@ -407,9 +400,11 @@ final class ReceiptOptimizer implements Optimizer {
       'sum?': receipt.sum?.value,
     });
 
+    final stabilityThreshold =
+        ReceiptRuntime.tuning.optimizerStabilityThreshold;
     final stableGroups =
         _groups
-            .where((g) => g.stability >= _stabilityThreshold || test)
+            .where((g) => g.stability >= stabilityThreshold || test)
             .toList();
 
     _learnOrder(receipt);
@@ -519,12 +514,13 @@ final class ReceiptOptimizer implements Optimizer {
     observed.sort((a, b) => a.y.compareTo(b.y));
 
     final now = DateTime.now();
+    final alpha = ReceiptRuntime.tuning.optimizerEwmaAlpha;
     for (final o in observed) {
       final s = _orderStats.putIfAbsent(
         o.group,
         () => _OrderStats(firstSeen: now),
       );
-      s.orderY = s.hasY ? (1 - _ewmaAlpha) * s.orderY + _ewmaAlpha * o.y : o.y;
+      s.orderY = s.hasY ? (1 - alpha) * s.orderY + alpha * o.y : o.y;
       s.hasY = true;
       if (s.firstSeen.isAfter(o.ts)) s.firstSeen = o.ts;
     }
@@ -538,9 +534,11 @@ final class ReceiptOptimizer implements Optimizer {
       }
     }
 
+    final decayThreshold =
+        ReceiptRuntime.tuning.optimizerAboveCountDecayThreshold;
     for (final s in _orderStats.values) {
       final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
-      if (total > ReceiptConstants.optimizerAboveCountDecayThreshold) {
+      if (total > decayThreshold) {
         s.aboveCounts.updateAll((_, v) => math.max(1, v ~/ 2));
       }
     }
@@ -562,7 +560,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
-    final tiePx = ReceiptConstants.boundingBoxBuffer;
+    final tiePx = ReceiptRuntime.tuning.boundingBoxBuffer.toDouble();
 
     final sa = _orderStats[a];
     final sb = _orderStats[b];
@@ -590,11 +588,15 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Detects very early weak outliers.
   bool _isEarlyOutlier(RecognizedGroup g, DateTime now) {
-    final grace = _invalidateInterval ~/ 8;
+    final invalidateMs = ReceiptRuntime.tuning.optimizerInvalidateIntervalMs;
+    final grace = Duration(milliseconds: invalidateMs) ~/ 8;
+
     final staleForAWhile = now.difference(g.timestamp) >= grace;
     final veryWeak =
-        g.stability < (_stabilityThreshold ~/ 2) &&
-        g.confidence < (_confidenceThreshold ~/ 2);
+        g.stability <
+            (ReceiptRuntime.tuning.optimizerStabilityThreshold ~/ 2) &&
+        g.confidence <
+            (ReceiptRuntime.tuning.optimizerConfidenceThreshold ~/ 2);
     final tiny = g.members.length <= 1;
     return staleForAWhile && veryWeak && tiny;
   }
@@ -649,6 +651,7 @@ final class _ConfidenceResult {
   /// Whether the position should be assigned to the group.
   final bool shouldUseGroup;
 
+  /// Creates a confidence result.
   const _ConfidenceResult({
     required this.productConfidence,
     required this.priceConfidence,
@@ -673,6 +676,7 @@ final class _Obs {
   /// Timestamp of the observation.
   final DateTime ts;
 
+  /// Creates an observation.
   _Obs({required this.group, required this.y, required this.ts});
 }
 
@@ -690,5 +694,6 @@ final class _OrderStats {
   /// Count of times this group was observed above another group.
   final Map<RecognizedGroup, int> aboveCounts = {};
 
+  /// Creates ordering stats.
   _OrderStats({required this.firstSeen});
 }

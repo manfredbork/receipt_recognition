@@ -1,4 +1,4 @@
-import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 
 /// How user config should interact with built-in defaults.
 enum MergePolicy {
@@ -42,10 +42,32 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
   'nonFoodKeywords': ['A', '1', 'AW'],
   'discountKeywords': ['Rabatt', 'Coupon', 'Discount'],
   'depositKeywords': ['Leerg.', 'Leergut', 'Einweg', 'Pfand', 'Deposit'],
+  'tuning': {
+    'boundingBoxBuffer': 25,
+    'sumTolerance': 0.009,
+    'heuristicQuarter': 0.25,
+    'outlierTau': 1,
+    'outlierMaxCandidates': 12,
+    'outlierLowConfThreshold': 35,
+    'outlierMinSamples': 3,
+    'outlierSuspectBonus': 50,
+    'optimizerLoopThreshold': 10,
+    'optimizerPrecisionNormal': 20,
+    'optimizerPrecisionHigh': 20,
+    'optimizerConfidenceThreshold': 90,
+    'optimizerStabilityThreshold': 50,
+    'optimizerInvalidateIntervalMs': 3000,
+    'optimizerEwmaAlpha': 0.3,
+    'optimizerAboveCountDecayThreshold': 50,
+    'optimizerVariantMinSim': 0.85,
+    'optimizerMinProductSimToMerge': 0.5,
+  },
 };
 
-/// Strongly-typed, user-configurable options for the parser, including
-/// factory helpers to build and merge with built-in defaults.
+/// A literal that won't ever occur in receipt text → safe never-match regex.
+const String neverMatchLiteral = r'___NEVER_MATCH___';
+
+/// Strongly-typed, user-configurable options for the parser with merge helpers.
 final class ReceiptOptions {
   /// Map of store aliases to canonical names.
   final DetectionMap storeNames;
@@ -71,7 +93,10 @@ final class ReceiptOptions {
   /// Keywords that indicate deposits/returns.
   final KeywordSet depositKeywords;
 
-  /// Creates a new options object with explicit maps/sets.
+  /// Numeric/string tuning applied across the parser/optimizer.
+  final ReceiptTuning tuning;
+
+  /// Creates a new options object with explicit maps/sets and tuning.
   ReceiptOptions({
     required this.storeNames,
     required this.totalLabels,
@@ -81,6 +106,7 @@ final class ReceiptOptions {
     required this.nonFoodKeywords,
     required this.discountKeywords,
     required this.depositKeywords,
+    required this.tuning,
   });
 
   /// Returns a minimal config with all maps/lists empty (no matches).
@@ -93,6 +119,7 @@ final class ReceiptOptions {
     nonFoodKeywords: KeywordSet.fromList(const []),
     discountKeywords: KeywordSet.fromList(const []),
     depositKeywords: KeywordSet.fromList(const []),
+    tuning: ReceiptTuning.fromJsonLike(const {}),
   );
 
   /// Builds options from a JSON-like map (e.g., from user config).
@@ -128,6 +155,9 @@ final class ReceiptOptions {
       depositKeywords: KeywordSet.fromList(
         pickStrList(json['depositKeywords']),
       ),
+      tuning: ReceiptTuning.fromJsonLike(
+        json['tuning'] as Map<String, dynamic>?,
+      ),
     );
   }
 
@@ -141,20 +171,18 @@ final class ReceiptOptions {
     'nonFoodKeywords': nonFoodKeywords.keywords,
     'discountKeywords': discountKeywords.keywords,
     'depositKeywords': depositKeywords.keywords,
+    'tuning': tuning.toJsonLike(),
   };
 
   /// Returns options built solely from built-in JSON defaults (no user overrides).
   static ReceiptOptions defaults() =>
       ReceiptOptions.fromJsonLike(kReceiptDefaultOptions);
 
-  /// Builds options using **only** user input (no defaults).
+  /// Builds options using only user input (no defaults).
   static ReceiptOptions userOnly(ReceiptOptions? opts) =>
       opts ?? ReceiptOptions.empty();
 
   /// Builds effective options by merging [opts] with built-in JSON defaults.
-  ///
-  /// - [MergePolicy.extend]: defaults ∪ user (user wins on duplicates)
-  /// - [MergePolicy.replace]: only user (ignore defaults)
   static ReceiptOptions withDefaults(
     ReceiptOptions? opts, {
     MergePolicy storeNames = MergePolicy.extend,
@@ -194,6 +222,8 @@ final class ReceiptOptions {
         user.depositKeywords,
         depositKeywords,
       ),
+      tuning:
+          user.tuning, // user takes precedence; pass def if you want extend semantics
     );
   }
 
@@ -215,14 +245,15 @@ final class ReceiptOptions {
     MergePolicy p,
   ) {
     if (p == MergePolicy.replace) return user;
-    final merged = <String, String>{};
-    merged.addAll(defaults.mapping);
-    merged.addAll(user.mapping);
+    final merged =
+        <String, String>{}
+          ..addAll(defaults.mapping)
+          ..addAll(user.mapping);
     return DetectionMap.fromMap(merged);
   }
 }
 
-/// A typed wrapper for "label -> canonical" maps with a precompiled regex.
+/// A typed wrapper for "label → canonical" maps with a precompiled regex.
 final class DetectionMap {
   /// Precompiled alternation regex matching any label (case-insensitive).
   final RegExp regexp;
@@ -230,15 +261,13 @@ final class DetectionMap {
   /// Lowercased label→canonical mapping used for lookups.
   final Map<String, String> mapping;
 
+  /// Private constructor with precompiled regex and mapping.
   DetectionMap._(this.regexp, this.mapping);
 
   /// Builds a case-insensitive mapping and one regex; returns a never-match regex if empty.
   factory DetectionMap.fromMap(Map<String, String> map) {
     if (map.isEmpty) {
-      return DetectionMap._(
-        RegExp(ReceiptConstants.neverMatchLiteral),
-        const {},
-      );
+      return DetectionMap._(RegExp(neverMatchLiteral), const {});
     }
 
     final patterns = <String>[];
@@ -258,17 +287,17 @@ final class DetectionMap {
     );
   }
 
-  /// Returns the canonical value if any label in [text] matches, otherwise null.
+  /// Returns the canonical value if any label in [text] matches; otherwise null.
   String? detect(String text) {
     final m = regexp.stringMatch(text);
     if (m == null) return null;
     return mapping[m.toLowerCase()];
   }
 
-  /// The alternation pattern string used by [regexp].
+  /// Returns the alternation pattern string used by [regexp].
   String get pattern => regexp.pattern;
 
-  /// True if [s] contains any of the configured labels.
+  /// Returns true if [s] contains any of the configured labels.
   bool hasMatch(String s) => regexp.hasMatch(s);
 }
 
@@ -280,12 +309,13 @@ final class KeywordSet {
   /// Precompiled alternation regex matching any keyword (case-insensitive).
   final RegExp regexp;
 
+  /// Private constructor with original keywords and precompiled regex.
   KeywordSet._(this.keywords, this.regexp);
 
   /// Builds a case-insensitive keyword set and one alternation regex (never-match if empty).
   factory KeywordSet.fromList(List<String> list) {
     if (list.isEmpty) {
-      return KeywordSet._(const [], RegExp(ReceiptConstants.neverMatchLiteral));
+      return KeywordSet._(const [], RegExp(neverMatchLiteral));
     }
     final escaped =
         list
@@ -299,6 +329,6 @@ final class KeywordSet {
     );
   }
 
-  /// True if [text] contains any keyword.
+  /// Returns true if [text] contains any keyword.
   bool hasMatch(String text) => regexp.hasMatch(text);
 }
