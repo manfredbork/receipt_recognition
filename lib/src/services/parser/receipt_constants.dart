@@ -30,17 +30,11 @@ class ReceiptConstants {
   /// Max identical iterations before stopping optimization.
   static const int optimizerLoopThreshold = 10;
 
-  /// Confirmations required before a sum is accepted.
-  static const int optimizerSumConfirmationThreshold = 1;
-
   /// Default maximum cache size for normal precision mode.
   static const int optimizerPrecisionNormal = 20;
 
   /// Increased maximum cache size for high precision mode.
   static const int optimizerPrecisionHigh = 20;
-
-  /// Max number of recognition groups kept before old ones are evicted.
-  static const int optimizerMaxGroups = 50;
 
   /// Minimum confidence score (0–100) for groups to be stable.
   static const int optimizerConfidenceThreshold = 90;
@@ -56,9 +50,6 @@ class ReceiptConstants {
 
   /// Pairwise count threshold before halving to avoid overflow.
   static const int optimizerAboveCountDecayThreshold = 50;
-
-  /// Minimum number of positions required for sum validation.
-  static const int optimizerMinPositionsForSum = 2;
 
   /// Minimum fuzzy similarity required to merge product text variants.
   static const double optimizerVariantMinSim = 0.85;

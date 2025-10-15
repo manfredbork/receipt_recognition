@@ -22,7 +22,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     this.confidence,
     this.position,
     ReceiptOptions? options,
-  }) : options = options ?? ReceiptOptionsMerger.defaults();
+  }) : options = options ?? ReceiptOptions.defaults();
 
   /// Creates a recognized product from JSON.
   factory RecognizedProduct.fromJson(Map<String, dynamic> json) {
@@ -36,7 +36,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       value: value,
       confidence: Confidence(value: confValue),
       line: ReceiptTextLine(),
-      options: ReceiptOptionsMerger.defaults(),
+      options: ReceiptOptions.defaults(),
     );
   }
 
@@ -53,7 +53,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       line: line ?? this.line,
       confidence: confidence ?? this.confidence,
       position: position ?? this.position,
-      options: options ?? ReceiptOptionsMerger.defaults(),
+      options: options ?? ReceiptOptions.defaults(),
     );
   }
 
@@ -90,16 +90,12 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   /// Percentage frequency of the most common alternative text.
   int get textConsensusRatio {
     final alts = alternativeTexts;
-    if (alts.length <
-        ReceiptConstants.optimizerPrecisionHigh *
-            ReceiptConstants.heuristicQuarter) {
-      return (alts.length * 100) ~/ ReceiptConstants.optimizerPrecisionNormal;
-    }
+    if (alts.isEmpty) return 0;
     final counts = <String, int>{};
     for (final t in alts) {
       counts[t] = (counts[t] ?? 0) + 1;
     }
-    var maxCount = 0;
+    int maxCount = 0;
     for (final v in counts.values) {
       if (v > maxCount) maxCount = v;
     }

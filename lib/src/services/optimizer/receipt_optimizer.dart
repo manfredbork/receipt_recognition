@@ -1,18 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/optimizer/index.dart';
 import 'package:receipt_recognition/src/services/parser/index.dart';
-import 'package:receipt_recognition/src/utils/geometry/index.dart';
 import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
-
-part 'receipt_confidence.dart';
-part 'receipt_group_maintenance.dart';
-part 'receipt_ordering.dart';
-part 'receipt_sum_selection.dart';
 
 /// Interface for receipt optimization components.
 abstract class Optimizer {
@@ -21,6 +14,7 @@ abstract class Optimizer {
 
   /// Processes a receipt and returns an optimized version.
   ///
+  /// Pass [options] to provide parser/label defaults (merged elsewhere).
   /// Set [test] to true to always return a merged/optimized receipt.
   RecognizedReceipt optimize(
     RecognizedReceipt receipt, {
@@ -33,20 +27,20 @@ abstract class Optimizer {
 }
 
 /// Default implementation of receipt optimizer that uses confidence scoring and grouping.
+/// Options (if provided) are cached per run for option-dependent heuristics.
 final class ReceiptOptimizer implements Optimizer {
   final List<RecognizedGroup> _groups = [];
   final List<RecognizedStore> _stores = [];
   final List<RecognizedSum> _sums = [];
-  final List<_SumCandidate> _sumCandidates = [];
+  final List<RecognizedSumLabel> _sumLabels = [];
+  final List<RecognizedPurchaseDate> _purchaseDates = [];
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
 
   final ReceiptThresholder _thresholder;
   final int _loopThreshold;
-  final int _sumConfirmationThreshold;
   final int _stabilityThreshold;
   final int _confidenceThreshold;
   final int _maxCacheSize;
-  final int _maxGroups;
   final Duration _invalidateInterval;
   final double _ewmaAlpha;
 
@@ -54,14 +48,13 @@ final class ReceiptOptimizer implements Optimizer {
   bool _shouldInitialize = false;
   bool _needsRegrouping = false;
   String? _lastFingerprint;
-  double? _lastAngleRad;
-  double? _lastAngleDeg;
-  RecognizedPurchaseDate? _purchaseDate;
+
+  /// Effective options for the current run (defaults if none provided).
+  ReceiptOptions _options = ReceiptOptions.defaults();
 
   /// Creates a new receipt optimizer with configurable thresholds.
   ReceiptOptimizer({
     int? loopThreshold,
-    int? sumConfirmationThreshold,
     int? confidenceThreshold,
     int? stabilityThreshold,
     bool? highPrecision,
@@ -75,9 +68,6 @@ final class ReceiptOptimizer implements Optimizer {
        ),
        _loopThreshold =
            loopThreshold ?? ReceiptConstants.optimizerLoopThreshold,
-       _sumConfirmationThreshold =
-           sumConfirmationThreshold ??
-           ReceiptConstants.optimizerSumConfirmationThreshold,
        _stabilityThreshold =
            stabilityThreshold ?? ReceiptConstants.optimizerStabilityThreshold,
        _invalidateInterval =
@@ -89,33 +79,40 @@ final class ReceiptOptimizer implements Optimizer {
        _maxCacheSize =
            highPrecision == true
                ? ReceiptConstants.optimizerPrecisionHigh
-               : ReceiptConstants.optimizerPrecisionNormal,
-       _maxGroups = ReceiptConstants.optimizerMaxGroups;
+               : ReceiptConstants.optimizerPrecisionNormal;
 
   /// Marks the optimizer for reinitialization on next optimization.
   @override
   void init() => _shouldInitialize = true;
 
   /// Processes a receipt and returns an optimized version.
+  ///
+  /// The provided [options] (or defaults) are cached on the instance and can be
+  /// used by option-driven heuristics. Behavior is unchanged if no heuristics
+  /// consult options yet.
   @override
   RecognizedReceipt optimize(
     RecognizedReceipt receipt, {
     ReceiptOptions? options,
     bool test = false,
   }) {
+    _options = options ?? ReceiptOptions.defaults();
+
     _initializeIfNeeded();
     _checkConvergence(receipt);
     _updateStores(receipt);
     _updateSums(receipt);
-    _updatePurchaseDate(receipt);
+    _updateSumLabels(receipt);
+    _updatePurchaseDates(receipt);
     _optimizeStore(receipt);
     _optimizeSum(receipt);
+    _optimizeSumLabel(receipt);
     _optimizePurchaseDate(receipt);
     _cleanupGroups();
     _resetOperations();
     _processPositions(receipt);
     _updateEntities(receipt);
-    return _createOptimizedReceipt(receipt, options: options, test: test);
+    return _createOptimizedReceipt(receipt, options: _options, test: test);
   }
 
   /// Releases all resources used by the optimizer.
@@ -131,15 +128,13 @@ final class ReceiptOptimizer implements Optimizer {
     _groups.clear();
     _stores.clear();
     _sums.clear();
-    _sumCandidates.clear();
+    _sumLabels.clear();
+    _purchaseDates.clear();
     _orderStats.clear();
-    _lastAngleRad = null;
-    _lastAngleDeg = null;
     _shouldInitialize = false;
     _needsRegrouping = false;
     _unchangedCount = 0;
     _lastFingerprint = null;
-    _purchaseDate = null;
   }
 
   /// Tracks convergence to avoid infinite loops and trigger regrouping.
@@ -176,145 +171,72 @@ final class ReceiptOptimizer implements Optimizer {
     if (_stores.length > _maxCacheSize) _stores.removeAt(0);
   }
 
-  /// Updates sum history and confirms stable sum candidates.
+  /// Updates sums history cache for later normalization.
   void _updateSums(RecognizedReceipt receipt) {
     final sum = receipt.sum;
-    if (sum == null) return;
-
-    _sums.add(sum);
-
-    final angleDeg =
-        receipt.boundingBox?.skewAngle ??
-        ReceiptSkewEstimator.estimateDegrees(receipt);
-    final rot = ReceiptRotator(angleDeg);
-    final tol = ReceiptConstants.boundingBoxBuffer.toDouble();
-
-    final sumLabel = receipt.entities
-        ?.whereType<RecognizedSumLabel>()
-        .firstWhereOrNull((label) {
-          final dy = (rot.yCenter(label.line) - rot.yCenter(sum.line)).abs();
-          final isRightOfLabel =
-              rot.xCenter(sum.line) >= rot.maxXOf(label.line.boundingBox) - tol;
-          return dy <= tol && isRightOfLabel;
-        });
-
-    if (sumLabel == null) return;
-
-    final vd =
-        (rot.yCenter(sumLabel.line) - rot.yCenter(sum.line)).abs().round();
-    final candidate = _SumCandidate(
-      label: sumLabel,
-      sum: sum,
-      verticalDistance: vd,
-    );
-    final existing =
-        _sumCandidates.where((c) => c.matches(candidate)).firstOrNull;
-    existing != null ? existing.confirm() : _sumCandidates.add(candidate);
-    if (_sumCandidates.length > _maxCacheSize) _sumCandidates.removeAt(0);
+    if (sum != null) _sums.add(sum);
+    if (_sums.length > _maxCacheSize) _sums.removeAt(0);
   }
 
-  /// Updates purchase date cache.
-  void _updatePurchaseDate(RecognizedReceipt receipt) {
-    final pd = receipt.purchaseDate;
-    if (pd != null) _purchaseDate ??= pd;
+  /// Updates sum labels history cache for later normalization.
+  void _updateSumLabels(RecognizedReceipt receipt) {
+    final sumLabel = receipt.sumLabel;
+    if (sumLabel != null) _sumLabels.add(sumLabel);
+    if (_sumLabels.length > _maxCacheSize) _sumLabels.removeAt(0);
   }
 
-  /// Fills missing store from frequency in history.
+  /// Updates purchase dates history cache for later normalization.
+  void _updatePurchaseDates(RecognizedReceipt receipt) {
+    final purchaseDate = receipt.purchaseDate;
+    if (purchaseDate != null) _purchaseDates.add(purchaseDate);
+    if (_purchaseDates.length > _maxCacheSize) _purchaseDates.removeAt(0);
+  }
+
+  /// Fills store with the most frequent value in history.
   void _optimizeStore(RecognizedReceipt receipt) {
-    if (receipt.store != null || _stores.isEmpty) return;
-    final lastStore = _stores.lastOrNull;
-    final mostFrequent =
-        ReceiptNormalizer.sortByFrequency(
-          _stores.map((c) => c.value).toList(),
-        ).lastOrNull;
-    if (lastStore != null) {
-      receipt.store = lastStore.copyWith(value: mostFrequent);
-    }
-  }
-
-  /// Fills missing purchase date from cache.
-  void _optimizePurchaseDate(RecognizedReceipt receipt) =>
-      receipt.purchaseDate ??= _purchaseDate;
-
-  /// Fills or overwrites the receipt sum from history.
-  void _optimizeSum(RecognizedReceipt receipt) {
-    final stable = _pickStableSum(receipt);
-    final hasConfirmed = stable != null;
-
-    if (_sums.isEmpty) {
-      ReceiptLogger.log('sum.opt', {
-        'status': 'no-sums-in-cache',
-        'receiptSum?': receipt.sum?.value,
-      });
-      return;
-    }
-
-    final freqSorted = ReceiptNormalizer.sortByFrequency(
-      _sums.map((s) => s.formattedValue).toList(),
+    if (_stores.isEmpty) return;
+    final mostFrequentStore = ReceiptNormalizer.sortByFrequency(
+      _stores.map((c) => c.value).toList(),
     );
-    final mostFrequentValue = freqSorted.isNotEmpty ? freqSorted.last : null;
-    final parsed =
-        mostFrequentValue != null
-            ? ReceiptFormatter.parse(mostFrequentValue)
-            : null;
-    final template = _sums.last;
-
-    if (hasConfirmed || receipt.sum == null) {
-      if (parsed != null) receipt.sum = template.copyWith(value: parsed);
-      if (hasConfirmed && receipt.sumLabel == null) {
-        receipt.sumLabel = stable.label;
-      }
-    }
-
-    if (hasConfirmed) _demoteOtherConfirmedSums(stable);
-
-    ReceiptLogger.log('sum.opt', {
-      'hasConfirmed': hasConfirmed,
-      'stable?':
-          hasConfirmed
-              ? {
-                'label': stable.label.value,
-                'sum': stable.sum.value,
-                'conf': stable.confirmations,
-                'vd': stable.verticalDistance,
-              }
-              : null,
-      'mostFreq': mostFrequentValue,
-      'parsed': parsed,
-      'receiptSumAfter': receipt.sum?.value,
-      'sumsCached': _sums.length,
-      'candidates': _sumCandidates.length,
-      'action':
-          hasConfirmed
-              ? 'overwrite-with-most-frequent+demote-others'
-              : (receipt.sum == null
-                  ? 'backfill-most-frequent'
-                  : 'keep-existing'),
-    });
+    receipt.store = _stores.lastWhere((s) => s.value == mostFrequentStore.last);
   }
 
-  /// Demotes all other confirmed sum candidates so only [keep] remains confirmed.
-  void _demoteOtherConfirmedSums(_SumCandidate keep) {
-    for (final c in _sumCandidates) {
-      if (!identical(c, keep) && c.confirmations >= _sumConfirmationThreshold) {
-        final old = c.confirmations;
-        c.confirmations = 1;
-        ReceiptLogger.log('sum.demote', {
-          'label': c.label.value,
-          'sum': c.sum.value,
-          'oldConf': old,
-          'newConf': c.confirmations,
-          'keptLabel': keep.label.value,
-          'keptSum': keep.sum.value,
-        });
-      }
-    }
+  /// Fills sum label with the most frequent value in history.
+  void _optimizeSumLabel(RecognizedReceipt receipt) {
+    if (_sumLabels.isEmpty) return;
+    final mostFrequentSumLabel = ReceiptNormalizer.sortByFrequency(
+      _sumLabels.map((c) => c.value).toList(),
+    );
+    receipt.sumLabel = _sumLabels.lastWhere(
+      (sl) => sl.value == mostFrequentSumLabel.last,
+    );
   }
 
-  /// Removes empty/outlier/stale groups and trims to cap.
+  /// Fills sum with the most frequent value in history.
+  void _optimizeSum(RecognizedReceipt receipt) {
+    if (_sums.isEmpty) return;
+    final mostFrequentSum = ReceiptNormalizer.sortByFrequency(
+      _sums.map((c) => c.value.toString()).toList(),
+    );
+    receipt.sum = _sums.lastWhere(
+      (s) => s.value.toString() == mostFrequentSum.last,
+    );
+  }
+
+  /// Fills purchase date with the most frequent value in history.
+  void _optimizePurchaseDate(RecognizedReceipt receipt) {
+    if (_purchaseDates.isEmpty) return;
+    final mostFrequentPurchaseDate = ReceiptNormalizer.sortByFrequency(
+      _purchaseDates.map((c) => c.value).toList(),
+    );
+    receipt.purchaseDate = _purchaseDates.lastWhere(
+      (pd) => pd.value == mostFrequentPurchaseDate.last,
+    );
+  }
+
+  /// Removes empty groups and very early weak outliers based on grace/thresholds.
   void _cleanupGroups() {
     final now = DateTime.now();
-    final cap = _maxGroups;
 
     final emptied = _groups.where((g) => g.members.isEmpty).toList();
     if (emptied.isNotEmpty) {
@@ -327,46 +249,6 @@ final class ReceiptOptimizer implements Optimizer {
     final earlyOutliers =
         _groups.where((g) => _isEarlyOutlier(g, now)).toList();
     if (earlyOutliers.isNotEmpty) _purgeGroups(earlyOutliers.toSet());
-
-    final overCap = _groups.length > cap;
-
-    var sumOverinflated = false;
-    final calc = _groups.fold<double>(0.0, (a, g) => a + _groupBestPrice(g));
-    final detectedSum = _sums.isNotEmpty ? _sums.last.value : 0.0;
-    if (detectedSum > 0 &&
-        calc > detectedSum * (1 + ReceiptConstants.heuristicQuarter)) {
-      sumOverinflated = true;
-      ReceiptLogger.log('group.overinflated', {
-        'calc': calc,
-        'detected': detectedSum,
-        'ratio': calc / detectedSum,
-      });
-    }
-
-    final doomed =
-        _groups
-            .where((g) => _shouldKillGroup(g, now, overCap || sumOverinflated))
-            .toList();
-    if (doomed.isNotEmpty) _purgeGroups(doomed.toSet());
-
-    if (_groups.length > cap) {
-      _groups.sort(
-        (a, b) => _evictScore(b, now).compareTo(_evictScore(a, now)),
-      );
-      while (_groups.length > cap) {
-        final g = _groups.removeLast();
-        ReceiptLogger.log('group.evict', {
-          'grp': ReceiptLogger.grpKey(g),
-          'stb': g.stability,
-          'conf': g.confidence,
-          'ageMs': now.difference(g.timestamp).inMilliseconds,
-        });
-        _orderStats.remove(g);
-        for (final s in _orderStats.values) {
-          s.aboveCounts.remove(g);
-        }
-      }
-    }
   }
 
   /// Resets per-frame operation markers on positions.
@@ -378,45 +260,11 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Processes positions, optionally respecting a confirmed stable sum.
+  /// Processes and assigns all receipt positions to groups; forces a full regroup if flagged.
   void _processPositions(RecognizedReceipt receipt) {
-    final stableSum = _pickStableSum(receipt);
-    final isStableSumConfirmed = stableSum != null;
-
-    ReceiptLogger.log('sum.candidates', {
-      'cands':
-          _sumCandidates
-              .map(
-                (c) => {
-                  'txt': c.label.value,
-                  'sum': c.sum.value,
-                  'vd': c.verticalDistance,
-                  'conf': c.confirmations,
-                },
-              )
-              .toList(),
-    });
-
-    ReceiptLogger.log('sum.stable', {
-      'has': isStableSumConfirmed,
-      'picked': stableSum?.sum.value,
-      'vd': stableSum?.verticalDistance,
-    });
-
     for (final position in receipt.positions) {
-      if (isStableSumConfirmed) {
-        final matchesStableSum =
-            (position.price.value - stableSum.sum.value).abs() <=
-            ReceiptConstants.sumTolerance;
-        if (matchesStableSum) continue;
-      }
       _processPosition(position);
     }
-
-    _thresholder.update(
-      recognizedSum: receipt.sum?.value.toDouble(),
-      calculatedSum: receipt.calculatedSum.value.toDouble(),
-    );
 
     if (_needsRegrouping) {
       _forceRegroup();
@@ -595,17 +443,6 @@ final class ReceiptOptimizer implements Optimizer {
     mergedReceipt.purchaseDate ??= receipt.purchaseDate;
     mergedReceipt.boundingBox ??= receipt.boundingBox;
 
-    final stableSum = _pickStableSum(mergedReceipt);
-    ReceiptLogger.log('out.gate', {
-      'enabled': stableSum != null,
-      'sum': stableSum?.sum.value,
-      'vd': stableSum?.verticalDistance,
-    });
-
-    if (stableSum != null) {
-      _removeOutliersToMatchSum(mergedReceipt, options: options);
-    }
-
     _updateEntities(mergedReceipt);
 
     ReceiptLogger.log('opt.out', {
@@ -619,19 +456,21 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Refreshes the `entities` list from receipt fields and positions.
   void _updateEntities(RecognizedReceipt receipt) {
-    final products = receipt.positions.map((p) => p.product);
-    final prices = receipt.positions.map((p) => p.price);
-
     receipt.entities?.clear();
+
     final store = receipt.store;
     if (store != null) {
       receipt.entities?.add(
         RecognizedStore(value: store.value, line: store.line),
       );
     }
+
+    final products = receipt.positions.map((p) => p.product);
     receipt.entities?.addAll(
       products.map((p) => RecognizedProduct(value: p.value, line: p.line)),
     );
+
+    final prices = receipt.positions.map((p) => p.price);
     receipt.entities?.addAll(
       prices.map((pr) => RecognizedPrice(value: pr.value, line: pr.line)),
     );
@@ -648,45 +487,31 @@ final class ReceiptOptimizer implements Optimizer {
       );
     }
 
-    final pd = receipt.purchaseDate;
-    if (pd != null) {
+    final purchaseDate = receipt.purchaseDate;
+    if (purchaseDate != null) {
       receipt.entities?.add(
-        RecognizedPurchaseDate(value: pd.value, line: pd.line),
+        RecognizedPurchaseDate(
+          value: purchaseDate.value,
+          line: purchaseDate.line,
+        ),
       );
     }
 
-    final bb = receipt.boundingBox;
-    if (bb != null) {
+    final boundingBox = receipt.boundingBox;
+    if (boundingBox != null) {
       receipt.entities?.add(
-        RecognizedBoundingBox(value: bb.value, line: bb.line),
+        RecognizedBoundingBox(value: boundingBox.value, line: boundingBox.line),
       );
     }
   }
 
-  /// Applies the outlier-removal step to make sums consistent.
-  void _removeOutliersToMatchSum(
-    RecognizedReceipt receipt, {
-    ReceiptOptions? options,
-  }) =>
-      ReceiptOutlierRemover.removeOutliersToMatchSum(receipt, options: options);
-
-  /// Learns vertical ordering of groups using skew-aware projection.
+  /// Learns vertical ordering of groups using observed Y coordinates (EWMA + pairwise counts).
   void _learnOrder(RecognizedReceipt receipt) {
-    final angleDeg = ReceiptSkewEstimator.estimateDegrees(receipt);
-    if (angleDeg.abs() < 0.5) {
-      _lastAngleDeg = 0.0;
-      _lastAngleRad = null;
-    } else {
-      _lastAngleDeg = angleDeg;
-      _lastAngleRad = angleDeg * math.pi / 180.0;
-    }
-
-    final angleRad = _lastAngleRad;
     final observed = <_Obs>[];
     for (final p in receipt.positions) {
       final g = p.group;
       if (g == null) continue;
-      final y = _projectedYFromLine(p.product.line, angleRad);
+      final y = p.product.line.boundingBox.center.dy;
       observed.add(_Obs(group: g, y: y, ts: p.timestamp));
     }
     if (observed.isEmpty) return;
@@ -721,7 +546,6 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     ReceiptLogger.log('order.learn', {
-      'angleDeg': _lastAngleDeg,
       'stats':
           _orderStats.entries
               .map(
@@ -738,10 +562,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
-    final tiePx =
-        (_lastAngleDeg?.abs() ?? 0) < 0.5
-            ? (ReceiptConstants.boundingBoxBuffer ~/ 2)
-            : ReceiptConstants.boundingBoxBuffer;
+    final tiePx = ReceiptConstants.boundingBoxBuffer;
 
     final sa = _orderStats[a];
     final sb = _orderStats[b];
@@ -797,4 +618,77 @@ final class ReceiptOptimizer implements Optimizer {
       }
     }
   }
+
+  /// Median Y for all members of [g].
+  double _medianProjectedY(RecognizedGroup g) {
+    if (g.members.isEmpty) return double.infinity;
+    final ys =
+        g.members.map((p) => p.product.line.boundingBox.center.dy).toList()
+          ..sort();
+    return ys[ys.length ~/ 2];
+  }
+
+  /// Earliest timestamp in [ps], or epoch for empty lists.
+  DateTime _earliestTimestamp(List<RecognizedPosition> ps) =>
+      ps.isEmpty
+          ? DateTime.fromMillisecondsSinceEpoch(0)
+          : ps.map((p) => p.timestamp).reduce((x, y) => x.isBefore(y) ? x : y);
+}
+
+/// Result of evaluating how well a position fits a group.
+final class _ConfidenceResult {
+  /// Product-side confidence computed by the group.
+  final Confidence productConfidence;
+
+  /// Price-side confidence computed by the group.
+  final Confidence priceConfidence;
+
+  /// Combined confidence used for the selection decision (0–100).
+  final int confidence;
+
+  /// Whether the position should be assigned to the group.
+  final bool shouldUseGroup;
+
+  const _ConfidenceResult({
+    required this.productConfidence,
+    required this.priceConfidence,
+    required this.confidence,
+    required this.shouldUseGroup,
+  });
+
+  @override
+  String toString() =>
+      '_ConfidenceResult(prod:${productConfidence.value}, '
+      'price:${priceConfidence.value}, conf:$confidence, use:$shouldUseGroup)';
+}
+
+/// Observation of a group's vertical position at a given time.
+final class _Obs {
+  /// The group being observed.
+  final RecognizedGroup group;
+
+  /// Projected Y coordinate (skew-aware).
+  final double y;
+
+  /// Timestamp of the observation.
+  final DateTime ts;
+
+  _Obs({required this.group, required this.y, required this.ts});
+}
+
+/// Running ordering statistics for a group (EWMA + pairwise counts).
+final class _OrderStats {
+  /// Exponentially weighted moving average of the group's Y.
+  double orderY = 0;
+
+  /// Whether [orderY] has been initialized.
+  bool hasY = false;
+
+  /// First time the group was seen.
+  DateTime firstSeen;
+
+  /// Count of times this group was observed above another group.
+  final Map<RecognizedGroup, int> aboveCounts = {};
+
+  _OrderStats({required this.firstSeen});
 }

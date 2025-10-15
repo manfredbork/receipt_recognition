@@ -22,7 +22,7 @@ ReceiptOptions makeOptionsFromLists({
     depositKeywords: KeywordSet.fromList(deposit),
   );
 
-  return ReceiptOptionsMerger.userOnly(raw);
+  return ReceiptOptions.userOnly(raw);
 }
 
 /// Wire up a minimal product/price/position/group so postfix extraction works.

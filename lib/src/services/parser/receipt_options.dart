@@ -1,6 +1,51 @@
 import 'package:receipt_recognition/src/services/parser/index.dart';
 
-/// Strongly-typed, user-configurable options for the parser.
+/// How user config should interact with built-in defaults.
+enum MergePolicy {
+  /// Keep defaults and add/override with user config (defaults ∪ user).
+  extend,
+
+  /// Ignore defaults completely and use only user config.
+  replace,
+}
+
+/// Built-in default options as a JSON-like map (can be persisted/overridden).
+/// Canonicals map to themselves by default. Adjust values if you want alias→canonical.
+const Map<String, dynamic> kReceiptDefaultOptions = {
+  'storeNames': {
+    'Aldi': 'Aldi',
+    'Rewe': 'Rewe',
+    'Edeka': 'Edeka',
+    'Penny': 'Penny',
+    'Lidl': 'Lidl',
+    'Kaufland': 'Kaufland',
+    'Netto': 'Netto',
+    'Akzenta': 'Akzenta',
+  },
+  'totalLabels': {
+    'Zu zahlen': 'Zu zahlen',
+    'Gesamt': 'Gesamt',
+    'Summe': 'Summe',
+    'Total': 'Total',
+  },
+  'ignoreKeywords': [
+    'E-Bon',
+    'Coupon',
+    'Eingabe',
+    'Posten',
+    'Subtotal',
+    'Stk x',
+    'kg x',
+  ],
+  'stopKeywords': ['Geg.', 'Rückgeld', 'Bar', 'Change'],
+  'foodKeywords': ['B', '2', 'BW'],
+  'nonFoodKeywords': ['A', '1', 'AW'],
+  'discountKeywords': ['Rabatt', 'Coupon', 'Discount'],
+  'depositKeywords': ['Leerg.', 'Leergut', 'Einweg', 'Pfand', 'Deposit'],
+};
+
+/// Strongly-typed, user-configurable options for the parser, including
+/// factory helpers to build and merge with built-in defaults.
 final class ReceiptOptions {
   /// Map of store aliases to canonical names.
   final DetectionMap storeNames;
@@ -27,8 +72,6 @@ final class ReceiptOptions {
   final KeywordSet depositKeywords;
 
   /// Creates a new options object with explicit maps/sets.
-  /// Prefer constructing this with user data only (no defaults),
-  /// then call `ReceiptOptionsMerger.withDefaults(...)`.
   ReceiptOptions({
     required this.storeNames,
     required this.totalLabels,
@@ -41,9 +84,6 @@ final class ReceiptOptions {
   });
 
   /// Returns a minimal config with all maps/lists empty (no matches).
-  /// Useful for tests or when you explicitly want *no* built-in patterns.
-  /// For production use, prefer [ReceiptOptionsMerger.withDefaults] so your
-  /// user config extends the built-ins.
   factory ReceiptOptions.empty() => ReceiptOptions(
     storeNames: DetectionMap.fromMap(const {}),
     totalLabels: DetectionMap.fromMap(const {}),
@@ -55,10 +95,7 @@ final class ReceiptOptions {
     depositKeywords: KeywordSet.fromList(const []),
   );
 
-  /// Builds options from a JSON-like map.
-  @Deprecated(
-    'Parse user config, then merge via ReceiptOptionsMerger.withDefaults(...)',
-  )
+  /// Builds options from a JSON-like map (e.g., from user config).
   factory ReceiptOptions.fromJsonLike(Map<String, dynamic> json) {
     Map<String, String> pickStrMap(dynamic v) {
       if (v is Map) {
@@ -92,6 +129,96 @@ final class ReceiptOptions {
         pickStrList(json['depositKeywords']),
       ),
     );
+  }
+
+  /// Serializes options to a JSON-like map.
+  Map<String, dynamic> toJsonLike() => {
+    'storeNames': storeNames.mapping,
+    'totalLabels': totalLabels.mapping,
+    'ignoreKeywords': ignoreKeywords.keywords,
+    'stopKeywords': stopKeywords.keywords,
+    'foodKeywords': foodKeywords.keywords,
+    'nonFoodKeywords': nonFoodKeywords.keywords,
+    'discountKeywords': discountKeywords.keywords,
+    'depositKeywords': depositKeywords.keywords,
+  };
+
+  /// Returns options built solely from built-in JSON defaults (no user overrides).
+  static ReceiptOptions defaults() =>
+      ReceiptOptions.fromJsonLike(kReceiptDefaultOptions);
+
+  /// Builds options using **only** user input (no defaults).
+  static ReceiptOptions userOnly(ReceiptOptions? opts) =>
+      opts ?? ReceiptOptions.empty();
+
+  /// Builds effective options by merging [opts] with built-in JSON defaults.
+  ///
+  /// - [MergePolicy.extend]: defaults ∪ user (user wins on duplicates)
+  /// - [MergePolicy.replace]: only user (ignore defaults)
+  static ReceiptOptions withDefaults(
+    ReceiptOptions? opts, {
+    MergePolicy storeNames = MergePolicy.extend,
+    MergePolicy totalLabels = MergePolicy.extend,
+    MergePolicy ignoreKeywords = MergePolicy.extend,
+    MergePolicy stopKeywords = MergePolicy.extend,
+    MergePolicy foodKeywords = MergePolicy.extend,
+    MergePolicy nonFoodKeywords = MergePolicy.extend,
+    MergePolicy discountKeywords = MergePolicy.extend,
+    MergePolicy depositKeywords = MergePolicy.extend,
+  }) {
+    final user = opts ?? ReceiptOptions.empty();
+    final def = ReceiptOptions.defaults();
+
+    return ReceiptOptions(
+      storeNames: _dmMerge(def.storeNames, user.storeNames, storeNames),
+      totalLabels: _dmMerge(def.totalLabels, user.totalLabels, totalLabels),
+      ignoreKeywords: _ksMerge(
+        def.ignoreKeywords,
+        user.ignoreKeywords,
+        ignoreKeywords,
+      ),
+      stopKeywords: _ksMerge(def.stopKeywords, user.stopKeywords, stopKeywords),
+      foodKeywords: _ksMerge(def.foodKeywords, user.foodKeywords, foodKeywords),
+      nonFoodKeywords: _ksMerge(
+        def.nonFoodKeywords,
+        user.nonFoodKeywords,
+        nonFoodKeywords,
+      ),
+      discountKeywords: _ksMerge(
+        def.discountKeywords,
+        user.discountKeywords,
+        discountKeywords,
+      ),
+      depositKeywords: _ksMerge(
+        def.depositKeywords,
+        user.depositKeywords,
+        depositKeywords,
+      ),
+    );
+  }
+
+  /// Merges default and user keyword sets according to [p].
+  static KeywordSet _ksMerge(
+    KeywordSet defaults,
+    KeywordSet user,
+    MergePolicy p,
+  ) {
+    if (p == MergePolicy.replace) return user;
+    final out = <String>{...defaults.keywords, ...user.keywords};
+    return KeywordSet.fromList(out.toList());
+  }
+
+  /// Merges default and user detection maps according to [p] (user wins on duplicates).
+  static DetectionMap _dmMerge(
+    DetectionMap defaults,
+    DetectionMap user,
+    MergePolicy p,
+  ) {
+    if (p == MergePolicy.replace) return user;
+    final merged = <String, String>{};
+    merged.addAll(defaults.mapping);
+    merged.addAll(user.mapping);
+    return DetectionMap.fromMap(merged);
   }
 }
 

@@ -48,7 +48,7 @@ final class ReceiptRecognizer {
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(highPrecision: highPrecision),
-       _options = options ?? ReceiptOptionsMerger.withDefaults(options),
+       _options = options ?? ReceiptOptions.withDefaults(options),
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,

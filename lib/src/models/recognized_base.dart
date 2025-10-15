@@ -48,7 +48,7 @@ enum Operation {
 /// Weighted confidence score used to evaluate recognition reliability.
 final class Confidence extends Valuable<int> {
   /// Relative influence of this confidence value when aggregated with others.
-  int weight;
+  final int weight;
 
   /// Creates a confidence from numeric [value] and optional [weight].
   Confidence({required super.value, this.weight = 1});
