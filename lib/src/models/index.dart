@@ -1,5 +1,5 @@
 export 'recognized_base.dart';
-export 'recognized_bounding_box.dart';
+export 'recognized_bounds.dart';
 export 'recognized_position.dart';
 export 'recognized_price.dart';
 export 'recognized_product.dart';

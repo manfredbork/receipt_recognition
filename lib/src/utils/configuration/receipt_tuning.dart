@@ -1,15 +1,15 @@
 /// Numeric/string tuning knobs for parsing/optimization.
 final class ReceiptTuning {
-  /// Sum tolerance tight and more precise below 1 cent.
-  final double sumTolerance;
+  /// Total tolerance tight and more precise below 1 cent.
+  final double totalTolerance;
 
   /// Generic quarter fraction (25%) used by multiple heuristics.
   final double heuristicQuarter;
 
   /// Vertical tolerance (in pixels) for comparing bounding box alignment.
-  final int boundingBoxBuffer;
+  final int verticalTolerance;
 
-  /// Allowed tolerance in cents when matching delta between sums.
+  /// Allowed tolerance in cents when matching delta between totals.
   final int outlierTau;
 
   /// Maximum number of candidate items considered for removal.
@@ -56,9 +56,9 @@ final class ReceiptTuning {
 
   /// Creates a new tuning configuration from required values.
   ReceiptTuning({
-    required this.sumTolerance,
+    required this.totalTolerance,
     required this.heuristicQuarter,
-    required this.boundingBoxBuffer,
+    required this.verticalTolerance,
     required this.outlierTau,
     required this.outlierMaxCandidates,
     required this.outlierLowConfThreshold,
@@ -86,9 +86,9 @@ final class ReceiptTuning {
     }
 
     return ReceiptTuning(
-      sumTolerance: numAs<double>('sumTolerance', 0.009),
+      totalTolerance: numAs<double>('totalTolerance', 0.009),
       heuristicQuarter: numAs<double>('heuristicQuarter', 0.25),
-      boundingBoxBuffer: numAs<int>('boundingBoxBuffer', 25),
+      verticalTolerance: numAs<int>('verticalTolerance', 25),
       outlierTau: numAs<int>('outlierTau', 1),
       outlierMaxCandidates: numAs<int>('outlierMaxCandidates', 12),
       outlierLowConfThreshold: numAs<int>('outlierLowConfThreshold', 35),
@@ -124,9 +124,9 @@ final class ReceiptTuning {
 
   /// Serializes tuning to a JSON-like map.
   Map<String, dynamic> toJsonLike() => {
-    'sumTolerance': sumTolerance,
+    'totalTolerance': totalTolerance,
     'heuristicQuarter': heuristicQuarter,
-    'boundingBoxBuffer': boundingBoxBuffer,
+    'verticalTolerance': verticalTolerance,
     'outlierTau': outlierTau,
     'outlierMaxCandidates': outlierMaxCandidates,
     'outlierLowConfThreshold': outlierLowConfThreshold,

@@ -101,14 +101,14 @@ final class RecognizedGroup {
         _members.map((b) => ratio(product.value, b.product.value)).toList();
     if (scores.isEmpty) return Confidence(value: 0);
 
-    var sum = 0.0, sumSq = 0.0;
+    var total = 0.0, totalSq = 0.0;
     for (final s in scores) {
-      sum += s;
-      sumSq += s * s;
+      total += s;
+      totalSq += s * s;
     }
     final n = scores.length;
-    final avg = sum / n;
-    final variance = (sumSq / n) - (avg * avg);
+    final avg = total / n;
+    final variance = (totalSq / n) - (avg * avg);
     final stddev = sqrt(max(0.0, variance));
     final weight = stddev < 10 ? 1.0 : (100 - stddev) / 100.0;
 

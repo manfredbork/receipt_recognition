@@ -132,7 +132,7 @@ final class ReceiptRecognizer {
 
   /// Computes validation result for [receipt].
   ReceiptValidationResult _validateReceipt(RecognizedReceipt receipt) {
-    if (receipt.positions.isEmpty || receipt.sum == null) {
+    if (receipt.positions.isEmpty || receipt.total == null) {
       return const ReceiptValidationResult(
         status: ReceiptCompleteness.invalid,
         matchPercentage: 0,
@@ -162,10 +162,10 @@ final class ReceiptRecognizer {
     );
   }
 
-  /// Calculates the match percentage between calculated and recognized sums.
+  /// Calculates the match percentage between calculated and recognized totals.
   int _calculateMatchPercentage(RecognizedReceipt receipt) {
-    final calc = receipt.calculatedSum.value.toDouble();
-    final decl = (receipt.sum?.value ?? 0).toDouble();
+    final calc = receipt.calculatedTotal.value.toDouble();
+    final decl = (receipt.total?.value ?? 0).toDouble();
     if (calc <= 0 || decl <= 0) return 0;
 
     final ratio = calc < decl ? (calc / decl) : (decl / calc);

@@ -5,11 +5,12 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/parser/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
+import 'package:receipt_recognition/src/utils/geometry/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
-/// Parses OCR output into a structured receipt by extracting entities,
-/// ordering by vertical position, filtering outliers, and assembling positions, sum, store, and bounds.
+/// Parses OCR output into a structured receipt by extracting entities, ordering by
+/// vertical position, filtering outliers, and assembling positions, total, store, and bounds.
 final class ReceiptParser {
   /// Center-Y of a TextLine.
   static double _cyL(TextLine l) => l.boundingBox.center.dy;
@@ -63,7 +64,7 @@ final class ReceiptParser {
   }
 
   /// Effective geometric tolerance as double from runtime.
-  static double get _tol => ReceiptRuntime.tuning.boundingBoxBuffer.toDouble();
+  static double get _tol => ReceiptRuntime.tuning.verticalTolerance.toDouble();
 
   /// Shorthand for the active parser options provided by [ReceiptRuntime].
   static ReceiptOptions get _opts => ReceiptRuntime.options;
@@ -79,8 +80,8 @@ final class ReceiptParser {
       lines.sort(_cmpCyThenCx);
 
       final parsed = _parseLines(lines);
-      final prunedU = _filterUnknownLeftAlignmentOutliers(parsed);
-      final prunedA = _filterAmountXOutliers(prunedU);
+      final prunedU = _filterUnknownOutliers(parsed);
+      final prunedA = _filterAmountOutliers(prunedU);
       final filtered = _filterIntermediaryEntities(prunedA);
 
       return _buildReceipt(filtered);
@@ -102,21 +103,17 @@ final class ReceiptParser {
     final median = _cxR(rect);
 
     RecognizedStore? detectedStore;
-    RecognizedSumLabel? detectedSumLabel;
+    RecognizedTotalLabel? detectedTotalLabel;
     RecognizedAmount? detectedAmount;
 
     _applyPurchaseDate(lines, parsed);
     _applyBoundingBox(lines, parsed);
 
-    final thresholdCache = <String, int>{};
-    int thr(String label) =>
-        thresholdCache[label] ??= _adaptiveThreshold(label);
-
     for (final line in lines) {
-      if (_shouldExitIfValidSum(parsed, detectedSumLabel)) break;
+      if (_shouldExitIfValidTotal(parsed, detectedTotalLabel)) break;
       if (_shouldStopParsing(line)) break;
       if (_shouldIgnoreLine(line)) continue;
-      if (_shouldSkipLine(line, detectedSumLabel)) continue;
+      if (_shouldSkipLine(line, detectedTotalLabel)) continue;
 
       if (_tryParseStore(
         line,
@@ -130,20 +127,14 @@ final class ReceiptParser {
       }
 
       final text = ReceiptFormatter.trim(line.text);
-      final customSumLabel = _opts.totalLabels.detect(text);
-      if (customSumLabel != null) {
-        parsed.add(RecognizedSumLabel(line: line, value: customSumLabel));
-        detectedSumLabel = parsed.last as RecognizedSumLabel;
+      final fuzzyTotal = _detectTotalLabelFuzzy(text);
+      if (fuzzyTotal != null) {
+        parsed.add(RecognizedTotalLabel(line: line, value: fuzzyTotal));
+        detectedTotalLabel = parsed.last as RecognizedTotalLabel;
         continue;
       }
-      for (final label in _opts.totalLabels.mapping.keys) {
-        if (ratio(text, label) >= thr(label)) {
-          parsed.add(RecognizedSumLabel(line: line, value: label));
-          detectedSumLabel = parsed.last as RecognizedSumLabel;
-          break;
-        }
-      }
-      if (detectedSumLabel?.line == line) continue;
+
+      if (detectedTotalLabel?.line == line) continue;
 
       if (_tryParseAmount(line, parsed, median)) {
         detectedAmount = parsed.last as RecognizedAmount;
@@ -156,28 +147,63 @@ final class ReceiptParser {
     return parsed;
   }
 
-  /// Stops early when a found sum equals the accumulated amounts.
-  static bool _shouldExitIfValidSum(
-    List<RecognizedEntity> entities,
-    RecognizedSumLabel? sumLabel,
-  ) {
-    final sum = _findSum(entities, sumLabel);
-    if (sum == null) return false;
-    final amounts = entities.whereType<RecognizedAmount>().toList();
-    if (amounts.isEmpty) return false;
-    final calculatedSum = CalculatedSum(
-      value: amounts.fold(-sum.value, (a, b) => a + b.value),
-    );
-    return sum.formattedValue == calculatedSum.formattedValue;
+  /// Fuzzy score for detecting a label *inside* a longer line.
+  /// Use the max of partialRatio and tokenSetRatio to handle substrings and word shuffles.
+  static int _scoreFuzzy(String line, String label) {
+    final p = partialRatio(line, label);
+    final ts = tokenSetRatio(line, label);
+    return p > ts ? p : ts;
   }
 
-  /// Skips lines that are clearly below the detected sum label.
+  /// Find best fuzzy match among configured total label *keys*.
+  /// Returns the **canonical** value or null if under threshold.
+  static String? _detectTotalLabelFuzzy(String lineText) {
+    if (_opts.totalLabels.mapping.isEmpty) return null;
+
+    int thr(String label) => _adaptiveThreshold(label);
+
+    String? bestLabel;
+    int bestScore = 0;
+
+    for (final label in _opts.totalLabels.mapping.keys) {
+      final s = _scoreFuzzy(lineText, label);
+      if (s > bestScore) {
+        bestScore = s;
+        bestLabel = label;
+      }
+    }
+
+    if (bestLabel == null) return null;
+    if (bestScore < thr(bestLabel)) return null;
+
+    final canonical =
+        _opts.totalLabels.mapping[bestLabel.toLowerCase()] ?? bestLabel;
+
+    return canonical;
+  }
+
+  /// Stops early when a found total equals the accumulated amounts.
+  static bool _shouldExitIfValidTotal(
+    List<RecognizedEntity> entities,
+    RecognizedTotalLabel? totalLabel,
+  ) {
+    final total = _findTotal(entities, totalLabel);
+    if (total == null) return false;
+    final amounts = entities.whereType<RecognizedAmount>().toList();
+    if (amounts.isEmpty) return false;
+    final calculatedTotal = CalculatedTotal(
+      value: amounts.fold(-total.value, (a, b) => a + b.value),
+    );
+    return total.formattedValue == calculatedTotal.formattedValue;
+  }
+
+  /// Skips lines that are clearly below the detected total label.
   static bool _shouldSkipLine(
     TextLine line,
-    RecognizedSumLabel? detectedSumLabel,
+    RecognizedTotalLabel? detectedTotalLabel,
   ) {
-    if (detectedSumLabel == null) return false;
-    return _cyL(line) > _cyL(detectedSumLabel.line) + _tol;
+    if (detectedTotalLabel == null) return false;
+    return _cyL(line) > _cyL(detectedTotalLabel.line) + _tol;
   }
 
   /// Detects store name via custom map; early-bails if we already saw a store or an amount.
@@ -237,7 +263,7 @@ final class ReceiptParser {
   ) {
     if (lines.isEmpty) return false;
     final line = ReceiptTextLine.fromRect(_extractRectFromLines(lines));
-    parsed.add(RecognizedBoundingBox(line: line, value: line.boundingBox));
+    parsed.add(RecognizedBounds(line: line, value: line.boundingBox));
     return true;
   }
 
@@ -300,10 +326,12 @@ final class ReceiptParser {
     return null;
   }
 
-  /// Returns the first detected sum label if any.
-  static RecognizedSumLabel? _findSumLabel(List<RecognizedEntity> entities) {
+  /// Returns the first detected total label if any.
+  static RecognizedTotalLabel? _findTotalLabel(
+    List<RecognizedEntity> entities,
+  ) {
     for (final entity in entities) {
-      if (entity is RecognizedSumLabel) return entity;
+      if (entity is RecognizedTotalLabel) return entity;
     }
     return null;
   }
@@ -318,27 +346,25 @@ final class ReceiptParser {
     return null;
   }
 
-  /// Returns the first detected bounding box entity if any.
-  static RecognizedBoundingBox? _findBoundingBox(
-    List<RecognizedEntity> entities,
-  ) {
+  /// Returns the first detected bounds entity if any.
+  static RecognizedBounds? _findBounds(List<RecognizedEntity> entities) {
     for (final entity in entities) {
-      if (entity is RecognizedBoundingBox) return entity;
+      if (entity is RecognizedBounds) return entity;
     }
     return null;
   }
 
-  /// Applies the parsed sum label to the receipt.
-  static void _processSumLabel(
-    RecognizedSumLabel? sumLabel,
+  /// Applies the parsed total label to the receipt.
+  static void _processTotalLabel(
+    RecognizedTotalLabel? totalLabel,
     RecognizedReceipt receipt,
   ) {
-    receipt.sumLabel = sumLabel;
+    receipt.totalLabel = totalLabel;
   }
 
-  /// Applies the parsed sum to the receipt.
-  static void _processSum(RecognizedSum? sum, RecognizedReceipt receipt) {
-    receipt.sum = sum;
+  /// Applies the parsed total to the receipt.
+  static void _processTotal(RecognizedTotal? total, RecognizedReceipt receipt) {
+    receipt.total = total;
   }
 
   /// Applies the parsed purchase date to the receipt.
@@ -349,12 +375,13 @@ final class ReceiptParser {
     receipt.purchaseDate = purchaseDate;
   }
 
-  /// Applies the parsed bounding box to the receipt.
-  static void _processBoundingBox(
-    RecognizedBoundingBox? boundingBox,
+  /// Applies the parsed bounds to the receipt.
+  static void _processBounds(
+    RecognizedBounds? bounds,
     RecognizedReceipt receipt,
   ) {
-    receipt.boundingBox = boundingBox;
+    final skewAngle = ReceiptSkewEstimator.estimateDegrees(receipt);
+    receipt.bounds = bounds?.copyWith(skewAngle: skewAngle);
   }
 
   /// Applies the parsed store to the receipt.
@@ -371,7 +398,7 @@ final class ReceiptParser {
   ) {
     for (final entity in entities) {
       if (entity is! RecognizedAmount) continue;
-      if (receipt.sum?.line == entity.line) continue;
+      if (receipt.total?.line == entity.line) continue;
       _createPositionForAmount(entity, yUnknowns, receipt, forbidden);
     }
   }
@@ -383,7 +410,7 @@ final class ReceiptParser {
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
   ) {
-    if (entity == receipt.sum) return;
+    if (entity == receipt.total) return;
     _sortByDistance(entity.line.boundingBox, yUnknowns);
 
     for (final yUnknown in yUnknowns) {
@@ -435,12 +462,12 @@ final class ReceiptParser {
     return position;
   }
 
-  /// Derives the sum amount from label alignment or nearest scoring.
-  static RecognizedSum? _findSum(
+  /// Derives the total amount from label alignment or nearest scoring.
+  static RecognizedTotal? _findTotal(
     List<RecognizedEntity> entities,
-    RecognizedSumLabel? sumLabel,
+    RecognizedTotalLabel? totalLabel,
   ) {
-    if (sumLabel == null) return null;
+    if (totalLabel == null) return null;
 
     final amounts = entities.whereType<RecognizedAmount>().toList();
     if (amounts.isEmpty) return null;
@@ -448,8 +475,8 @@ final class ReceiptParser {
     RecognizedAmount? rightmost;
     double rightmostX = -double.infinity;
     for (final a in amounts) {
-      final dy = (_cyL(a.line) - _cyL(sumLabel.line)).abs();
-      if (dy <= _tol && _cxL(a.line) >= _rightL(sumLabel.line) - _tol) {
+      final dy = (_cyL(a.line) - _cyL(totalLabel.line)).abs();
+      if (dy <= _tol && _cxL(a.line) >= _rightL(totalLabel.line) - _tol) {
         final x = _cxL(a.line);
         if (x > rightmostX) {
           rightmostX = x;
@@ -458,20 +485,20 @@ final class ReceiptParser {
       }
     }
 
-    final pick = rightmost ?? _findClosestSumAmount(sumLabel, amounts);
+    final pick = rightmost ?? _findClosestTotalAmount(totalLabel, amounts);
     if (pick == null) return null;
 
-    return RecognizedSum(value: pick.value, line: pick.line);
+    return RecognizedTotal(value: pick.value, line: pick.line);
   }
 
-  /// Finds the closest amount to a sum label using a geometric score (single pass).
-  static RecognizedAmount? _findClosestSumAmount(
-    RecognizedSumLabel sumLabel,
+  /// Finds the closest amount to a total label using a geometric score (single pass).
+  static RecognizedAmount? _findClosestTotalAmount(
+    RecognizedTotalLabel totalLabel,
     List<RecognizedAmount> amounts,
   ) {
     RecognizedAmount? best;
     double bestScore = double.infinity;
-    final labelLine = sumLabel.line;
+    final labelLine = totalLabel.line;
     for (final a in amounts) {
       final s = _distanceScore(labelLine, a.line);
       if (s < bestScore) {
@@ -482,19 +509,38 @@ final class ReceiptParser {
     return best;
   }
 
-  /// Returns a fuzzy threshold based on label length.
+  /// Computes an adaptive fuzzy threshold based on label length and an
+  /// allowed number of edits. Short labels require near-exact matches,
+  /// while longer labels tolerate more edits. The formula is
+  /// `threshold(L, k) = round(100 × (1 − k / L)) − margin`,
+  /// clamped between 75 and 98 to avoid extremes.
   static int _adaptiveThreshold(String label) {
-    final length = label.length;
-    if (length <= 3) return 95;
-    if (length <= 6) return 90;
-    if (length <= 12) return 85;
-    return 80;
+    final L = label.length;
+    if (L <= 0) return 100;
+    if (L <= 3) return 98;
+
+    int k;
+    if (L <= 5) {
+      k = 1;
+    } else if (L <= 10) {
+      k = 2;
+    } else if (L <= 20) {
+      k = 3;
+    } else {
+      k = 4;
+    }
+
+    const int margin = 2;
+    final double base = 100.0 * (1.0 - (k / L));
+    int thr = (base - margin).round();
+    thr = thr.clamp(75, 98);
+    return thr;
   }
 
-  /// Scores proximity between a sum label and an amount using vertical distance and rightward X offset.
-  static double _distanceScore(TextLine sumLabel, TextLine amount) {
-    final dy = _dy(sumLabel, amount);
-    final dx = _cxL(amount) - _rightL(sumLabel);
+  /// Scores proximity between a total label and an amount using vertical distance and rightward X offset.
+  static double _distanceScore(TextLine totalLabel, TextLine amount) {
+    final dy = _dy(totalLabel, amount);
+    final dx = _cxL(amount) - _rightL(totalLabel);
     final dxPenalty = dx >= 0 ? dx : (dx.abs() * 3);
     return dy + (dxPenalty * 0.3);
   }
@@ -537,22 +583,22 @@ final class ReceiptParser {
     }
     if (leftUnknown == null || rightAmount == null) return entities;
 
-    final sumLabel =
-        entities.whereType<RecognizedSumLabel>().isEmpty
+    final totalLabel =
+        entities.whereType<RecognizedTotalLabel>().isEmpty
             ? null
-            : entities.whereType<RecognizedSumLabel>().first;
-    RecognizedAmount? protectedSumAmount;
-    if (sumLabel != null) {
+            : entities.whereType<RecognizedTotalLabel>().first;
+    RecognizedAmount? protectedTotalAmount;
+    if (totalLabel != null) {
       final amounts = entities.whereType<RecognizedAmount>().toList();
-      protectedSumAmount = _findClosestSumAmount(sumLabel, amounts);
+      protectedTotalAmount = _findClosestTotalAmount(totalLabel, amounts);
     }
 
     final filtered = <RecognizedEntity>[];
     for (final entity in entities) {
       if (entity is RecognizedStore ||
-          entity is RecognizedBoundingBox ||
+          entity is RecognizedBounds ||
           entity is RecognizedPurchaseDate ||
-          identical(entity, protectedSumAmount)) {
+          identical(entity, protectedTotalAmount)) {
         filtered.add(entity);
         continue;
       }
@@ -567,13 +613,13 @@ final class ReceiptParser {
 
       final betweenUnknownAndAmount = horizontallyBetween && verticallyAligned;
 
-      final betweenSumLabelAndSum =
-          sumLabel != null &&
-          protectedSumAmount != null &&
-          _cy(entity) > _cy(sumLabel) &&
-          _cy(entity) < _cy(protectedSumAmount);
+      final betweenTotalLabelAndTotal =
+          totalLabel != null &&
+          protectedTotalAmount != null &&
+          _cy(entity) > _cy(totalLabel) &&
+          _cy(entity) < _cy(protectedTotalAmount);
 
-      if (!betweenUnknownAndAmount && !betweenSumLabelAndSum) {
+      if (!betweenUnknownAndAmount && !betweenTotalLabelAndTotal) {
         filtered.add(entity);
       }
     }
@@ -620,7 +666,7 @@ final class ReceiptParser {
   }
 
   /// Filters left-alignment outliers among unknown product lines.
-  static List<RecognizedEntity> _filterUnknownLeftAlignmentOutliers(
+  static List<RecognizedEntity> _filterUnknownOutliers(
     List<RecognizedEntity> entities,
   ) {
     return _filterOneSidedXOutliers(
@@ -632,7 +678,7 @@ final class ReceiptParser {
   }
 
   /// Filters X-center outliers among amount lines.
-  static List<RecognizedEntity> _filterAmountXOutliers(
+  static List<RecognizedEntity> _filterAmountOutliers(
     List<RecognizedEntity> entities,
   ) {
     return _filterOneSidedXOutliers(
@@ -673,19 +719,19 @@ final class ReceiptParser {
     final receipt = RecognizedReceipt.empty();
     final forbidden = <RecognizedUnknown>[];
     final store = _findStore(entities);
-    final sumLabel = _findSumLabel(entities);
-    final sum = _findSum(entities, sumLabel);
+    final totalLabel = _findTotalLabel(entities);
+    final total = _findTotal(entities, totalLabel);
     final purchaseDate = _findPurchaseDate(entities);
-    final boundingBox = _findBoundingBox(entities);
+    final bounds = _findBounds(entities);
 
     _processAmounts(entities, yUnknowns, receipt, forbidden);
     _processStore(store, receipt);
-    _processSumLabel(sumLabel, receipt);
-    _processSum(sum, receipt);
+    _processTotalLabel(totalLabel, receipt);
+    _processTotal(total, receipt);
     _processPurchaseDate(purchaseDate, receipt);
-    _processBoundingBox(boundingBox, receipt);
+    _processBounds(bounds, receipt);
     _filterSuspiciousProducts(receipt);
-    _trimToMatchSum(receipt);
+    _trimToMatchTotal(receipt);
 
     return receipt.copyWith(entities: entities);
   }
@@ -708,29 +754,30 @@ final class ReceiptParser {
     }
   }
 
-  /// Prunes low-confidence positions to bring the total closer to the target sum.
-  static void _trimToMatchSum(RecognizedReceipt receipt) {
-    final target = receipt.sum?.value;
+  /// Prunes low-confidence positions to bring the total closer to the target total.
+  static void _trimToMatchTotal(RecognizedReceipt receipt) {
+    final target = receipt.total?.value;
     if (target == null || receipt.positions.length <= 1) return;
 
-    final tol = _opts.tuning.sumTolerance;
+    final tol = _opts.tuning.totalTolerance;
 
     receipt.positions.removeWhere(
       (pos) =>
-          receipt.sum != null &&
-          (pos.price.value - receipt.sum!.value).abs() <= tol &&
+          receipt.total != null &&
+          (pos.price.value - receipt.total!.value).abs() <= tol &&
           _opts.totalLabels.hasMatch(pos.product.value),
     );
 
     final positions = List<RecognizedPosition>.from(receipt.positions)
       ..sort((a, b) => a.confidence.compareTo(b.confidence));
-    num currentSum = receipt.calculatedSum.value;
+    num currentTotal = receipt.calculatedTotal.value;
 
     for (final pos in positions) {
-      if ((currentSum - target).abs() <= tol) break;
+      if ((currentTotal - target).abs() <= tol) break;
 
-      final newSum = currentSum - pos.price.value;
-      final improvement = (currentSum - target).abs() - (newSum - target).abs();
+      final newTotal = currentTotal - pos.price.value;
+      final improvement =
+          (currentTotal - target).abs() - (newTotal - target).abs();
 
       if (improvement > 0) {
         receipt.positions.remove(pos);
@@ -739,7 +786,7 @@ final class ReceiptParser {
         if ((pos.group?.members.isEmpty ?? false)) {
           receipt.positions.removeWhere((p) => p.group == pos.group);
         }
-        currentSum = newSum;
+        currentTotal = newTotal;
       }
     }
   }

@@ -27,7 +27,7 @@ void main() {
     );
 
     expect(result.positions.length, equals(2));
-    expect(result.sum?.value, result.calculatedSum.value);
+    expect(result.total?.value, result.calculatedTotal.value);
   });
 
   test('Two `Banana` items should be grouped in two groups', () {
@@ -43,7 +43,7 @@ void main() {
     );
 
     expect(result.positions.length, equals(2));
-    expect(result.sum?.value, result.calculatedSum.value);
+    expect(result.total?.value, result.calculatedTotal.value);
   });
 
   test('Two `Deposit` items should be grouped in two groups', () {
@@ -59,7 +59,7 @@ void main() {
     );
 
     expect(result.positions.length, equals(2));
-    expect(result.sum?.value, result.calculatedSum.value);
+    expect(result.total?.value, result.calculatedTotal.value);
   });
 
   test('Two `Coke` items should be grouped in two groups', () {
@@ -75,7 +75,7 @@ void main() {
     );
 
     expect(result.positions.length, equals(2));
-    expect(result.sum?.value, result.calculatedSum.value);
+    expect(result.total?.value, result.calculatedTotal.value);
   });
 
   test('Two `Haribo` items should be grouped in two groups', () {
@@ -91,7 +91,7 @@ void main() {
     );
 
     expect(result.positions.length, equals(2));
-    expect(result.sum?.value, result.calculatedSum.value);
+    expect(result.total?.value, result.calculatedTotal.value);
   });
 
   test('Two `Milk` items should be grouped in same group', () {
@@ -107,7 +107,7 @@ void main() {
     );
 
     expect(result.positions.length, equals(1));
-    expect(result.sum?.value, result.calculatedSum.value);
+    expect(result.total?.value, result.calculatedTotal.value);
   });
 
   test('Two `Butter` items should be grouped in same group', () {
@@ -123,7 +123,7 @@ void main() {
     );
 
     expect(result.positions.length, equals(1));
-    expect(result.sum?.value, result.calculatedSum.value);
+    expect(result.total?.value, result.calculatedTotal.value);
   });
 
   test('Purchase date is recognized and parsed correctly', () {

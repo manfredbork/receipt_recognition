@@ -4,8 +4,8 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 class OverlayScreen extends StatelessWidget {
   final List<RecognizedPosition> positions;
   final RecognizedStore? store;
-  final RecognizedSumLabel? sumLabel;
-  final RecognizedSum? sum;
+  final RecognizedTotalLabel? totalLabel;
+  final RecognizedTotal? total;
   final RecognizedPurchaseDate? purchaseDate;
   final Size imageSize;
   final Size screenSize;
@@ -16,8 +16,8 @@ class OverlayScreen extends StatelessWidget {
     required this.imageSize,
     required this.screenSize,
     this.store,
-    this.sumLabel,
-    this.sum,
+    this.totalLabel,
+    this.total,
     this.purchaseDate,
   });
 
@@ -29,8 +29,8 @@ class OverlayScreen extends StatelessWidget {
         imageSize: imageSize,
         screenSize: screenSize,
         store: store,
-        sumLabel: sumLabel,
-        sum: sum,
+        totalLabel: totalLabel,
+        total: total,
         purchaseDate: purchaseDate,
       ),
     );
@@ -40,8 +40,8 @@ class OverlayScreen extends StatelessWidget {
 class _PositionPainter extends CustomPainter {
   final List<RecognizedPosition> positions;
   final RecognizedStore? store;
-  final RecognizedSumLabel? sumLabel;
-  final RecognizedSum? sum;
+  final RecognizedTotalLabel? totalLabel;
+  final RecognizedTotal? total;
   final RecognizedPurchaseDate? purchaseDate;
   final Size imageSize;
   final Size screenSize;
@@ -51,8 +51,8 @@ class _PositionPainter extends CustomPainter {
     required this.imageSize,
     required this.screenSize,
     this.store,
-    this.sumLabel,
-    this.sum,
+    this.totalLabel,
+    this.total,
     this.purchaseDate,
   });
 
@@ -98,11 +98,11 @@ class _PositionPainter extends CustomPainter {
     if (store != null) {
       canvas.drawRect(_scale(store!.line.boundingBox), paintStore);
     }
-    if (sumLabel != null) {
-      canvas.drawRect(_scale(sumLabel!.line.boundingBox), paintTotalLabel);
+    if (totalLabel != null) {
+      canvas.drawRect(_scale(totalLabel!.line.boundingBox), paintTotalLabel);
     }
-    if (sum != null) {
-      canvas.drawRect(_scale(sum!.line.boundingBox), paintTotal);
+    if (total != null) {
+      canvas.drawRect(_scale(total!.line.boundingBox), paintTotal);
     }
     if (purchaseDate != null) {
       canvas.drawRect(
@@ -124,7 +124,7 @@ class _PositionPainter extends CustomPainter {
       old.imageSize != imageSize ||
       old.screenSize != screenSize ||
       old.store != store ||
-      old.sumLabel != sumLabel ||
-      old.sum != sum ||
+      old.totalLabel != totalLabel ||
+      old.total != total ||
       old.purchaseDate != purchaseDate;
 }

@@ -67,33 +67,51 @@ final class RecognizedAmount extends RecognizedEntity<num> {
   String format(num value) => ReceiptFormatter.format(value);
 }
 
-/// Total sum recognized from the receipt.
-final class RecognizedSum extends RecognizedEntity<num> {
-  /// Creates a sum entity from [value] and [line].
-  const RecognizedSum({required super.value, required super.line});
+/// Total recognized from the receipt.
+final class RecognizedTotal extends RecognizedEntity<num> {
+  /// Creates a total entity from [value] and [line].
+  const RecognizedTotal({required super.value, required super.line});
 
   /// Returns a copy with updated fields.
-  RecognizedSum copyWith({num? value, TextLine? line}) =>
-      RecognizedSum(value: value ?? this.value, line: line ?? this.line);
+  RecognizedTotal copyWith({num? value, TextLine? line}) =>
+      RecognizedTotal(value: value ?? this.value, line: line ?? this.line);
+
+  @override
+  String format(num value) => ReceiptFormatter.format(value);
+}
+
+/// Sum recognized from a receipt.
+final class RecognizedSum extends RecognizedTotal {
+  /// Creates a sum entity from [value] and [line].
+  const RecognizedSum({required super.value, required super.line});
+}
+
+/// Total calculated from receipt positions rather than directly recognized.
+final class CalculatedTotal extends Valuable<num> {
+  /// Creates a calculated total from aggregated position values.
+  const CalculatedTotal({required super.value});
 
   @override
   String format(num value) => ReceiptFormatter.format(value);
 }
 
 /// Sum calculated from receipt positions rather than directly recognized.
-final class CalculatedSum extends Valuable<num> {
+final class CalculatedSum extends CalculatedTotal {
   /// Creates a calculated sum from aggregated position values.
   const CalculatedSum({required super.value});
-
-  @override
-  String format(num value) => ReceiptFormatter.format(value);
 }
 
-/// Label for the sum/total (e.g., "Total", "Summe").
-final class RecognizedSumLabel extends RecognizedEntity<String> {
-  /// Creates a sum label entity from [value] and [line].
-  const RecognizedSumLabel({required super.value, required super.line});
+/// Label for the total (e.g., "Total", "Summe").
+final class RecognizedTotalLabel extends RecognizedEntity<String> {
+  /// Creates a total label entity from [value] and [line].
+  const RecognizedTotalLabel({required super.value, required super.line});
 
   @override
   String format(String value) => value;
+}
+
+/// Label for the sum (e.g., "Total", "Summe").
+final class RecognizedSumLabel extends RecognizedTotalLabel {
+  /// Creates a sum label entity from [value] and [line].
+  const RecognizedSumLabel({required super.value, required super.line});
 }

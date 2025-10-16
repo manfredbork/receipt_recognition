@@ -65,11 +65,13 @@ final class ReceiptLogger {
         );
       }
       debugPrint(
-        '🧮 Calculated sum: ${optimizedReceipt.calculatedSum.formattedValue}',
+        '🧮 Calculated total: ${optimizedReceipt.calculatedTotal.formattedValue}',
       );
-      debugPrint('🧾 Sum in receipt: ${optimizedReceipt.sum?.formattedValue}');
       debugPrint(
-        '📌 Optimizer final sum label: ${optimizedReceipt.sumLabel?.formattedValue}',
+        '🧾 Total in receipt: ${optimizedReceipt.total?.formattedValue}',
+      );
+      debugPrint(
+        '📌 Optimizer final total label: ${optimizedReceipt.totalLabel?.formattedValue}',
       );
     }
   }

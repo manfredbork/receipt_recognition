@@ -15,17 +15,18 @@ export 'src/models/index.dart'
         RecognizedEntity,
         /// Low-level entities
         RecognizedUnknown,
-        RecognizedBoundingBox,
+        RecognizedBounds,
         RecognizedStore,
         RecognizedCompany,
         RecognizedPurchaseDate,
+
         /// Line-item layer
         RecognizedProduct,
         RecognizedPrice,
         RecognizedAmount,
-        RecognizedSumLabel,
-        RecognizedSum,
-        CalculatedSum,
+        RecognizedTotalLabel,
+        RecognizedTotal,
+        CalculatedTotal,
         RecognizedPosition,
         RecognizedGroup,
         /// Receipt layer

@@ -71,15 +71,15 @@ class ResultScreen extends StatelessWidget {
                         );
                       }),
                       const Divider(),
-                      if (receipt.sum != null)
+                      if (receipt.total != null)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                receipt.sumLabel != null
-                                    ? receipt.sumLabel!.formattedValue
+                                receipt.totalLabel != null
+                                    ? receipt.totalLabel!.formattedValue
                                     : 'Total',
                                 style: const TextStyle(
                                   fontSize: 18,
@@ -87,7 +87,7 @@ class ResultScreen extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                receipt.sum!.formattedValue,
+                                receipt.total!.formattedValue,
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,

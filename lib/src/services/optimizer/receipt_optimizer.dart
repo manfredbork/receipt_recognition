@@ -32,11 +32,11 @@ final class ReceiptOptimizer implements Optimizer {
   /// Cache of stores from recent frames.
   final List<RecognizedStore> _stores = [];
 
-  /// Cache of sums from recent frames.
-  final List<RecognizedSum> _sums = [];
+  /// Cache of totals from recent frames.
+  final List<RecognizedTotal> _totals = [];
 
-  /// Cache of sum labels from recent frames.
-  final List<RecognizedSumLabel> _sumLabels = [];
+  /// Cache of total labels from recent frames.
+  final List<RecognizedTotalLabel> _totalLabels = [];
 
   /// Cache of purchase dates from recent frames.
   final List<RecognizedPurchaseDate> _purchaseDates = [];
@@ -71,12 +71,12 @@ final class ReceiptOptimizer implements Optimizer {
       _initializeIfNeeded();
       _checkConvergence(receipt);
       _updateStores(receipt);
-      _updateSums(receipt);
-      _updateSumLabels(receipt);
+      _updateTotals(receipt);
+      _updateTotalLabels(receipt);
       _updatePurchaseDates(receipt);
       _optimizeStore(receipt);
-      _optimizeSum(receipt);
-      _optimizeSumLabel(receipt);
+      _optimizeTotal(receipt);
+      _optimizeTotalLabel(receipt);
       _optimizePurchaseDate(receipt);
       _cleanupGroups();
       _resetOperations();
@@ -98,8 +98,8 @@ final class ReceiptOptimizer implements Optimizer {
     if (!_shouldInitialize) return;
     _groups.clear();
     _stores.clear();
-    _sums.clear();
-    _sumLabels.clear();
+    _totals.clear();
+    _totalLabels.clear();
     _purchaseDates.clear();
     _orderStats.clear();
     _shouldInitialize = false;
@@ -113,8 +113,8 @@ final class ReceiptOptimizer implements Optimizer {
     final positionsHash = receipt.positions
         .map((p) => '${p.product.normalizedText}:${p.price.value}')
         .join(',');
-    final sumHash = receipt.sum?.formattedValue ?? '';
-    final fingerprint = '$positionsHash|$sumHash';
+    final totalHash = receipt.total?.formattedValue ?? '';
+    final fingerprint = '$positionsHash|$totalHash';
 
     final loopThreshold = ReceiptRuntime.tuning.optimizerLoopThreshold;
 
@@ -144,18 +144,18 @@ final class ReceiptOptimizer implements Optimizer {
     _trimCache(_stores);
   }
 
-  /// Updates sums history cache for later normalization.
-  void _updateSums(RecognizedReceipt receipt) {
-    final sum = receipt.sum;
-    if (sum != null) _sums.add(sum);
-    _trimCache(_sums);
+  /// Updates totals history cache for later normalization.
+  void _updateTotals(RecognizedReceipt receipt) {
+    final total = receipt.total;
+    if (total != null) _totals.add(total);
+    _trimCache(_totals);
   }
 
-  /// Updates sum labels history cache for later normalization.
-  void _updateSumLabels(RecognizedReceipt receipt) {
-    final sumLabel = receipt.sumLabel;
-    if (sumLabel != null) _sumLabels.add(sumLabel);
-    _trimCache(_sumLabels);
+  /// Updates total labels history cache for later normalization.
+  void _updateTotalLabels(RecognizedReceipt receipt) {
+    final totalLabel = receipt.totalLabel;
+    if (totalLabel != null) _totalLabels.add(totalLabel);
+    _trimCache(_totalLabels);
   }
 
   /// Updates purchase dates history cache for later normalization.
@@ -182,25 +182,25 @@ final class ReceiptOptimizer implements Optimizer {
     receipt.store = _stores.lastWhere((s) => s.value == mostFrequentStore.last);
   }
 
-  /// Fills sum label with the most frequent value in history.
-  void _optimizeSumLabel(RecognizedReceipt receipt) {
-    if (_sumLabels.isEmpty) return;
-    final mostFrequentSumLabel = ReceiptNormalizer.sortByFrequency(
-      _sumLabels.map((c) => c.value).toList(),
+  /// Fills total label with the most frequent value in history.
+  void _optimizeTotalLabel(RecognizedReceipt receipt) {
+    if (_totalLabels.isEmpty) return;
+    final mostFrequentTotalLabel = ReceiptNormalizer.sortByFrequency(
+      _totalLabels.map((c) => c.value).toList(),
     );
-    receipt.sumLabel = _sumLabels.lastWhere(
-      (sl) => sl.value == mostFrequentSumLabel.last,
+    receipt.totalLabel = _totalLabels.lastWhere(
+      (sl) => sl.value == mostFrequentTotalLabel.last,
     );
   }
 
-  /// Fills sum with the most frequent value in history.
-  void _optimizeSum(RecognizedReceipt receipt) {
-    if (_sums.isEmpty) return;
-    final mostFrequentSum = ReceiptNormalizer.sortByFrequency(
-      _sums.map((c) => c.value.toString()).toList(),
+  /// Fills total with the most frequent value in history.
+  void _optimizeTotal(RecognizedReceipt receipt) {
+    if (_totals.isEmpty) return;
+    final mostFrequentTotal = ReceiptNormalizer.sortByFrequency(
+      _totals.map((c) => c.value.toString()).toList(),
     );
-    receipt.sum = _sums.lastWhere(
-      (s) => s.value.toString() == mostFrequentSum.last,
+    receipt.total = _totals.lastWhere(
+      (s) => s.value.toString() == mostFrequentTotal.last,
     );
   }
 
@@ -385,8 +385,8 @@ final class ReceiptOptimizer implements Optimizer {
 
     ReceiptLogger.log('opt.in', {
       'n': receipt.positions.length,
-      'calc': receipt.calculatedSum.value.toStringAsFixed(2),
-      'sum?': receipt.sum?.value,
+      'calc': receipt.calculatedTotal.value.toStringAsFixed(2),
+      'total?': receipt.total?.value,
     });
 
     final stabilityThreshold =
@@ -422,17 +422,17 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     mergedReceipt.store ??= receipt.store;
-    mergedReceipt.sum ??= receipt.sum;
-    mergedReceipt.sumLabel ??= receipt.sumLabel;
+    mergedReceipt.total ??= receipt.total;
+    mergedReceipt.totalLabel ??= receipt.totalLabel;
     mergedReceipt.purchaseDate ??= receipt.purchaseDate;
-    mergedReceipt.boundingBox ??= receipt.boundingBox;
+    mergedReceipt.bounds ??= receipt.bounds;
 
     _updateEntities(mergedReceipt);
 
     ReceiptLogger.log('opt.out', {
       'n': mergedReceipt.positions.length,
-      'calc': mergedReceipt.calculatedSum.value.toStringAsFixed(2),
-      'sum?': mergedReceipt.sum?.value,
+      'calc': mergedReceipt.calculatedTotal.value.toStringAsFixed(2),
+      'total?': mergedReceipt.total?.value,
     });
 
     return mergedReceipt;
@@ -459,15 +459,17 @@ final class ReceiptOptimizer implements Optimizer {
       prices.map((pr) => RecognizedPrice(value: pr.value, line: pr.line)),
     );
 
-    final sum = receipt.sum;
-    if (sum != null) {
-      receipt.entities?.add(RecognizedSum(value: sum.value, line: sum.line));
+    final total = receipt.total;
+    if (total != null) {
+      receipt.entities?.add(
+        RecognizedTotal(value: total.value, line: total.line),
+      );
     }
 
-    final sumLabel = receipt.sumLabel;
-    if (sumLabel != null) {
+    final totalLabel = receipt.totalLabel;
+    if (totalLabel != null) {
       receipt.entities?.add(
-        RecognizedSumLabel(value: sumLabel.value, line: sumLabel.line),
+        RecognizedTotalLabel(value: totalLabel.value, line: totalLabel.line),
       );
     }
 
@@ -481,10 +483,10 @@ final class ReceiptOptimizer implements Optimizer {
       );
     }
 
-    final boundingBox = receipt.boundingBox;
-    if (boundingBox != null) {
+    final bounds = receipt.bounds;
+    if (bounds != null) {
       receipt.entities?.add(
-        RecognizedBoundingBox(value: boundingBox.value, line: boundingBox.line),
+        RecognizedBounds(value: bounds.value, line: bounds.line),
       );
     }
   }
@@ -549,7 +551,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
-    final tiePx = ReceiptRuntime.tuning.boundingBoxBuffer.toDouble();
+    final tiePx = ReceiptRuntime.tuning.verticalTolerance.toDouble();
 
     final sa = _orderStats[a];
     final sb = _orderStats[b];
