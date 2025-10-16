@@ -19,7 +19,6 @@ export 'src/models/index.dart'
         RecognizedStore,
         RecognizedCompany,
         RecognizedPurchaseDate,
-
         /// Line-item layer
         RecognizedProduct,
         RecognizedPrice,
