@@ -1,6 +1,7 @@
 import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
-import 'package:receipt_recognition/src/utils/ocr/index.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Complete recognized receipt (positions, totals, store, date, bounds, entities).
 class RecognizedReceipt {
@@ -65,7 +66,7 @@ class RecognizedReceipt {
     RecognizedPurchaseDate? purchaseDate;
     if (rawPd != null) {
       purchaseDate = RecognizedPurchaseDate(
-        value: rawPd.toString(),
+        value: ReceiptFormatter.parseNumericYMD(rawPd) ?? DateTime.now(),
         line: ReceiptTextLine(),
       );
     }

@@ -2,7 +2,6 @@ import 'dart:math';
 
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/services/parser/index.dart';
 
 /// Line item position on a receipt (product + price).
 final class RecognizedPosition {
@@ -132,7 +131,8 @@ final class RecognizedGroup {
   /// Removes a leading amount pattern from [postfixText], returning the remainder.
   String convertToPostfixText(String postfixText) {
     if (postfixText.isEmpty) return postfixText;
-    final m = ReceiptPatterns.amount.matchAsPrefix(postfixText.trim());
+    final amountPattern = RegExp(r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)');
+    final m = amountPattern.matchAsPrefix(postfixText.trim());
     if (m == null) return '';
     return postfixText.substring(m.end).trim();
   }

@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/utils/ocr/index.dart';
+import 'package:receipt_recognition/src/services/ocr/index.dart';
 
 /// Outer bounds and skew angle of the receipt.
 final class RecognizedBounds extends RecognizedEntity<Rect> {

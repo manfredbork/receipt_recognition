@@ -3,11 +3,10 @@ import 'dart:ui';
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/services/parser/index.dart';
+import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/geometry/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
-import 'package:receipt_recognition/src/utils/ocr/index.dart';
 
 /// Parses OCR output into a structured receipt by extracting entities, ordering by
 /// vertical position, filtering outliers, and assembling positions, total, store, and bounds.
@@ -62,6 +61,54 @@ final class ReceiptParser {
     final c = _topL(a).compareTo(_topL(b));
     return c != 0 ? c : _leftL(a).compareTo(_leftL(b));
   }
+
+  /// Matches numeric dates in the format "01.09.2025" or "1/9/25" with a consistent separator.
+  static final RegExp _dateDayMonthYearNumeric = RegExp(
+    r'\b(\d{1,2}([./-])\d{1,2}\2\d{2,4})\b',
+  );
+
+  /// Matches numeric dates in the format "2025-09-01" or "2025/9/1" with a consistent separator.
+  static final RegExp _dateYearMonthDayNumeric = RegExp(
+    r'\b(\d{4}([./-])\d{1,2}\2\d{1,2})\b',
+  );
+
+  /// Matches English dates like "1.September 25", "1. September 2025", or "1 September 2025".
+  static final RegExp _dateDayMonthYearEn = RegExp(
+    r'\b(\d{1,2}(?:\.\s*|\s+)(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|'
+    r'Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|'
+    r'Dec(?:ember)?)\.?,?\s+\d{2,4})\b',
+    caseSensitive: false,
+  );
+
+  /// Matches U.S. English dates like "September 1, 2025", "Sep 1 25", or "Sep.1,2025".
+  static final RegExp _dateMonthDayYearEn = RegExp(
+    r'\b((Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|'
+    r'Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|'
+    r'Dec(?:ember)?)\.?\s*\d{1,2},?\s*\d{2,4})\b',
+    caseSensitive: false,
+  );
+
+  /// Matches German dates like "1.September 25", "1. September 2025", or "1 September 2025".
+  static final RegExp _dateDayMonthYearDe = RegExp(
+    r'\b(\d{1,2}(?:\.\s*|\s+)(Jan(?:uar)?|Feb(?:ruar)?|Mär(?:z)?|Apr(?:il)?|Mai|Jun(?:i)?|'
+    r'Jul(?:i)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Okt(?:ober)?|Nov(?:ember)?|'
+    r'Dez(?:ember)?)\.?,?\s+\d{2,4})\b',
+    caseSensitive: false,
+  );
+
+  /// Pattern to match monetary values (e.g., 1,99 or -5.00).
+  static final RegExp _amount = RegExp(
+    r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
+  );
+
+  /// Pattern to match strings likely to be product descriptions.
+  static final RegExp _unknown = RegExp(r'[\D\S]{4,}');
+
+  /// Pattern to filter out suspicious or metadata-like product names.
+  static final RegExp _suspiciousProductName = RegExp(
+    r'\bx\s?\d+',
+    caseSensitive: false,
+  );
 
   /// Effective geometric tolerance as double from runtime.
   static double get _tol => ReceiptRuntime.tuning.verticalTolerance.toDouble();
@@ -236,7 +283,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    final amount = ReceiptPatterns.amount.stringMatch(line.text);
+    final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
     if (_cxL(line) <= median - _tol) return false;
     final value = double.parse(ReceiptFormatter.normalizeAmount(amount));
@@ -250,7 +297,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    final unknown = ReceiptPatterns.unknown.stringMatch(line.text);
+    final unknown = _unknown.stringMatch(line.text);
     if (unknown == null || _cxL(line) >= median) return false;
     parsed.add(RecognizedUnknown(line: line, value: line.text));
     return true;
@@ -298,20 +345,37 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Extracts the first date found in the given text lines.
+  /// Extracts the first purchase date as a UTC `DateTime` placed directly in `value`,
+  /// using the class-level `_date*` regex patterns (numeric and EN/DE month-name forms).
   static RecognizedPurchaseDate? _extractDateFromLines(List<TextLine> lines) {
-    final datePatterns = [
-      ReceiptPatterns.dateDayMonthYearNumeric,
-      ReceiptPatterns.dateYearMonthDayNumeric,
-      ReceiptPatterns.dateDayMonthYearEn,
-      ReceiptPatterns.dateMonthDayYearEn,
-      ReceiptPatterns.dateDayMonthYearDe,
+    final patterns = [
+      _dateYearMonthDayNumeric,
+      _dateDayMonthYearNumeric,
+      _dateDayMonthYearEn,
+      _dateMonthDayYearEn,
+      _dateDayMonthYearDe,
     ];
+
     for (final line in lines) {
-      for (final p in datePatterns) {
-        final m = p.firstMatch(line.text);
-        if (m != null && m.groupCount >= 1) {
-          return RecognizedPurchaseDate(value: m.group(1)!, line: line);
+      final text = line.text;
+      for (final p in patterns) {
+        final m = p.firstMatch(text);
+        if (m == null || m.groupCount < 1) continue;
+        final token = m.group(1)!;
+        DateTime? dt;
+
+        if (identical(p, _dateYearMonthDayNumeric)) {
+          dt = ReceiptFormatter.parseNumericYMD(token);
+        } else if (identical(p, _dateDayMonthYearNumeric)) {
+          dt = ReceiptFormatter.parseNumericDMY(token);
+        } else if (identical(p, _dateMonthDayYearEn)) {
+          dt = ReceiptFormatter.parseNameMDY(token);
+        } else {
+          dt = ReceiptFormatter.parseNameDMY(token);
+        }
+
+        if (dt != null) {
+          return RecognizedPurchaseDate(value: dt, line: line);
         }
       }
     }
@@ -741,7 +805,7 @@ final class ReceiptParser {
     final toRemove = <RecognizedPosition>[];
     for (final pos in receipt.positions) {
       final productText = ReceiptFormatter.trim(pos.product.value);
-      if (ReceiptPatterns.suspiciousProductName.hasMatch(productText)) {
+      if (_suspiciousProductName.hasMatch(productText)) {
         toRemove.add(pos);
       }
     }

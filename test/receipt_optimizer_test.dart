@@ -132,7 +132,10 @@ void main() {
     );
 
     expect(receipt.purchaseDate, isNotNull);
-    expect(receipt.purchaseDate!.value, equals('2024-02-01'));
+    expect(
+      receipt.purchaseDate!.formattedValue,
+      equals('2024-02-01T00:00:00.000Z'),
+    );
 
     final dt = receipt.purchaseDate!.parsedDateTime!;
 

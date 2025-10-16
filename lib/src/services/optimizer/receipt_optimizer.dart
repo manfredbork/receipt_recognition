@@ -208,10 +208,10 @@ final class ReceiptOptimizer implements Optimizer {
   void _optimizePurchaseDate(RecognizedReceipt receipt) {
     if (_purchaseDates.isEmpty) return;
     final mostFrequentPurchaseDate = ReceiptNormalizer.sortByFrequency(
-      _purchaseDates.map((c) => c.value).toList(),
+      _purchaseDates.map((c) => c.formattedValue).toList(),
     );
     receipt.purchaseDate = _purchaseDates.lastWhere(
-      (pd) => pd.value == mostFrequentPurchaseDate.last,
+      (pd) => pd.formattedValue == mostFrequentPurchaseDate.last,
     );
   }
 

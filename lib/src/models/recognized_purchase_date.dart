@@ -1,22 +1,29 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
-import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Purchase date recognized from a receipt.
-final class RecognizedPurchaseDate extends RecognizedEntity<String> {
-  /// Creates a purchase date entity from [value] and [line].
+///
+/// The `value` is a parsed `DateTime`. Prefer storing UTC to avoid
+/// timezone ambiguity; formatting uses ISO-8601 via `toIso8601String()`.
+final class RecognizedPurchaseDate extends RecognizedEntity<DateTime> {
+  /// Creates a purchase date entity from a parsed [value] and its source [line].
   const RecognizedPurchaseDate({required super.value, required super.line});
 
   /// Returns a copy with updated fields.
-  RecognizedPurchaseDate copyWith({String? value, TextLine? line}) =>
+  RecognizedPurchaseDate copyWith({DateTime? value, TextLine? line}) =>
       RecognizedPurchaseDate(
         value: value ?? this.value,
         line: line ?? this.line,
       );
 
-  /// Parsed [DateTime] if possible.
-  DateTime? get parsedDateTime => ReceiptFormatter.parseDate(value);
+  /// The parsed `DateTime` value.
+  DateTime? get parsedDateTime => value;
 
+  /// Formats the date as ISO-8601 using `DateTime.toIso8601String()`.
+  ///
+  /// For UTC values, this yields strings like `2025-10-16T09:15:30.123Z`.
+  /// For local (non-UTC) values, this yields strings like
+  /// `2025-10-16T11:15:30.123` without a timezone designator.
   @override
-  String format(String value) => value;
+  String format(DateTime value) => value.toIso8601String();
 }
