@@ -192,10 +192,10 @@ final class RecognizedScanProgress {
   final ReceiptValidationResult validationResult;
 
   /// Estimated completion percentage (0–100).
-  final int? estimatedPercentage;
+  final int estimatedPercentage;
 
   /// Merged receipt built from all scans.
-  final RecognizedReceipt? mergedReceipt;
+  final RecognizedReceipt mergedReceipt;
 
   /// Creates a scan progress snapshot.
   const RecognizedScanProgress({
@@ -203,8 +203,8 @@ final class RecognizedScanProgress {
     required this.addedPositions,
     required this.updatedPositions,
     required this.validationResult,
-    this.estimatedPercentage,
-    this.mergedReceipt,
+    required this.estimatedPercentage,
+    required this.mergedReceipt,
   });
 }
 
@@ -229,15 +229,15 @@ class ReceiptValidationResult {
   final ReceiptCompleteness status;
 
   /// Match percentage between calculated and declared total (0–100).
-  final int? matchPercentage;
+  final int matchPercentage;
 
   /// Human-readable validation message.
-  final String? message;
+  final String message;
 
   /// Creates a validation result.
   const ReceiptValidationResult({
     required this.status,
-    this.matchPercentage,
-    this.message,
+    required this.matchPercentage,
+    required this.message,
   });
 }

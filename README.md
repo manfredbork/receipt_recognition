@@ -460,9 +460,8 @@ When automatic validation doesn't reach 100% match but the receipt seems adequat
 ```dart
 // Example: Accepting a nearly complete receipt when user taps "Accept"
 void acceptCurrentReceipt() {
-  if (progress.mergedReceipt != null && 
-      progress.validationResult.matchPercentage! >= 95) {
-    final acceptedReceipt = receiptRecognizer.acceptReceipt(progress.mergedReceipt!);
+  if (progress.validationResult.matchPercentage >= 95) {
+    final acceptedReceipt = receiptRecognizer.acceptReceipt(progress.mergedReceipt);
     // Handle the accepted receipt
   }
 }
@@ -470,8 +469,8 @@ void acceptCurrentReceipt() {
 
 Tip: You can also accept immediately from the current snapshot if it already meets both conditions:
 
-- `merged.isValid == true`
-- `merged.isConfirmed == true`
+- `progress.mergedReceipt.isValid == true`
+- `progress.mergedReceipt.isConfirmed == true`
 
 #### Receipt Validation Flow
 
