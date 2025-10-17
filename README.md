@@ -66,8 +66,6 @@ Update `Info.plist`:
 ```xml
 <key>NSCameraUsageDescription</key>
 <string>Camera access is needed to scan receipts.</string>
-<key>NSPhotoLibraryUsageDescription</key>
-<string>Photo library access is needed to select receipt images.</string>
 ```
 
 ---
@@ -83,9 +81,11 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 // - extend: merge with defaults (user wins on duplicates)
 // - override: replace specific sections entirely
 // - tuning: override-only thresholds/knobs
-final options = {
+final options = ReceiptOptions.fromLayeredJson({
   "extend": {
-    "storeNames": { "REWE CITY": "Rewe" },
+    "storeNames": {
+      "REWE CITY": "Rewe"
+    },
     "discountKeywords": ["Rabatt", "Discount", "Promo"]
   },
   "override": {
@@ -93,9 +93,9 @@ final options = {
   },
   "tuning": {
     "optimizerConfidenceThreshold": 88,
-    "optimizerStabilityThreshold": 45,
+    "optimizerStabilityThreshold": 45
   }
-}
+});
 
 // Create a receipt recognizer
 final receiptRecognizer = ReceiptRecognizer(
@@ -131,6 +131,106 @@ processReceiptImage(InputImage inputImage) async {
   receiptRecognizer.close();
   super.dispose();
 }
+```
+
+### ⚙️ Options Overview
+
+Use options to customize parsing, detection, and optimizer behavior. You can supply options as:
+
+- Layered object: `extend`, `override`, and `tuning`
+- Flat map: using a single-level JSON-like structure
+
+Parameters (keys inside extend/override, or top-level in flat form)
+
+- storeNames: Map<String, String>
+    - Maps OCR labels to a canonical store name (case-insensitive detection).
+- totalLabels: Map<String, String>
+    - Maps variants (e.g., “SUMME”, “GESAMT”, “AMOUNT DUE”) to a canonical label.
+- ignoreKeywords: List<String>
+    - Lines containing any of these are ignored.
+- stopKeywords: List<String>
+    - Parsing stops after encountering these.
+- foodKeywords: List<String>
+    - Postfix markers that classify an item as food.
+- nonFoodKeywords: List<String>
+    - Postfix markers that classify an item as non-food.
+- discountKeywords: List<String>
+    - Indicates discounts/coupons.
+- depositKeywords: List<String>
+    - Indicates deposits/returns (e.g., “Pfand”, “Leergut”).
+- tuning: Map<String, dynamic> (override-only)
+    - optimizerConfidenceThreshold (int): min combined confidence (0–100).
+    - optimizerStabilityThreshold (int): min stability (0–100).
+    - optimizerPrecisionNormal (int): typical grouping capacity.
+    - optimizerPrecisionHigh (int): higher-capacity variant.
+    - optimizerLoopThreshold (int): stall detection iterations.
+    - optimizerEwmaAlpha (double): smoothing for order learning.
+    - optimizerAboveCountDecayThreshold (int): decay threshold for order counts.
+    - optimizerVariantMinSim (double): min similarity for merging variants.
+    - optimizerMinProductSimToMerge (double): min token similarity to merge.
+    - verticalTolerance (int): pixel tolerance for alignment.
+    - totalTolerance (double): amount tolerance when matching totals.
+    - outlierTau, outlierMaxCandidates, outlierLowConfThreshold, outlierMinSamples, outlierSuspectBonus: outlier
+      handling knobs.
+
+Merge behavior
+
+- extend: merged with built-in defaults; user values win on duplicates.
+- override: replaces the provided sections entirely; defaults ignored for those keys.
+- tuning: always override-only (not merged); omitted fields fall back to defaults.
+
+Examples
+
+- Layered:
+
+```dart
+// Layered form:
+// - extend merges with defaults (only provided keys; omitted sections use defaults)
+// - override replaces the specified sections entirely
+// - tuning overrides only the provided fields; others fall back to defaults
+final layered = {
+  "extend": {
+    "storeNames": {
+      "REWE CITY": "Rewe"
+    },
+    "discountKeywords": ["Rabatt", "Discount", "Promo"]
+  },
+  "override": {
+    "stopKeywords": ["Rückgeld", "Change"]
+  },
+  "tuning": {
+    "optimizerConfidenceThreshold": 88,
+    "optimizerStabilityThreshold": 45
+  }
+};
+
+final options = ReceiptOptions.fromLayeredJson(layered);
+```
+
+- Flat:
+
+```dart
+// Flat form:
+// - Provided sections override that section (no union merge for that section)
+// - Omitted sections fall back to built-in defaults
+// - tuning still overrides only provided fields (others use defaults)
+final flat = {
+  "storeNames": {
+    "REWE": "Rewe",
+    "REWE CITY": "Rewe"
+  },
+  "totalLabels": {
+    "SUMME": "Summe",
+    "GESAMT": "Gesamt"
+  },
+  "ignoreKeywords": ["E-Bon", "Coupon"],
+  "stopKeywords": ["Rückgeld", "Change"],
+  "tuning": {
+    "optimizerConfidenceThreshold": 90 
+  }
+};
+
+final options = ReceiptOptions.fromJsonLike(flat);
 ```
 
 ### 🎥 Advanced Example: Video Feed Integration
@@ -427,7 +527,14 @@ See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version 
 
 - [x] Product name normalization
 - [x] Long receipt support and merging mechanism
-- [x] Multi-language receipt support (English and German)
+- [x] Multi-language receipt support
+- [x] Purchase date detection
+- [x] Total label normalization
+- [x] Bounds and skew estimation
+- [x] Layered options (extend/override/tuning)
+- [x] Stability-based grouping/merging
+- [ ] Enhanced Android platform integration
+- [ ] Broader international receipt layout support
 
 ---
 
