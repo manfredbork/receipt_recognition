@@ -1,3 +1,5 @@
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
+
 /// Numeric/string tuning knobs for parsing/optimization.
 final class ReceiptTuning {
   /// Total tolerance tight and more precise below 1 cent.
@@ -54,8 +56,8 @@ final class ReceiptTuning {
   /// Minimum Jaccard similarity of product tokens required to merge items.
   final double optimizerMinProductSimToMerge;
 
-  /// Creates a new tuning configuration from required values.
-  ReceiptTuning({
+  // Private real constructor
+  ReceiptTuning._internal({
     required this.totalTolerance,
     required this.heuristicQuarter,
     required this.verticalTolerance,
@@ -76,49 +78,122 @@ final class ReceiptTuning {
     required this.optimizerMinProductSimToMerge,
   });
 
-  /// Builds tuning from a JSON-like map using safe defaults.
+  /// Public constructor with **optional** named params.
+  /// Any omitted field falls back to the default from `kReceiptDefaultOptions['tuning']`.
+  factory ReceiptTuning({
+    double? totalTolerance,
+    double? heuristicQuarter,
+    int? verticalTolerance,
+    int? outlierTau,
+    int? outlierMaxCandidates,
+    int? outlierLowConfThreshold,
+    int? outlierMinSamples,
+    int? outlierSuspectBonus,
+    int? optimizerLoopThreshold,
+    int? optimizerPrecisionNormal,
+    int? optimizerPrecisionHigh,
+    int? optimizerConfidenceThreshold,
+    int? optimizerStabilityThreshold,
+    int? optimizerInvalidateIntervalMs,
+    double? optimizerEwmaAlpha,
+    int? optimizerAboveCountDecayThreshold,
+    double? optimizerVariantMinSim,
+    double? optimizerMinProductSimToMerge,
+  }) {
+    final def = ReceiptTuning.fromJsonLike(
+      kReceiptDefaultOptions['tuning'] as Map<String, dynamic>?,
+    );
+    return ReceiptTuning._internal(
+      totalTolerance: totalTolerance ?? def.totalTolerance,
+      heuristicQuarter: heuristicQuarter ?? def.heuristicQuarter,
+      verticalTolerance: verticalTolerance ?? def.verticalTolerance,
+      outlierTau: outlierTau ?? def.outlierTau,
+      outlierMaxCandidates: outlierMaxCandidates ?? def.outlierMaxCandidates,
+      outlierLowConfThreshold:
+          outlierLowConfThreshold ?? def.outlierLowConfThreshold,
+      outlierMinSamples: outlierMinSamples ?? def.outlierMinSamples,
+      outlierSuspectBonus: outlierSuspectBonus ?? def.outlierSuspectBonus,
+      optimizerLoopThreshold:
+          optimizerLoopThreshold ?? def.optimizerLoopThreshold,
+      optimizerPrecisionNormal:
+          optimizerPrecisionNormal ?? def.optimizerPrecisionNormal,
+      optimizerPrecisionHigh:
+          optimizerPrecisionHigh ?? def.optimizerPrecisionHigh,
+      optimizerConfidenceThreshold:
+          optimizerConfidenceThreshold ?? def.optimizerConfidenceThreshold,
+      optimizerStabilityThreshold:
+          optimizerStabilityThreshold ?? def.optimizerStabilityThreshold,
+      optimizerInvalidateIntervalMs:
+          optimizerInvalidateIntervalMs ?? def.optimizerInvalidateIntervalMs,
+      optimizerEwmaAlpha: optimizerEwmaAlpha ?? def.optimizerEwmaAlpha,
+      optimizerAboveCountDecayThreshold:
+          optimizerAboveCountDecayThreshold ??
+          def.optimizerAboveCountDecayThreshold,
+      optimizerVariantMinSim:
+          optimizerVariantMinSim ?? def.optimizerVariantMinSim,
+      optimizerMinProductSimToMerge:
+          optimizerMinProductSimToMerge ?? def.optimizerMinProductSimToMerge,
+    );
+  }
+
+  /// Convenience: build strictly from the defaults table.
+  factory ReceiptTuning.defaults() => ReceiptTuning.fromJsonLike(
+    kReceiptDefaultOptions['tuning'] as Map<String, dynamic>?,
+  );
+
+  /// Builds tuning from a JSON-like map, falling back **per-field** to defaults,
+  /// without hardcoded numeric literals. Also supports legacy key aliases.
   factory ReceiptTuning.fromJsonLike(Map<String, dynamic>? json) {
-    final j = json ?? const {};
-    T numAs<T extends num>(String k, T d) {
-      final v = j[k];
-      if (v is num) return (T == int ? v.toInt() : v.toDouble()) as T;
-      return d;
+    final Map<String, dynamic> d =
+        (kReceiptDefaultOptions['tuning'] as Map<String, dynamic>?) ?? const {};
+
+    final Map<String, dynamic> u = json ?? const {};
+
+    final Map<String, dynamic> merged =
+        <String, dynamic>{}
+          ..addAll(d)
+          ..addAll(u);
+
+    T numCast<T extends num>(num v) =>
+        (T == int ? v.toInt() : v.toDouble()) as T;
+
+    T numFromKeys<T extends num>(List<String> keys) {
+      for (final k in keys) {
+        final v = merged[k];
+        if (v is num) return numCast<T>(v);
+      }
+      throw StateError('Missing tuning value for keys: ${keys.join(", ")}');
     }
 
-    return ReceiptTuning(
-      totalTolerance: numAs<double>('totalTolerance', 0.009),
-      heuristicQuarter: numAs<double>('heuristicQuarter', 0.25),
-      verticalTolerance: numAs<int>('verticalTolerance', 25),
-      outlierTau: numAs<int>('outlierTau', 1),
-      outlierMaxCandidates: numAs<int>('outlierMaxCandidates', 12),
-      outlierLowConfThreshold: numAs<int>('outlierLowConfThreshold', 35),
-      outlierMinSamples: numAs<int>('outlierMinSamples', 3),
-      outlierSuspectBonus: numAs<int>('outlierSuspectBonus', 50),
-      optimizerLoopThreshold: numAs<int>('optimizerLoopThreshold', 10),
-      optimizerPrecisionNormal: numAs<int>('optimizerPrecisionNormal', 20),
-      optimizerPrecisionHigh: numAs<int>('optimizerPrecisionHigh', 20),
-      optimizerConfidenceThreshold: numAs<int>(
+    return ReceiptTuning._internal(
+      totalTolerance: numFromKeys<double>(['totalTolerance']),
+      heuristicQuarter: numFromKeys<double>(['heuristicQuarter']),
+      verticalTolerance: numFromKeys<int>(['verticalTolerance']),
+      outlierTau: numFromKeys<int>(['outlierTau']),
+      outlierMaxCandidates: numFromKeys<int>(['outlierMaxCandidates']),
+      outlierLowConfThreshold: numFromKeys<int>(['outlierLowConfThreshold']),
+      outlierMinSamples: numFromKeys<int>(['outlierMinSamples']),
+      outlierSuspectBonus: numFromKeys<int>(['outlierSuspectBonus']),
+      optimizerLoopThreshold: numFromKeys<int>(['optimizerLoopThreshold']),
+      optimizerPrecisionNormal: numFromKeys<int>(['optimizerPrecisionNormal']),
+      optimizerPrecisionHigh: numFromKeys<int>(['optimizerPrecisionHigh']),
+      optimizerConfidenceThreshold: numFromKeys<int>([
         'optimizerConfidenceThreshold',
-        90,
-      ),
-      optimizerStabilityThreshold: numAs<int>(
+      ]),
+      optimizerStabilityThreshold: numFromKeys<int>([
         'optimizerStabilityThreshold',
-        50,
-      ),
-      optimizerInvalidateIntervalMs: numAs<int>(
+      ]),
+      optimizerInvalidateIntervalMs: numFromKeys<int>([
         'optimizerInvalidateIntervalMs',
-        3000,
-      ),
-      optimizerEwmaAlpha: numAs<double>('optimizerEwmaAlpha', 0.3),
-      optimizerAboveCountDecayThreshold: numAs<int>(
+      ]),
+      optimizerEwmaAlpha: numFromKeys<double>(['optimizerEwmaAlpha']),
+      optimizerAboveCountDecayThreshold: numFromKeys<int>([
         'optimizerAboveCountDecayThreshold',
-        50,
-      ),
-      optimizerVariantMinSim: numAs<double>('optimizerVariantMinSim', 0.85),
-      optimizerMinProductSimToMerge: numAs<double>(
+      ]),
+      optimizerVariantMinSim: numFromKeys<double>(['optimizerVariantMinSim']),
+      optimizerMinProductSimToMerge: numFromKeys<double>([
         'optimizerMinProductSimToMerge',
-        0.5,
-      ),
+      ]),
     );
   }
 

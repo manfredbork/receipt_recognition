@@ -3,27 +3,24 @@ import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 
-/// Build options from simple keyword lists, but ensure defaults DO NOT apply.
-/// We mark every set/map as `replace` so only the provided test keywords are used.
 ReceiptOptions makeOptionsFromLists({
   List<String> food = const [],
   List<String> nonFood = const [],
   List<String> discount = const [],
   List<String> deposit = const [],
 }) {
-  final raw = ReceiptOptions(
-    storeNames: DetectionMap.fromMap(const {}),
-    totalLabels: DetectionMap.fromMap(const {}),
-    ignoreKeywords: KeywordSet.fromList(const []),
-    stopKeywords: KeywordSet.fromList(const []),
-    foodKeywords: KeywordSet.fromList(food),
-    nonFoodKeywords: KeywordSet.fromList(nonFood),
-    discountKeywords: KeywordSet.fromList(discount),
-    depositKeywords: KeywordSet.fromList(deposit),
-    tuning: ReceiptOptions.defaults().tuning,
+  return ReceiptOptions(
+    override: <String, dynamic>{
+      'storeNames': <String, String>{},
+      'totalLabels': <String, String>{},
+      'ignoreKeywords': <String>[],
+      'stopKeywords': <String>[],
+      'foodKeywords': food,
+      'nonFoodKeywords': nonFood,
+      'discountKeywords': discount,
+      'depositKeywords': deposit,
+    },
   );
-
-  return ReceiptOptions.userOnly(raw);
 }
 
 /// Wire up a minimal product/price/position/group so postfix extraction works.

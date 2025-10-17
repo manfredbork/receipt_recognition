@@ -6,66 +6,11 @@ enum MergePolicy {
   extend,
 
   /// Ignore defaults completely and use only user config.
-  replace,
+  override,
 }
 
-/// Built-in default options as a JSON-like map (can be persisted/overridden).
-/// Canonicals map to themselves by default. Adjust values if you want alias→canonical.
-const Map<String, dynamic> kReceiptDefaultOptions = {
-  'storeNames': {
-    'Aldi': 'Aldi',
-    'Rewe': 'Rewe',
-    'Edeka': 'Edeka',
-    'Penny': 'Penny',
-    'Lidl': 'Lidl',
-    'Kaufland': 'Kaufland',
-    'Netto': 'Netto',
-    'Akzenta': 'Akzenta',
-  },
-  'totalLabels': {
-    'Zu zahlen': 'Zu zahlen',
-    'Gesamt': 'Gesamt',
-    'Summe': 'Summe',
-    'Total': 'Total',
-  },
-  'ignoreKeywords': [
-    'E-Bon',
-    'Coupon',
-    'Eingabe',
-    'Posten',
-    'Subtotal',
-    'Stk x',
-    'kg x',
-  ],
-  'stopKeywords': ['Geg.', 'Rückgeld', 'Bar', 'Change'],
-  'foodKeywords': ['B', '2', 'BW'],
-  'nonFoodKeywords': ['A', '1', 'AW'],
-  'discountKeywords': ['Rabatt', 'Coupon', 'Discount'],
-  'depositKeywords': ['Leerg.', 'Leergut', 'Einweg', 'Pfand', 'Deposit'],
-  'tuning': {
-    'boundingBoxBuffer': 25,
-    'sumTolerance': 0.009,
-    'heuristicQuarter': 0.25,
-    'outlierTau': 1,
-    'outlierMaxCandidates': 12,
-    'outlierLowConfThreshold': 35,
-    'outlierMinSamples': 3,
-    'outlierSuspectBonus': 50,
-    'optimizerLoopThreshold': 10,
-    'optimizerPrecisionNormal': 20,
-    'optimizerPrecisionHigh': 20,
-    'optimizerConfidenceThreshold': 90,
-    'optimizerStabilityThreshold': 50,
-    'optimizerInvalidateIntervalMs': 3000,
-    'optimizerEwmaAlpha': 0.3,
-    'optimizerAboveCountDecayThreshold': 50,
-    'optimizerVariantMinSim': 0.85,
-    'optimizerMinProductSimToMerge': 0.5,
-  },
-};
-
 /// A literal that won't ever occur in receipt text → safe never-match regex.
-const String neverMatchLiteral = r'___NEVER_MATCH___';
+const String neverMatchLiteral = r'(?!)';
 
 /// Strongly-typed, user-configurable options for the parser with merge helpers.
 final class ReceiptOptions {
@@ -96,8 +41,8 @@ final class ReceiptOptions {
   /// Numeric/string tuning applied across the parser/optimizer.
   final ReceiptTuning tuning;
 
-  /// Creates a new options object with explicit maps/sets and tuning.
-  ReceiptOptions({
+  /// Private constructor for raw typed parts.
+  ReceiptOptions._internal({
     required this.storeNames,
     required this.totalLabels,
     required this.ignoreKeywords,
@@ -109,8 +54,121 @@ final class ReceiptOptions {
     required this.tuning,
   });
 
+  /// Public constructor that mirrors the layered user config structure.
+  ///
+  /// - [extend]: union-merged with defaults (user wins on duplicates)
+  /// - [override]: fully replaces defaults per provided key
+  /// - [tuning]: ALWAYS override-only (top-level, not part of extend/override)
+  factory ReceiptOptions({
+    Map<String, dynamic>? extend,
+    Map<String, dynamic>? override,
+    Map<String, dynamic>? tuning,
+  }) {
+    final def = ReceiptOptions.defaults();
+
+    Map<String, dynamic> mapOrEmpty(dynamic v) =>
+        v is Map<String, dynamic> ? v : const <String, dynamic>{};
+    final ext = mapOrEmpty(extend);
+    final ovw = mapOrEmpty(override);
+    final tun = mapOrEmpty(tuning);
+
+    Map<String, String> pickStrMap(dynamic v) =>
+        v is Map
+            ? Map<String, String>.fromEntries(
+              v.entries
+                  .where((e) => e.key is String && e.value is String)
+                  .map((e) => MapEntry(e.key as String, e.value as String)),
+            )
+            : <String, String>{};
+
+    List<String> pickStrList(dynamic v) =>
+        v is List ? v.whereType<String>().toList() : const <String>[];
+
+    DetectionMap resolveMap({
+      required DetectionMap defaults,
+      required String key,
+    }) {
+      if (ovw.containsKey(key)) {
+        return DetectionMap.fromMap(pickStrMap(ovw[key]));
+      }
+      return _dmMerge(
+        defaults,
+        DetectionMap.fromMap(pickStrMap(ext[key])),
+        MergePolicy.extend,
+      );
+    }
+
+    KeywordSet resolveList({
+      required KeywordSet defaults,
+      required String key,
+    }) {
+      if (ovw.containsKey(key)) {
+        return KeywordSet.fromList(pickStrList(ovw[key]));
+      }
+      return _ksMerge(
+        defaults,
+        KeywordSet.fromList(pickStrList(ext[key])),
+        MergePolicy.extend,
+      );
+    }
+
+    final storeNames = resolveMap(defaults: def.storeNames, key: 'storeNames');
+    final totalLabels = resolveMap(
+      defaults: def.totalLabels,
+      key: 'totalLabels',
+    );
+
+    final ignoreKeywords = resolveList(
+      defaults: def.ignoreKeywords,
+      key: 'ignoreKeywords',
+    );
+    final stopKeywords = resolveList(
+      defaults: def.stopKeywords,
+      key: 'stopKeywords',
+    );
+    final foodKeywords = resolveList(
+      defaults: def.foodKeywords,
+      key: 'foodKeywords',
+    );
+    final nonFoodKeywords = resolveList(
+      defaults: def.nonFoodKeywords,
+      key: 'nonFoodKeywords',
+    );
+    final discountKeywords = resolveList(
+      defaults: def.discountKeywords,
+      key: 'discountKeywords',
+    );
+    final depositKeywords = resolveList(
+      defaults: def.depositKeywords,
+      key: 'depositKeywords',
+    );
+
+    final tuningResolved =
+        tun.isNotEmpty ? ReceiptTuning.fromJsonLike(tun) : def.tuning;
+
+    return ReceiptOptions._internal(
+      storeNames: storeNames,
+      totalLabels: totalLabels,
+      ignoreKeywords: ignoreKeywords,
+      stopKeywords: stopKeywords,
+      foodKeywords: foodKeywords,
+      nonFoodKeywords: nonFoodKeywords,
+      discountKeywords: discountKeywords,
+      depositKeywords: depositKeywords,
+      tuning: tuningResolved,
+    );
+  }
+
+  /// Convenience: build from a layered JSON map {extend, override, tuning}.
+  factory ReceiptOptions.fromLayeredJson(Map<String, dynamic>? json) =>
+      ReceiptOptions(
+        extend: json?['extend'] as Map<String, dynamic>?,
+        override: json?['override'] as Map<String, dynamic>?,
+        tuning: json?['tuning'] as Map<String, dynamic>?,
+      );
+
   /// Returns a minimal config with all maps/lists empty (no matches).
-  factory ReceiptOptions.empty() => ReceiptOptions(
+  factory ReceiptOptions.empty() => ReceiptOptions._internal(
     storeNames: DetectionMap.fromMap(const {}),
     totalLabels: DetectionMap.fromMap(const {}),
     ignoreKeywords: KeywordSet.fromList(const []),
@@ -122,7 +180,7 @@ final class ReceiptOptions {
     tuning: ReceiptTuning.fromJsonLike(const {}),
   );
 
-  /// Builds options from a JSON-like map (e.g., from user config).
+  /// Builds options from a flat JSON-like map (no layered rules).
   factory ReceiptOptions.fromJsonLike(Map<String, dynamic> json) {
     Map<String, String> pickStrMap(dynamic v) {
       if (v is Map) {
@@ -140,7 +198,7 @@ final class ReceiptOptions {
       return const [];
     }
 
-    return ReceiptOptions(
+    return ReceiptOptions._internal(
       storeNames: DetectionMap.fromMap(pickStrMap(json['storeNames'])),
       totalLabels: DetectionMap.fromMap(pickStrMap(json['totalLabels'])),
       ignoreKeywords: KeywordSet.fromList(pickStrList(json['ignoreKeywords'])),
@@ -161,7 +219,7 @@ final class ReceiptOptions {
     );
   }
 
-  /// Serializes options to a JSON-like map.
+  /// Serializes options to a flat JSON-like map (no layered rules).
   Map<String, dynamic> toJsonLike() => {
     'storeNames': storeNames.mapping,
     'totalLabels': totalLabels.mapping,
@@ -178,62 +236,13 @@ final class ReceiptOptions {
   static ReceiptOptions defaults() =>
       ReceiptOptions.fromJsonLike(kReceiptDefaultOptions);
 
-  /// Builds options using only user input (no defaults).
-  static ReceiptOptions userOnly(ReceiptOptions? opts) =>
-      opts ?? ReceiptOptions.empty();
-
-  /// Builds effective options by merging [opts] with built-in JSON defaults.
-  static ReceiptOptions withDefaults(
-    ReceiptOptions? opts, {
-    MergePolicy storeNames = MergePolicy.extend,
-    MergePolicy totalLabels = MergePolicy.extend,
-    MergePolicy ignoreKeywords = MergePolicy.extend,
-    MergePolicy stopKeywords = MergePolicy.extend,
-    MergePolicy foodKeywords = MergePolicy.extend,
-    MergePolicy nonFoodKeywords = MergePolicy.extend,
-    MergePolicy discountKeywords = MergePolicy.extend,
-    MergePolicy depositKeywords = MergePolicy.extend,
-  }) {
-    final user = opts ?? ReceiptOptions.empty();
-    final def = ReceiptOptions.defaults();
-
-    return ReceiptOptions(
-      storeNames: _dmMerge(def.storeNames, user.storeNames, storeNames),
-      totalLabels: _dmMerge(def.totalLabels, user.totalLabels, totalLabels),
-      ignoreKeywords: _ksMerge(
-        def.ignoreKeywords,
-        user.ignoreKeywords,
-        ignoreKeywords,
-      ),
-      stopKeywords: _ksMerge(def.stopKeywords, user.stopKeywords, stopKeywords),
-      foodKeywords: _ksMerge(def.foodKeywords, user.foodKeywords, foodKeywords),
-      nonFoodKeywords: _ksMerge(
-        def.nonFoodKeywords,
-        user.nonFoodKeywords,
-        nonFoodKeywords,
-      ),
-      discountKeywords: _ksMerge(
-        def.discountKeywords,
-        user.discountKeywords,
-        discountKeywords,
-      ),
-      depositKeywords: _ksMerge(
-        def.depositKeywords,
-        user.depositKeywords,
-        depositKeywords,
-      ),
-      tuning:
-          user.tuning, // user takes precedence; pass def if you want extend semantics
-    );
-  }
-
   /// Merges default and user keyword sets according to [p].
   static KeywordSet _ksMerge(
     KeywordSet defaults,
     KeywordSet user,
     MergePolicy p,
   ) {
-    if (p == MergePolicy.replace) return user;
+    if (p == MergePolicy.override) return user;
     final out = <String>{...defaults.keywords, ...user.keywords};
     return KeywordSet.fromList(out.toList());
   }
@@ -244,7 +253,7 @@ final class ReceiptOptions {
     DetectionMap user,
     MergePolicy p,
   ) {
-    if (p == MergePolicy.replace) return user;
+    if (p == MergePolicy.override) return user;
     final merged =
         <String, String>{}
           ..addAll(defaults.mapping)
