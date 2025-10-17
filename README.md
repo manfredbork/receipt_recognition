@@ -6,7 +6,8 @@
 [![License](https://img.shields.io/github/license/manfredbork/receipt_recognition)](LICENSE)
 [![Last Commit](https://img.shields.io/github/last-commit/manfredbork/receipt_recognition)](https://github.com/manfredbork/receipt_recognition/commits/main)
 
-A Flutter package for scanning and extracting structured data from supermarket receipts using **Google's ML Kit**. Ideal for building expense tracking apps, loyalty programs, or any system needing receipt parsing.
+A Flutter package for scanning and extracting structured data from supermarket receipts using **Google's ML Kit**. Ideal
+for building expense tracking apps, loyalty programs, or any system needing receipt parsing.
 
 ---
 
@@ -15,9 +16,16 @@ A Flutter package for scanning and extracting structured data from supermarket r
 - 🧾 Detect and extract text from printed receipts
 - 🛒 Optimized for typical supermarket layouts
 - 🔍 Identifies line items, totals, and store names
+    - Total label normalization (e.g., “Summe”, “Gesamt”, “Total”)
+    - Purchase date detection
 - ⚡ Fast and efficient ML Kit text recognition
 - 📱 Works on Android and iOS
 - 🔧 Easy API with callback support
+    - Progress and completion callbacks driven by validation
+- 📐 Provides receipt bounds and estimated skew angle
+- 🧠 Layered options (extend/override/tuning) to customize stores, labels, keywords, and optimizer thresholds
+- 🧳 Stability-based merging and grouping to increase confidence over multiple scans
+- 🗓️ Multi-format date parsing (numeric and EN/DE month-name formats)
 
 ---
 
@@ -40,13 +48,15 @@ flutter pub get
 
 ### Platform Setup
 
+Note: Camera-only scanning requires the camera permission. If your app also lets users pick images from the gallery, add
+the appropriate media/storage permission for your target SDK (Android) or Photo Library usage description (iOS).
+
 #### Android
 
 Update `AndroidManifest.xml`:
 
 ```xml
 <uses-permission android:name="android.permission.CAMERA"/>
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
 ```
 
 #### iOS
@@ -56,8 +66,6 @@ Update `Info.plist`:
 ```xml
 <key>NSCameraUsageDescription</key>
 <string>Camera access is needed to scan receipts.</string>
-<key>NSPhotoLibraryUsageDescription</key>
-<string>Photo library access is needed to select receipt images.</string>
 ```
 
 ---
@@ -69,62 +77,166 @@ import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+// Prefer layered options:
+// - extend: merge with defaults (user wins on duplicates)
+// - override: replace specific sections entirely
+// - tuning: override-only thresholds/knobs
+final options = ReceiptOptions.fromLayeredJson({
+  "extend": {
+    "storeNames": {
+      "REWE CITY": "Rewe"
+    },
+    "discountKeywords": ["Rabatt", "Discount", "Promo"]
+  },
+  "override": {
+    "stopKeywords": ["Rückgeld", "Change"]
+  },
+  "tuning": {
+    "optimizerConfidenceThreshold": 88,
+    "optimizerStabilityThreshold": 45
+  }
+});
+
 // Create a receipt recognizer
 final receiptRecognizer = ReceiptRecognizer(
-  options: {
-    // The 'stores' map lets you normalize store/company names detected by OCR.
-    // Keys: possible OCR outputs or store name variants (case-insensitive).
-    // Values: the canonical store name you want in the final RecognizedReceipt.
-    'stores': {
-      // Normalize multiple variations of Aldi:
-      'aldi nord': 'Aldi Nord',
-      'aldi süd': 'Aldi Süd',
-      'aldi': 'Aldi',
-
-      // Normalize REWE variants:
-      'r e w e': 'Rewe',
-      'rewe': 'Rewe',
-
-      // Normalize Lidl spelling:
-      'lidl': 'Lidl',
-    }
-  },
-  singleScan: true,
+  options: options,
   onScanComplete: (receipt) {
     // Handle the recognized receipt
-    print('Company: ${receipt.company?.value}');
-    print('Total: ${receipt.sum?.formattedValue}');
-    
+    print('Store: ${receipt.store?.value}');
+    print('Total: ${receipt.total?.formattedValue}');
     for (final position in receipt.positions) {
       print('${position.product.formattedValue}: ${position.price.formattedValue}');
     }
   },
   onScanUpdate: (progress) {
     // Track scanning progress
-    print('Scan progress: ${progress.estimatedPercentage}%');
+    print('Scan progress: ${progress.validationResult.matchPercentage}%');
     print('Added positions: ${progress.addedPositions.length}');
   },
 );
 
-// Process an image
-Future<void> processReceiptImage(InputImage inputImage) async {
-  final receipt = await receiptRecognizer.processImage(inputImage);
-  if (receipt != null) {
-    // Receipt was successfully recognized
+// Process an image Future
+processReceiptImage(InputImage inputImage) async {
+  // 'snapshot' is the current best; final result arrives via onScanComplete
+  final snapshot = await receiptRecognizer.processImage(inputImage);
+  // If you prefer using the current snapshot as the final result:
+  if (snapshot.isValid && snapshot.isConfirmed) {
+    // snapshot is already final here; you can use it immediately
+    debugPrint('Final (via snapshot): ${snapshot.total?.formattedValue}');
   }
 }
 
-// Don't forget to close the receipt recognizer when done
-@override
-void dispose() {
+// Dispose
+@override void dispose() {
   receiptRecognizer.close();
   super.dispose();
 }
 ```
 
+### ⚙️ Options Overview
+
+Use options to customize parsing, detection, and optimizer behavior. You can supply options as:
+
+- Layered object: `extend`, `override`, and `tuning`
+- Flat map: using a single-level JSON-like structure
+
+Parameters (keys inside extend/override, or top-level in flat form)
+
+- storeNames: Map<String, String>
+    - Maps OCR labels to a canonical store name (case-insensitive detection).
+- totalLabels: Map<String, String>
+    - Maps variants (e.g., “SUMME”, “GESAMT”, “AMOUNT DUE”) to a canonical label.
+- ignoreKeywords: List<String>
+    - Lines containing any of these are ignored.
+- stopKeywords: List<String>
+    - Parsing stops after encountering these.
+- foodKeywords: List<String>
+    - Postfix markers that classify an item as food.
+- nonFoodKeywords: List<String>
+    - Postfix markers that classify an item as non-food.
+- discountKeywords: List<String>
+    - Indicates discounts/coupons.
+- depositKeywords: List<String>
+    - Indicates deposits/returns (e.g., “Pfand”, “Leergut”).
+- tuning: Map<String, dynamic> (override-only)
+    - optimizerConfidenceThreshold (int): min combined confidence (0–100).
+    - optimizerStabilityThreshold (int): min stability (0–100).
+    - optimizerPrecisionNormal (int): typical grouping capacity.
+    - optimizerPrecisionHigh (int): higher-capacity variant.
+    - optimizerLoopThreshold (int): stall detection iterations.
+    - optimizerEwmaAlpha (double): smoothing for order learning.
+    - optimizerAboveCountDecayThreshold (int): decay threshold for order counts.
+    - optimizerVariantMinSim (double): min similarity for merging variants.
+    - optimizerMinProductSimToMerge (double): min token similarity to merge.
+    - verticalTolerance (int): pixel tolerance for alignment.
+    - totalTolerance (double): amount tolerance when matching totals.
+    - outlierTau, outlierMaxCandidates, outlierLowConfThreshold, outlierMinSamples, outlierSuspectBonus: outlier
+      handling knobs.
+
+Merge behavior
+
+- extend: merged with built-in defaults; user values win on duplicates.
+- override: replaces the provided sections entirely; defaults ignored for those keys.
+- tuning: always override-only (not merged); omitted fields fall back to defaults.
+
+Examples
+
+- Layered:
+
+```dart
+// Layered form:
+// - extend merges with defaults (only provided keys; omitted sections use defaults)
+// - override replaces the specified sections entirely
+// - tuning overrides only the provided fields; others fall back to defaults
+final layered = {
+  "extend": {
+    "storeNames": {
+      "REWE CITY": "Rewe"
+    },
+    "discountKeywords": ["Rabatt", "Discount", "Promo"]
+  },
+  "override": {
+    "stopKeywords": ["Rückgeld", "Change"]
+  },
+  "tuning": {
+    "optimizerConfidenceThreshold": 88,
+    "optimizerStabilityThreshold": 45
+  }
+};
+
+final options = ReceiptOptions.fromLayeredJson(layered);
+```
+
+- Flat:
+
+```dart
+// Flat form:
+// - Provided sections override that section (no union merge for that section)
+// - Omitted sections fall back to built-in defaults
+// - tuning still overrides only provided fields (others use defaults)
+final flat = {
+  "storeNames": {
+    "REWE": "Rewe",
+    "REWE CITY": "Rewe"
+  },
+  "totalLabels": {
+    "SUMME": "Summe",
+    "GESAMT": "Gesamt"
+  },
+  "ignoreKeywords": ["E-Bon", "Coupon"],
+  "stopKeywords": ["Rückgeld", "Change"],
+  "tuning": {
+    "optimizerConfidenceThreshold": 90 
+  }
+};
+
+final options = ReceiptOptions.fromJsonLike(flat);
+```
+
 ### 🎥 Advanced Example: Video Feed Integration
 
-For an advanced use case, we provide an example of using this package with a video feed. You can integrate it with a camera feed (via a package like `camera`), and continuously scan receipts in real time.
+For an advanced use case, we provide an example of using this package with a video feed. You can integrate it with a
+camera feed (via a package like `camera`), and continuously scan receipts in real time.
 
 <p style="width:100vh">
   <img src="screenshots/screenshot1.png" style="width:25vh" alt="Best Practices" />
@@ -132,7 +244,8 @@ For an advanced use case, we provide an example of using this package with a vid
   <img src="screenshots/screenshot3.png" style="width:25vh" alt="Smartphone Receipt" />
 </p>
 
-Refer to the **[example app](example/lib/main.dart)** for an implementation that uses live camera data to recognize and process receipts as they appear in the frame.
+Refer to the **[example app](example/lib/main.dart)** for an implementation that uses live camera data to recognize and
+process receipts as they appear in the frame.
 
 ---
 
@@ -140,7 +253,8 @@ Refer to the **[example app](example/lib/main.dart)** for an implementation that
 
 ### Architecture Overview
 
-The receipt_recognition package follows a modular architecture designed to handle the complexities of receipt scanning and data extraction:
+The receipt_recognition package follows a modular architecture designed to handle the complexities of receipt scanning
+and data extraction:
 
 ```
 ┌────────────────┐     ┌─────────────────┐     ┌────────────────┐
@@ -161,19 +275,25 @@ The receipt_recognition package follows a modular architecture designed to handl
 
 #### 1. ReceiptRecognizer
 
-The main entry point for the package. It orchestrates the entire recognition process from image input to structured data output.
+The main entry point for the package. It orchestrates the entire recognition process from image input to structured data
+output.
 
 #### 2. Text Recognition Engine
 
-Leverages Google's ML Kit to perform OCR (Optical Character Recognition) on receipt images, converting the visual text into digital text.
+Leverages Google's ML Kit to perform OCR (Optical Character Recognition) on receipt images, converting the visual text
+into digital text.
 
 #### 3. ReceiptParser
 
 Analyzes the raw text to identify and categorize receipt elements:
-- Store/company name (e.g., Aldi, Rewe, Edeka, Penny, Lidl, Kaufland, Netto in German markets)
-- Total sum ("Summe", "Gesamt", "Total")
+
+- Store name (e.g., Aldi, Rewe, Edeka, Penny, Lidl, Kaufland, Netto in German markets)
+- Total ("Summe", "Gesamt", "Total")
 - Line items (products and prices)
 - Date and time information
+- Total label normalization
+- Purchase date extraction
+- Receipt bounds and skew angle estimation
 
 #### 4. ReceiptOptimizer
 
@@ -193,10 +313,14 @@ A crucial part that improves recognition accuracy through several mechanisms:
 ```
 
 The optimizer:
+
 - Groups similar receipt items together
 - Applies confidence thresholds to filter out uncertain recognitions
 - Uses stability measures to determine reliable data points
 - Merges multiple scans for improved accuracy
+- Stability-based grouping and merging across scans
+- Vertical order learning (history/EWMA) for consistent line ordering
+- Early outlier cleanup and regrouping when stalled
 
 ### Recognition Process
 
@@ -206,6 +330,9 @@ The optimizer:
 4. **Optimization**: Multiple scans are compared and merged for accuracy
 5. **Data Delivery**: Structured receipt data is provided via callbacks
 
+Note: Finalization occurs when the receipt is both valid (calculated total equals detected total) and confirmed
+(stability-based). Otherwise, scanning continues, and you can manually accept nearly complete results.
+
 ### Implementation Status
 
 ```
@@ -213,11 +340,13 @@ The optimizer:
 | Feature                 | Status         | Notes                          |
 +-------------------------+----------------+--------------------------------+
 | Basic OCR               | ✅ Complete    | Using Google ML Kit            |
-| Company/Store Detection | ✅ Complete    | With optimization              |
+| Store Detection         | ✅ Complete    | With optimization + label norm |
 | Total Sum Detection     | ✅ Complete    | With validation                |
-| Line Item Recognition   | ✅ Complete    | Products with prices           |
+| Line Item Recognition   | ✅ Complete    | Products with prices + merging |
 | Receipt Merging         | ✅ Complete    | For improved accuracy          |
 | Product Normalization   | ✅ Complete    | Standardizes product names     |
+| Purchase Date Detection | ✅ Complete    | Parsed from multiple formats   |
+| Bounds & Skew           | ✅ Complete    | Outer rect + skew estimation   |
 +-------------------------+----------------+--------------------------------+
 ```
 
@@ -227,9 +356,9 @@ Currently, the package has optimized recognition for:
 
 - **English receipts**: Full support for standard formats
 - **German receipts**: Full support with specialized detection patterns for:
-  - German market chains (Aldi, Rewe, Edeka, etc.)
-  - German sum labels ("Summe", "Gesamt", "Zu zahlen")
-  - German number formats (comma as decimal separator)
+    - German market chains (Aldi, Rewe, Edeka, etc.)
+    - German total labels ("Summe", "Gesamt", "Zu zahlen")
+    - German number formats (comma as decimal separator)
 
 ### Usage Patterns
 
@@ -272,11 +401,13 @@ Better for real-time scanning with a live preview:
 2. **Alignment**: Keep receipts as flat and aligned as possible
 3. **Stability**: For continuous scanning, allow 1–2 seconds of stable framing
 4. **Multiple Scans**: Use the optimizer's merging capabilities for improved accuracy
-5. **Language Handling**: For mixed-language environments, consider setting the appropriate TextRecognitionScript when initializing the recognizer
+5. **Language Handling**: For mixed-language environments, consider setting the appropriate TextRecognitionScript when
+   initializing the recognizer
 
 ### Receipt Validation and Manual Acceptance
 
-The package includes a robust validation system that verifies receipt completeness based on the match between the calculated sum (from line items) and the detected total sum. Four validation states are possible:
+The package includes a robust validation system that verifies receipt completeness based on the match between the
+calculated total (from line items) and the detected total. Four validation states are possible:
 
 ```
 +-------------------------+------------------------+-------------------------+
@@ -297,6 +428,9 @@ The package includes a robust validation system that verifies receipt completene
 | invalid                 | (e.g., total sum)      |                         |
 +-------------------------+------------------------+-------------------------+
 ```
+
+Note: The current snapshot is already final when both `isValid` and `isConfirmed` are true (in addition to
+`onScanComplete`).
 
 You can track the validation state through the `onScanUpdate` callback:
 
@@ -320,18 +454,23 @@ final receiptRecognizer = ReceiptRecognizer(
 
 #### Manual Receipt Acceptance
 
-When automatic validation doesn't reach 100% match but the receipt seems adequate, you can manually accept it using the `acceptReceipt` method:
+When automatic validation doesn't reach 100% match but the receipt seems adequate, you can manually accept it using the
+`acceptReceipt` method:
 
 ```dart
 // Example: Accepting a nearly complete receipt when user taps "Accept"
 void acceptCurrentReceipt() {
-  if (progress.mergedReceipt != null && 
-      progress.validationResult.matchPercentage! >= 95) {
-    final acceptedReceipt = receiptRecognizer.acceptReceipt(progress.mergedReceipt!);
+  if (progress.validationResult.matchPercentage >= 95) {
+    final acceptedReceipt = receiptRecognizer.acceptReceipt(progress.mergedReceipt);
     // Handle the accepted receipt
   }
 }
 ```
+
+Tip: You can also accept immediately from the current snapshot if it already meets both conditions:
+
+- `progress.mergedReceipt.isValid == true`
+- `progress.mergedReceipt.isConfirmed == true`
 
 #### Receipt Validation Flow
 
@@ -374,7 +513,8 @@ void acceptCurrentReceipt() {
               └─────────────────────────┘
 ```
 
-This workflow enables you to build UIs that show the user scanning progress and offer manual acceptance for receipts that don't achieve perfect validation but are still usable.
+This workflow enables you to build UIs that show the user scanning progress and offer manual acceptance for receipts
+that don't achieve perfect validation but are still usable.
 
 ## 📦 Release Notes
 
@@ -386,7 +526,14 @@ See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version 
 
 - [x] Product name normalization
 - [x] Long receipt support and merging mechanism
-- [x] Multi-language receipt support (English and German)
+- [x] Multi-language receipt support
+- [x] Purchase date detection
+- [x] Total label normalization
+- [x] Bounds and skew estimation
+- [x] Layered options (extend/override/tuning)
+- [x] Stability-based grouping/merging
+- [ ] Enhanced Android platform integration
+- [ ] Broader international receipt layout support
 
 ---
 

@@ -1,1 +1,6 @@
 include: package:flutter_lints/flutter.yaml
+linter:
+  rules:
+    public_member_api_docs: true       # require docs on public APIs
+    comment_references: true           # check [Symbol]-style references
+    avoid_relative_lib_imports: true   # prefer package: receipt_recognition/... imports

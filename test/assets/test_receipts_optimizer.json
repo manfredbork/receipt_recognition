@@ -1,0 +1,265 @@
+{
+  "three_items_same_text_two_groups_two_scans": {
+    "positions": [
+      {
+        "product": {
+          "value": "Sausage",
+          "confidence": 90
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Sausage",
+          "confidence": 85
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Sausage",
+          "confidence": 85
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00.001000Z"
+      }
+    ],
+    "total": {
+      "value": 2.00
+    }
+  },
+  "two_items_same_text_same_price_two_groups_single_scan": {
+    "positions": [
+      {
+        "product": {
+          "value": "Banana",
+          "confidence": 90
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Banana",
+          "confidence": 85
+        },
+        "price": {
+          "value": 1.00,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      }
+    ],
+    "total": {
+      "value": 2.00
+    }
+  },
+  "two_items_same_text_two_groups_single_scan": {
+    "positions": [
+      {
+        "product": {
+          "value": "Deposit",
+          "confidence": 90
+        },
+        "price": {
+          "value": -1.00,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Deposit",
+          "confidence": 85
+        },
+        "price": {
+          "value": -0.50,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      }
+    ],
+    "total": {
+      "value": -1.50
+    }
+  },
+  "two_items_similar_text_two_groups_single_scan": {
+    "positions": [
+      {
+        "product": {
+          "value": "Coca Cola Zero",
+          "confidence": 95
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 85
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Coca Cola Light",
+          "confidence": 80
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      }
+    ],
+    "total": {
+      "value": 3.98
+    }
+  },
+  "two_items_same_text_two_groups_two_scans": {
+    "positions": [
+      {
+        "product": {
+          "value": "Haribo Colorado",
+          "confidence": 66
+        },
+        "price": {
+          "value": 2.49,
+          "confidence": 75
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Haribo Bumix",
+          "confidence": 83
+        },
+        "price": {
+          "value": 2.49,
+          "confidence": 68
+        },
+        "timestamp": "2024-01-01T12:00:00.001000Z"
+      }
+    ],
+    "total": {
+      "value": 4.98
+    }
+  },
+  "two_items_similar_text_single_group_two_scans": {
+    "positions": [
+      {
+        "product": {
+          "value": "Milk 3.8%",
+          "confidence": 95
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Mi lk 3.8%",
+          "confidence": 80
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00.001000Z"
+      }
+    ],
+    "total": {
+      "value": 1.99
+    }
+  },
+  "two_items_same_text_single_group_two_scans": {
+    "positions": [
+      {
+        "product": {
+          "value": "Butter",
+          "confidence": 90
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 77
+        },
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Butter",
+          "confidence": 85
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 83
+        },
+        "timestamp": "2024-01-01T12:00:00.001000Z"
+      }
+    ],
+    "total": {
+      "value": 1.99
+    }
+  },
+  "single_item_purchase_date": {
+    "positions": [
+      {
+        "product": {
+          "value": "Bread",
+          "confidence": 95
+        },
+        "price": {
+          "value": 2.49,
+          "confidence": 88
+        },
+        "timestamp": "2024-02-01T10:00:00Z"
+      }
+    ],
+    "total": {
+      "value": 2.49
+    },
+    "purchase_date": "2024-02-01"
+  },
+  "two_items_purchase_date": {
+    "positions": [
+      {
+        "product": {
+          "value": "Juice",
+          "confidence": 90
+        },
+        "price": {
+          "value": 1.99,
+          "confidence": 84
+        },
+        "timestamp": "2024-02-05T08:00:00Z"
+      },
+      {
+        "product": {
+          "value": "Water",
+          "confidence": 88
+        },
+        "price": {
+          "value": 0.99,
+          "confidence": 82
+        },
+        "timestamp": "2024-02-05T08:00:00.500Z"
+      }
+    ],
+    "total": {
+      "value": 2.98
+    },
+    "purchase_date": "2024-02-05"
+  }
+}

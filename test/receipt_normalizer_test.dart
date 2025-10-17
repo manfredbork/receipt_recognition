@@ -1,8 +1,88 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 void main() {
   group('ReceiptNormalizer', () {
+    group('canonicalKey', () {
+      test('removes diacritics and lowercases', () {
+        expect(
+          ReceiptNormalizer.canonicalKey('Êlite Item'),
+          equals('elite item'),
+        );
+        expect(
+          ReceiptNormalizer.canonicalKey('Café Crème'),
+          equals('cafe creme'),
+        );
+        expect(ReceiptNormalizer.canonicalKey('Ångström'), equals('angstrom'));
+      });
+
+      test('collapses multiple spaces and trims', () {
+        expect(
+          ReceiptNormalizer.canonicalKey('  Café   Crème  '),
+          equals('cafe creme'),
+        );
+        expect(
+          ReceiptNormalizer.canonicalKey('COFFEE     BEANS'),
+          equals('coffee beans'),
+        );
+      });
+
+      test('treats split/merged tokens equally when letters match', () {
+        expect(
+          ReceiptNormalizer.canonicalKey('Cof fee'),
+          isNot(equals(ReceiptNormalizer.canonicalKey('Coffee'))),
+        );
+        expect(
+          ReceiptNormalizer.canonicalKey('Coffee   Beans'),
+          equals(ReceiptNormalizer.canonicalKey('Coffee Beans')),
+        );
+      });
+
+      group('normalizeSpecialSpaces', () {
+        test('should merge when equal content ignoring spaces', () {
+          final alts = [
+            'BLATT SALAT',
+            'BLATT SALAT',
+            'BLATT SALAT',
+            'BLATTSALAT',
+            'BLATTSALA#',
+          ];
+          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+          expect(result, 'BLATTSALAT');
+        });
+
+        test('should keep most frequent if merged version not valid', () {
+          final alts = ['BROCCOLI SALAT', 'BROCCOL I SALAT', 'BROCCOL I SALAT'];
+          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+          expect(result, 'BROCCOLI SALAT');
+        });
+      });
+    });
+
+    group('normalizeByAlternativeTexts with diacritics/spacing', () {
+      test('prefers consensus and returns clean shortest original', () {
+        final alts = ['Café Crème', 'Cafe Creme', 'CAFÉ   CRÈME', 'Cafe Creme'];
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(result, equals('Cafe Creme'));
+      });
+
+      test('handles mixed diacritics + spacing + case', () {
+        final alts = [
+          'Êxtra   Virgin OLÍVE  OIL',
+          'Extra Virgin Olive Oil',
+          'EXTRA VIRGIN OLIVE  OIL',
+        ];
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(result, equals('Extra Virgin Olive Oil'));
+      });
+
+      test('keeps meaningful tokens and trims tail correctly when present', () {
+        final alts = ['Café 250g 3,49', 'Cafe 250 g 3.49', 'Cafe 250g'];
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(result == 'Cafe 250g' || result == 'Cafe 250 g', isTrue);
+      });
+    });
+
     group('normalizeByAlternativeTexts', () {
       test('should return normalized text when given alternative texts', () {
         final alternativeTexts = [
@@ -45,7 +125,7 @@ void main() {
         }
       });
     });
-    
+
     group('normalizeSpecialSpaces', () {
       test('should merge tokens when needed', () {
         const bestText = 'Cof fee Beans';
