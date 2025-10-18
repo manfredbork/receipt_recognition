@@ -44,6 +44,9 @@ final class ReceiptOptimizer implements Optimizer {
   /// Ordering stats by group.
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
 
+  /// Shorthand for the active options provided by [ReceiptRuntime].
+  final ReceiptOptions _opts = ReceiptRuntime.options;
+
   /// Internal convergence bookkeeping.
   int _unchangedCount = 0;
 
@@ -81,6 +84,7 @@ final class ReceiptOptimizer implements Optimizer {
       _cleanupGroups();
       _resetOperations();
       _processPositions(receipt);
+      _reconcileToTotal(receipt);
       _updateEntities(receipt);
       return _createOptimizedReceipt(receipt, test: test);
     });
@@ -116,7 +120,7 @@ final class ReceiptOptimizer implements Optimizer {
     final totalHash = receipt.total?.formattedValue ?? '';
     final fingerprint = '$positionsHash|$totalHash';
 
-    final loopThreshold = ReceiptRuntime.tuning.optimizerLoopThreshold;
+    final loopThreshold = _opts.tuning.optimizerLoopThreshold;
 
     if (_lastFingerprint == fingerprint) {
       _unchangedCount++;
@@ -167,7 +171,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Trims a cache list to the configured precision size.
   void _trimCache(List list) {
-    final maxCacheSize = ReceiptRuntime.tuning.optimizerPrecisionNormal;
+    final maxCacheSize = _opts.tuning.optimizerPrecisionNormal;
     while (list.length > maxCacheSize) {
       list.removeAt(0);
     }
@@ -254,7 +258,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Assigns a position to the best existing group or creates a new one.
   void _processPosition(RecognizedPosition position) {
-    var bestConfidence = -1;
+    int bestConfidence = -1;
     RecognizedGroup? bestGroup;
 
     for (final group in _groups) {
@@ -306,14 +310,12 @@ final class ReceiptOptimizer implements Optimizer {
         repTok.isNotEmpty &&
         incTok.isNotEmpty &&
         !const SetEquality().equals(repTok, incTok);
-    final baseMin = ReceiptRuntime.tuning.optimizerMinProductSimToMerge;
+    final baseMin = _opts.tuning.optimizerMinProductSimToMerge;
     final minNeeded =
-        variantDifferent
-            ? ReceiptRuntime.tuning.optimizerVariantMinSim
-            : baseMin;
+        variantDifferent ? _opts.tuning.optimizerVariantMinSim : baseMin;
 
     final looksDissimilar = fuzzy < minNeeded;
-    final thr = ReceiptRuntime.tuning.optimizerConfidenceThreshold;
+    final thr = _opts.tuning.optimizerConfidenceThreshold;
     final shouldUseGroup =
         !sameTimestamp &&
         !looksDissimilar &&
@@ -351,7 +353,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
-    final maxCacheSize = ReceiptRuntime.tuning.optimizerPrecisionNormal;
+    final maxCacheSize = _opts.tuning.optimizerPrecisionNormal;
     final newGroup = RecognizedGroup(maxGroupSize: maxCacheSize);
     position.group = newGroup;
     position.operation = Operation.added;
@@ -380,7 +382,7 @@ final class ReceiptOptimizer implements Optimizer {
     RecognizedReceipt receipt, {
     bool test = false,
   }) {
-    if (!test && receipt.isValid) return receipt;
+    if (!test && receipt.isValid && receipt.isConfirmed) return receipt;
 
     ReceiptLogger.log('opt.in', {
       'n': receipt.positions.length,
@@ -388,11 +390,16 @@ final class ReceiptOptimizer implements Optimizer {
       'total?': receipt.total?.value,
     });
 
-    final stabilityThreshold =
-        ReceiptRuntime.tuning.optimizerStabilityThreshold;
+    final stabilityThreshold = _opts.tuning.optimizerStabilityThreshold;
+    final quarter = ReceiptRuntime.tuning.optimizerPrecisionNormal ~/ 4;
     final stableGroups =
         _groups
-            .where((g) => g.stability >= stabilityThreshold || test)
+            .where(
+              (g) =>
+                  (g.stability >= stabilityThreshold &&
+                      g.members.length >= quarter) ||
+                  test,
+            )
             .toList();
 
     _learnOrder(receipt);
@@ -490,6 +497,166 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  void _reconcileToTotal(RecognizedReceipt receipt) {
+    final total = receipt.total?.value;
+    if (total == null) return;
+    if (receipt.positions.isEmpty) return;
+
+    final tol = _opts.tuning.totalTolerance;
+    final targetC = _toCents(total);
+    final beforeC = _sumCents(receipt.positions);
+
+    final beforeLen = receipt.positions.length;
+    receipt.positions.removeWhere(
+      (pos) => (pos.price.value - total).abs() <= tol,
+    );
+    final removedAsTotal = beforeLen - receipt.positions.length;
+
+    if (removedAsTotal > 0) {
+      ReceiptLogger.log('recon.drop_total_like', {'removed': removedAsTotal});
+    }
+
+    int currentC = _sumCents(receipt.positions);
+    final deltaC = currentC - targetC;
+    if (deltaC.abs() <= (tol * 100).round()) {
+      ReceiptLogger.log('recon.within_tol', {
+        'sum': currentC / 100.0,
+        'target': targetC / 100.0,
+        'tol': tol,
+      });
+      return;
+    }
+
+    final int maxCandidates = beforeLen ~/ 4;
+    final candidates = List<RecognizedPosition>.from(receipt.positions)..sort(
+      (a, b) => (a.group?.members.length ?? 0).compareTo(
+        b.group?.members.length ?? 0,
+      ),
+    );
+    final pool = candidates.take(maxCandidates).toList();
+
+    if (pool.length <= 1) return;
+
+    final targetRemove = deltaC.abs();
+    final toRemoveIdx = _pickSubsetToDrop(pool, targetRemove, beamWidth: 256);
+
+    if (toRemoveIdx.isEmpty) {
+      final beforeErr = (currentC - targetC).abs();
+      for (final p in pool) {
+        final after =
+            currentC - _toCents(p.price.value) * (deltaC > 0 ? 1 : -1);
+        final afterErr = (after - targetC).abs();
+        if (afterErr < beforeErr) {
+          receipt.positions.remove(p);
+          p.group?.members.remove(p);
+          ReceiptLogger.log('recon.greedy_drop', {
+            'price': p.price.value,
+            'conf': p.confidence,
+            'err_before': beforeErr / 100.0,
+            'err_after': afterErr / 100.0,
+          });
+          currentC = after;
+          break;
+        }
+      }
+    } else {
+      final toRemove = toRemoveIdx.map((i) => pool[i]).toSet();
+      int removedCount = 0;
+      int removedCents = 0;
+      for (final p in toRemove) {
+        removedCount += receipt.positions.remove(p) ? 1 : 0;
+        p.group?.members.remove(p);
+        removedCents += _toCents(p.price.value);
+      }
+      ReceiptLogger.log('recon.subset_drop', {
+        'removed': removedCount,
+        'removed_sum': removedCents / 100.0,
+        'sum_before': beforeC / 100.0,
+        'sum_after': _sumCents(receipt.positions) / 100.0,
+        'target': targetC / 100.0,
+      });
+    }
+
+    final emptied = _groups.where((g) => g.members.isEmpty).toList();
+    if (emptied.isNotEmpty) _purgeGroups(emptied.toSet());
+  }
+
+  /// Picks a subset (indexes into [pool]) to drop so that the sum of their prices
+  /// (in cents) best approximates [targetRemoveC]. Beam search capped by [beamWidth].
+  Set<int> _pickSubsetToDrop(
+    List<RecognizedPosition> pool,
+    int targetRemoveC, {
+    int beamWidth = 256,
+  }) {
+    if (targetRemoveC <= 0) return const <int>{};
+
+    final cents = pool.map((p) => _toCents(p.price.value)).toList();
+
+    List<_State> beam = <_State>[_State(0, 0, 101)];
+    for (int i = 0; i < cents.length; i++) {
+      final price = cents[i];
+      final conf = pool[i].confidence;
+
+      final next = <_State>[];
+      for (final s in beam) {
+        next.add(s);
+
+        final ns = s.sum + price;
+        final nm = s.mask | (1 << i);
+        final nw = math.min(s.worstC, conf);
+        next.add(_State(ns, nm, nw));
+      }
+
+      next.sort((a, b) {
+        final da = (targetRemoveC - a.sum).abs();
+        final db = (targetRemoveC - b.sum).abs();
+        if (da != db) return da.compareTo(db);
+
+        final ca = _bitCount(a.mask);
+        final cb = _bitCount(b.mask);
+        if (ca != cb) return ca.compareTo(cb);
+
+        return a.worstC.compareTo(b.worstC);
+      });
+      if (next.length > beamWidth) next.removeRange(beamWidth, next.length);
+      beam = next;
+    }
+
+    final best = beam.first;
+    return _maskToSet(best.mask);
+  }
+
+  /// Counts bits in an int.
+  int _bitCount(int x) {
+    int c = 0;
+    int v = x;
+    while (v != 0) {
+      v &= (v - 1);
+      c++;
+    }
+    return c;
+  }
+
+  /// Converts a bitmask of indexes to a Set.
+  Set<int> _maskToSet(int mask) {
+    final out = <int>{};
+    int m = mask;
+    int i = 0;
+    while (m != 0) {
+      if ((m & 1) == 1) out.add(i);
+      m >>= 1;
+      i++;
+    }
+    return out;
+  }
+
+  /// Sum of position prices in cents.
+  int _sumCents(List<RecognizedPosition> ps) =>
+      ps.fold<int>(0, (a, p) => a + _toCents(p.price.value));
+
+  /// Convert a price to cents safely.
+  int _toCents(num v) => (v * 100).round();
+
   /// Learns vertical ordering of groups using observed Y coordinates (EWMA + pairwise counts).
   void _learnOrder(RecognizedReceipt receipt) {
     final observed = <_Obs>[];
@@ -504,7 +671,7 @@ final class ReceiptOptimizer implements Optimizer {
     observed.sort((a, b) => a.y.compareTo(b.y));
 
     final now = DateTime.now();
-    final alpha = ReceiptRuntime.tuning.optimizerEwmaAlpha;
+    final alpha = _opts.tuning.optimizerEwmaAlpha;
     for (final o in observed) {
       final s = _orderStats.putIfAbsent(
         o.group,
@@ -515,8 +682,8 @@ final class ReceiptOptimizer implements Optimizer {
       if (s.firstSeen.isAfter(o.ts)) s.firstSeen = o.ts;
     }
 
-    for (var i = 0; i < observed.length; i++) {
-      for (var j = i + 1; j < observed.length; j++) {
+    for (int i = 0; i < observed.length; i++) {
+      for (int j = i + 1; j < observed.length; j++) {
         final a = observed[i].group;
         final b = observed[j].group;
         final sa = _orderStats[a]!;
@@ -524,8 +691,7 @@ final class ReceiptOptimizer implements Optimizer {
       }
     }
 
-    final decayThreshold =
-        ReceiptRuntime.tuning.optimizerAboveCountDecayThreshold;
+    final decayThreshold = _opts.tuning.optimizerAboveCountDecayThreshold;
     for (final s in _orderStats.values) {
       final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
       if (total > decayThreshold) {
@@ -550,7 +716,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
-    final tiePx = ReceiptRuntime.tuning.verticalTolerance.toDouble();
+    final tiePx = _opts.tuning.verticalTolerance.toDouble();
 
     final sa = _orderStats[a];
     final sb = _orderStats[b];
@@ -578,15 +744,13 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Detects very early weak outliers.
   bool _isEarlyOutlier(RecognizedGroup g, DateTime now) {
-    final invalidateMs = ReceiptRuntime.tuning.optimizerInvalidateIntervalMs;
+    final invalidateMs = _opts.tuning.optimizerInvalidateIntervalMs;
     final grace = Duration(milliseconds: invalidateMs) ~/ 8;
 
     final staleForAWhile = now.difference(g.timestamp) >= grace;
     final veryWeak =
-        g.stability <
-            (ReceiptRuntime.tuning.optimizerStabilityThreshold ~/ 2) &&
-        g.confidence <
-            (ReceiptRuntime.tuning.optimizerConfidenceThreshold ~/ 2);
+        g.stability < (_opts.tuning.optimizerStabilityThreshold ~/ 2) &&
+        g.confidence < (_opts.tuning.optimizerConfidenceThreshold ~/ 2);
     final tiny = g.members.length <= 1;
     return staleForAWhile && veryWeak && tiny;
   }
@@ -625,6 +789,14 @@ final class ReceiptOptimizer implements Optimizer {
       ps.isEmpty
           ? DateTime.fromMillisecondsSinceEpoch(0)
           : ps.map((p) => p.timestamp).reduce((x, y) => x.isBefore(y) ? x : y);
+}
+
+final class _State {
+  final int sum;
+  final int mask;
+  final int worstC;
+
+  _State(this.sum, this.mask, this.worstC);
 }
 
 /// Result of evaluating how well a position fits a group.

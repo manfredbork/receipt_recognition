@@ -22,7 +22,7 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
   void Function(CameraImage)? _imageListener;
 
   Future<void> initCamera(List<CameraDescription> cameras) async {
-    for (var cam in cameras) {
+    for (CameraDescription cam in cameras) {
       if (cam.lensDirection == CameraLensDirection.back) {
         cameraBack = cam;
         if (mounted) setState(() {});

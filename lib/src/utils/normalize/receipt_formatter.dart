@@ -91,10 +91,10 @@ final class ReceiptFormatter {
   static String normalizeAmount(String amount) {
     if (amount.isEmpty) return amount;
 
-    var s = amount.replaceAll('\u00A0', ' ').replaceAll(_reWs, ' ').trim();
+    String s = amount.replaceAll('\u00A0', ' ').replaceAll(_reWs, ' ').trim();
 
     final paren = _reParenNegative.firstMatch(s);
-    var negative = false;
+    bool negative = false;
     if (paren != null) {
       s = paren.group(1)!;
       negative = true;

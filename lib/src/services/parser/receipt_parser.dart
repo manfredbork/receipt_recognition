@@ -6,6 +6,7 @@ import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/geometry/index.dart';
+import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Parses OCR output into a structured receipt by extracting entities, ordering by
@@ -40,6 +41,12 @@ final class ReceiptParser {
 
   /// Right X of an entity’s TextLine.
   static double _right(RecognizedEntity e) => _rightL(e.line);
+
+  /// Top Y of an entity’s TextLine.
+  static double _top(RecognizedEntity e) => _topL(e.line);
+
+  /// Bottom Y of an entity’s TextLine.
+  static double _bottom(RecognizedEntity e) => _bottomL(e.line);
 
   /// Center-Y of a Rect.
   static double _cyR(Rect r) => r.center.dy;
@@ -106,14 +113,14 @@ final class ReceiptParser {
 
   /// Pattern to filter out suspicious or metadata-like product names.
   static final RegExp _suspiciousProductName = RegExp(
-    r'\bx\s?\d+',
+    r'\bx\s?\d+|^\s*[\[(]?\s*\d{1,3}[.,]\d{3}\b',
     caseSensitive: false,
   );
 
   /// Effective geometric tolerance from runtime.
   static int get _tol => ReceiptRuntime.tuning.verticalTolerance;
 
-  /// Shorthand for the active parser options provided by [ReceiptRuntime].
+  /// Shorthand for the active options provided by [ReceiptRuntime].
   static ReceiptOptions get _opts => ReceiptRuntime.options;
 
   /// Parses [text] with [options] and returns a structured [RecognizedReceipt].
@@ -125,9 +132,32 @@ final class ReceiptParser {
     return ReceiptRuntime.runWithOptions(options, () {
       final lines = _convertText(text);
       lines.sort(_cmpCyThenCx);
+      ReceiptLogger.log('parse.start', {'lines': lines.length});
 
       final parsed = _parseLines(lines);
-      final filtered = _filterIntermediaryEntities(parsed);
+      ReceiptLogger.log('parse.after_parse', {
+        'entities': parsed.length,
+        'unknowns': parsed.whereType<RecognizedUnknown>().length,
+        'amounts': parsed.whereType<RecognizedAmount>().length,
+      });
+
+      final prunedU = _filterUnknownOutliers(parsed);
+      ReceiptLogger.log('filter.unknown.outliers', {
+        'before': parsed.whereType<RecognizedUnknown>().length,
+        'after': prunedU.whereType<RecognizedUnknown>().length,
+      });
+
+      final prunedA = _filterAmountOutliers(prunedU);
+      ReceiptLogger.log('filter.amount.outliers', {
+        'before': prunedU.whereType<RecognizedAmount>().length,
+        'after': prunedA.whereType<RecognizedAmount>().length,
+      });
+
+      final filtered = _filterIntermediaryEntities(prunedA);
+      ReceiptLogger.log('filter.intermediary', {
+        'before': prunedA.length,
+        'after': filtered.length,
+      });
 
       return _buildReceipt(filtered);
     });
@@ -366,7 +396,7 @@ final class ReceiptParser {
     double maxX = _rightL(lines.first);
     double minY = _topL(lines.first);
     double maxY = _bottomL(lines.first);
-    for (var i = 1; i < lines.length; i++) {
+    for (int i = 1; i < lines.length; i++) {
       final l = lines[i];
       final left = _leftL(l),
           right = _rightL(l),
@@ -599,10 +629,6 @@ final class ReceiptParser {
     return best;
   }
 
-  /// Computes a vertical-distance score between a label and amount line.
-  /// Returns `double.infinity` when the distance exceeds the vertical tolerance,
-  /// otherwise returns the absolute delta-Y. Lower is better.
-
   /// Computes an adaptive fuzzy threshold based on label length and
   /// the number of allowed edits. Short labels require near-exact matches,
   /// while longer labels tolerate more deviations.
@@ -633,9 +659,205 @@ final class ReceiptParser {
     return thr;
   }
 
+  /// Returns absolute ΔY if within vertical tolerance, otherwise `double.infinity` (lower is better).
   static double _distanceScore(TextLine totalLabel, TextLine amount) {
     final dy = _dy(totalLabel, amount);
-    return (dy < _tol) ? dy : double.infinity;
+    return (dy < totalLabel.boundingBox.height) ? dy : double.infinity;
+  }
+
+  /// Filters left-alignment outliers among unknown product lines.
+  static List<RecognizedEntity> _filterUnknownOutliers(
+    List<RecognizedEntity> entities,
+  ) {
+    ReceiptLogger.log('filter.unknown.config', {
+      'metric': 'left(x)',
+      'tail': 'dropRightTail=true',
+      'k': 5.0,
+      'minSamples': 3,
+    });
+    return _filterOneSidedXOutliers(
+      entities,
+      isTarget: (e) => e is RecognizedUnknown,
+      xMetric: (e) => _left(e),
+      dropRightTail: true,
+    );
+  }
+
+  /// Filters X-center outliers among amount lines.
+  static List<RecognizedEntity> _filterAmountOutliers(
+    List<RecognizedEntity> entities,
+  ) {
+    ReceiptLogger.log('filter.amount.config', {
+      'metric': 'right(x)',
+      'tail': 'dropLeftTail=false',
+      'k': 5.0,
+      'minSamples': 3,
+    });
+    return _filterOneSidedXOutliers(
+      entities,
+      isTarget: (e) => e is RecognizedAmount,
+      xMetric: (e) => _right(e),
+      dropRightTail: false,
+    );
+  }
+
+  /// One-sided MAD filter in X-space for target entities (single pass filter without sets).
+  static List<RecognizedEntity> _filterOneSidedXOutliers(
+    List<RecognizedEntity> entities, {
+    required bool Function(RecognizedEntity e) isTarget,
+    required double Function(RecognizedEntity e) xMetric,
+    required bool dropRightTail,
+    int minSamples = 3,
+    double k = 5.0,
+  }) {
+    final xs = <double>[];
+    final ids = <String>[];
+    final targets = <RecognizedEntity>[];
+
+    for (final e in entities) {
+      if (isTarget(e)) {
+        xs.add(xMetric(e));
+        ids.add(_dbgId(e));
+        targets.add(e);
+      }
+    }
+
+    if (xs.length < minSamples) {
+      ReceiptLogger.log('filter.skip', {
+        'reason': 'minSamples_not_met',
+        'count': xs.length,
+        'minSamples': minSamples,
+      });
+      return entities;
+    }
+
+    final scratch = <double>[];
+    final med = _medianInPlace(List<double>.from(xs, growable: true));
+    if (xs.isEmpty || med.isNaN || med.isInfinite) return entities;
+
+    final madRaw = _madWithScratch(xs, med, scratch);
+    final madScaled = (madRaw == 0.0) ? 0.0 : (1.4826 * madRaw);
+
+    final lowerBound = med - k * madScaled;
+    final upperBound = med + k * madScaled;
+
+    ReceiptLogger.log('filter.stats', {
+      'targets': xs.length,
+      'median': med,
+      'madRaw': madRaw,
+      'madScaled': madScaled,
+      'k': k,
+      'lowerBound': lowerBound,
+      'upperBound': upperBound,
+      'dropRightTail': dropRightTail,
+      'tol': _tol,
+    });
+    if (madRaw == 0.0) {
+      ReceiptLogger.log('filter.note', {
+        'message': 'MAD==0; band collapses to median±tol',
+      });
+    }
+
+    final out = <RecognizedEntity>[];
+    final removed = <Map<String, Object?>>[];
+    final kept = <Map<String, Object?>>[];
+
+    for (final e in entities) {
+      if (!isTarget(e)) {
+        out.add(e);
+        kept.add(_dbgEntity(e, xMetric));
+        continue;
+      }
+      final x = xMetric(e);
+      final isOutlier =
+          dropRightTail ? (x > upperBound + _tol) : (x < lowerBound - _tol);
+
+      if (!isOutlier) {
+        out.add(e);
+        kept.add(_dbgEntity(e, xMetric));
+      } else {
+        removed.add(_dbgEntity(e, xMetric));
+      }
+    }
+
+    ReceiptLogger.log('filter.result', {
+      'kept': kept.length,
+      'removed': removed.length,
+      'removedEntities': removed,
+    });
+
+    return out;
+  }
+
+  /// Returns a short debug identifier with entity type and approximate position.
+  static String _dbgId(RecognizedEntity e) {
+    try {
+      return '${e.runtimeType}@'
+          '${_left(e).toStringAsFixed(1)},'
+          '${_cy(e).toStringAsFixed(1)}';
+    } catch (_) {
+      return '${e.runtimeType}';
+    }
+  }
+
+  /// Returns a compact debug map describing an entity’s geometry and text/value.
+  static Map<String, Object?> _dbgEntity(
+    RecognizedEntity e,
+    double Function(RecognizedEntity) xMetric,
+  ) {
+    double? left, right, cx, cy;
+    try {
+      left = _left(e);
+      right = _right(e);
+      cx = _cx(e);
+      cy = _cy(e);
+    } catch (_) {}
+
+    return {
+      'id': _dbgId(e),
+      'type': '${e.runtimeType}',
+      'xMetric': xMetric(e),
+      'left': left,
+      'right': right,
+      'cx': cx,
+      'cy': cy,
+      'text':
+          (e is RecognizedUnknown)
+              ? ReceiptFormatter.trim(e.value)
+              : (e is RecognizedAmount)
+              ? e.value
+              : (e is RecognizedTotalLabel)
+              ? e.value
+              : (e is RecognizedStore)
+              ? e.value
+              : null,
+    };
+  }
+
+  /// Returns the median of a list by sorting in place.
+  static double _medianInPlace(List<double> a) {
+    if (a.isEmpty) return double.nan;
+    a.sort();
+    final n = a.length;
+    final mid = n >> 1;
+    return (n & 1) == 1 ? a[mid] : (a[mid - 1] + a[mid]) / 2.0;
+  }
+
+  /// Returns the median absolute deviation (MAD) of [xs] using a reusable buffer.
+  static double _madWithScratch(
+    List<double> xs,
+    double med,
+    List<double> scratch,
+  ) {
+    if (scratch.length != xs.length) {
+      scratch
+        ..clear()
+        ..addAll(List<double>.filled(xs.length, 0.0));
+    }
+    for (int i = 0; i < xs.length; i++) {
+      scratch[i] = (xs[i] - med).abs();
+    }
+    return _medianInPlace(scratch);
   }
 
   /// Sorts entities by vertical distance to an amount, then by X.
@@ -703,8 +925,8 @@ final class ReceiptParser {
       final betweenTotalLabelAndTotal =
           totalLabel != null &&
           total != null &&
-          _cy(entity) > _cy(totalLabel) &&
-          _cy(entity) < _cy(total);
+          _cy(entity) > _top(totalLabel) &&
+          _cy(entity) < _bottom(total);
 
       if (!betweenUnknownAndAmount && !betweenTotalLabelAndTotal) {
         filtered.add(entity);
@@ -731,7 +953,6 @@ final class ReceiptParser {
     _processPurchaseDate(purchaseDate, receipt);
     _processBounds(bounds, receipt);
     _filterSuspiciousProducts(receipt);
-    _trimToMatchTotal(receipt);
 
     return receipt.copyWith(entities: entities);
   }
@@ -750,43 +971,6 @@ final class ReceiptParser {
       pos.group?.members.remove(pos);
       if ((pos.group?.members.isEmpty ?? false)) {
         receipt.positions.removeWhere((p) => p.group == pos.group);
-      }
-    }
-  }
-
-  /// Prunes low-confidence positions to bring the total closer to the target total.
-  static void _trimToMatchTotal(RecognizedReceipt receipt) {
-    final target = receipt.total?.value;
-    if (target == null || receipt.positions.length <= 1) return;
-
-    final tol = _opts.tuning.totalTolerance;
-
-    receipt.positions.removeWhere(
-      (pos) =>
-          receipt.total != null &&
-          (pos.price.value - receipt.total!.value).abs() <= tol &&
-          _opts.totalLabels.hasMatch(pos.product.value),
-    );
-
-    final positions = List<RecognizedPosition>.from(receipt.positions)
-      ..sort((a, b) => a.confidence.compareTo(b.confidence));
-    num currentTotal = receipt.calculatedTotal.value;
-
-    for (final pos in positions) {
-      if ((currentTotal - target).abs() <= tol) break;
-
-      final newTotal = currentTotal - pos.price.value;
-      final improvement =
-          (currentTotal - target).abs() - (newTotal - target).abs();
-
-      if (improvement > 0) {
-        receipt.positions.remove(pos);
-        pos.group?.members.remove(pos);
-
-        if ((pos.group?.members.isEmpty ?? false)) {
-          receipt.positions.removeWhere((p) => p.group == pos.group);
-        }
-        currentTotal = newTotal;
       }
     }
   }

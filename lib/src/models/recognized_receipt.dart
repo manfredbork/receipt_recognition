@@ -162,7 +162,7 @@ class RecognizedReceipt {
 
   /// True if the average group size exceeds one quarter of the configured precision.
   ///
-  /// Uses `ReceiptRuntime.tuning.optimizerPrecisionNormal` to avoid hardcoding.
+  /// Uses `ReceiptRuntime.tuning.optimizerPrecisionHigh` to avoid hardcoding.
   bool get isConfirmed {
     final lengths = positions.map((p) => p.group?.members.length ?? 0).toList();
     if (lengths.isEmpty) return false;
@@ -170,8 +170,8 @@ class RecognizedReceipt {
     final total = lengths.fold<int>(0, (a, b) => a + b);
     final avg = total ~/ lengths.length;
 
-    final quarter = ReceiptRuntime.tuning.optimizerPrecisionNormal ~/ 4;
-    return avg > quarter;
+    final quarter = ReceiptRuntime.tuning.optimizerPrecisionHigh ~/ 4;
+    return avg >= quarter;
   }
 }
 

@@ -46,7 +46,10 @@ final class ReceiptLogger {
       debugPrint('🧾${'-' * 48}');
       debugPrint('🏪 Supermarket: ${receipt.store?.value ?? 'N/A'}');
       debugPrint(
-        '📅 Purchase date: ${receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
+        '📅 Purchase datetime: ${receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
+      );
+      debugPrint(
+        '🔤 Purchase raw text: ${receipt.purchaseDate?.line.text ?? 'N/A'}',
       );
       const int padFullWidth = 25;
       final int padHalfWidth = (padFullWidth / 2).toInt();
