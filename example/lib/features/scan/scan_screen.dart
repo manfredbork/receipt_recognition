@@ -93,7 +93,7 @@ class _ScanScreenState extends State<ScanScreen>
                       );
                     }
                     final receipt = _ctrl.receipt;
-                    final addedPositions = _ctrl.addedPositions;
+                    final positions = _ctrl.positions;
                     final scene = SizedBox(
                       width: imageSize.width,
                       height: imageSize.height,
@@ -102,7 +102,7 @@ class _ScanScreenState extends State<ScanScreen>
                         children: [
                           CameraPreview(cc),
                           OverlayScreen(
-                            positions: addedPositions,
+                            positions: positions,
                             imageSize: imageSize,
                             screenSize: imageSize,
                             store: receipt.store,

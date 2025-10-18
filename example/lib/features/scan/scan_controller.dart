@@ -23,7 +23,8 @@ class ScanController extends ChangeNotifier {
 
   RecognizedReceipt get receipt => _lastReceipt;
 
-  List<RecognizedPosition> get addedPositions => _progress.addedPositions;
+  List<RecognizedPosition> get positions =>
+      _progress.addedPositions + _progress.updatedPositions;
 
   int get bestPercent => _bestPercent;
 

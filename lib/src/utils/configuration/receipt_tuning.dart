@@ -56,7 +56,7 @@ final class ReceiptTuning {
   /// Minimum Jaccard similarity of product tokens required to merge items.
   final double optimizerMinProductSimToMerge;
 
-  // Private real constructor
+  /// Private real constructor
   ReceiptTuning._internal({
     required this.totalTolerance,
     required this.heuristicQuarter,

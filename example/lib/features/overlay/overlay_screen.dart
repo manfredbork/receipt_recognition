@@ -56,6 +56,34 @@ class _PositionPainter extends CustomPainter {
     this.purchaseDate,
   });
 
+  void _fillHatched(
+    Canvas canvas,
+    Rect rect,
+    Color color, {
+    double spacing = 6.0,
+    double strokeWidth = 1.0,
+  }) {
+    if (rect.isEmpty) return;
+    final paint =
+        Paint()
+          ..color = color.withAlpha(192)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth;
+
+    canvas.save();
+    canvas.clipRect(rect);
+
+    final startX = rect.left - rect.height;
+    final endX = rect.right + rect.height;
+    for (double x = startX; x <= endX; x += spacing) {
+      final p1 = Offset(x, rect.top);
+      final p2 = Offset(x + rect.height, rect.bottom);
+      canvas.drawLine(p1, p2, paint);
+    }
+
+    canvas.restore();
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final paintPosition =
@@ -91,24 +119,36 @@ class _PositionPainter extends CustomPainter {
     for (final position in positions) {
       final rectProduct = _scale(position.product.line.boundingBox);
       final rectPrice = _scale(position.price.line.boundingBox);
+
+      _fillHatched(canvas, rectProduct, Colors.orange);
+      _fillHatched(canvas, rectPrice, Colors.orange);
+
       canvas.drawRect(rectProduct, paintPosition);
       canvas.drawRect(rectPrice, paintPosition);
     }
 
     if (store != null) {
-      canvas.drawRect(_scale(store!.line.boundingBox), paintStore);
+      final r = _scale(store!.line.boundingBox);
+      _fillHatched(canvas, r, Colors.blueAccent);
+      canvas.drawRect(r, paintStore);
     }
+
     if (totalLabel != null) {
-      canvas.drawRect(_scale(totalLabel!.line.boundingBox), paintTotalLabel);
+      final r = _scale(totalLabel!.line.boundingBox);
+      _fillHatched(canvas, r, Colors.deepPurpleAccent);
+      canvas.drawRect(r, paintTotalLabel);
     }
+
     if (total != null) {
-      canvas.drawRect(_scale(total!.line.boundingBox), paintTotal);
+      final r = _scale(total!.line.boundingBox);
+      _fillHatched(canvas, r, Colors.green);
+      canvas.drawRect(r, paintTotal);
     }
+
     if (purchaseDate != null) {
-      canvas.drawRect(
-        _scale(purchaseDate!.line.boundingBox),
-        paintPurchaseDate,
-      );
+      final r = _scale(purchaseDate!.line.boundingBox);
+      _fillHatched(canvas, r, Colors.amber);
+      canvas.drawRect(r, paintPurchaseDate);
     }
   }
 

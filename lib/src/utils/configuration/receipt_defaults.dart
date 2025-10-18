@@ -41,7 +41,7 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
     'outlierMinSamples': 3,
     'outlierSuspectBonus': 50,
     'optimizerLoopThreshold': 10,
-    'optimizerPrecisionNormal': 20,
+    'optimizerPrecisionNormal': 15,
     'optimizerPrecisionHigh': 20,
     'optimizerConfidenceThreshold': 90,
     'optimizerStabilityThreshold': 50,

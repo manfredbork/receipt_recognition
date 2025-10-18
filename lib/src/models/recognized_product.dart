@@ -25,7 +25,10 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   }) : options = options ?? ReceiptOptions.defaults();
 
   /// Creates a recognized product from JSON.
-  factory RecognizedProduct.fromJson(Map<String, dynamic> json) {
+  factory RecognizedProduct.fromJson(
+    Map<String, dynamic> json, {
+    ReceiptOptions? options,
+  }) {
     final rawValue = json['value'];
     final value = (rawValue is String) ? rawValue : (rawValue ?? '').toString();
     final conf = json['confidence'];
@@ -36,7 +39,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       value: value,
       confidence: Confidence(value: confValue),
       line: ReceiptTextLine(),
-      options: ReceiptOptions.defaults(),
+      options: options,
     );
   }
 
