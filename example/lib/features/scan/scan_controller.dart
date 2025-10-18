@@ -3,6 +3,14 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/receipt_recognition.dart';
 
 class ScanController extends ChangeNotifier {
+  late final ReceiptRecognizer _recognizer;
+
+  RecognizedScanProgress _progress = RecognizedScanProgress.empty();
+  RecognizedReceipt _lastReceipt;
+  int _bestPercent = 0;
+  bool _busy = false;
+  bool _manuallyAccepted = false;
+
   ScanController() : _lastReceipt = RecognizedReceipt.empty() {
     _recognizer = ReceiptRecognizer(
       onScanUpdate: _onScanUpdate,
@@ -11,62 +19,62 @@ class ScanController extends ChangeNotifier {
     );
   }
 
-  late final ReceiptRecognizer _recognizer;
+  RecognizedScanProgress get progress => _progress;
 
-  RecognizedReceipt _lastReceipt;
-  RecognizedScanProgress? _progress;
-  bool _busy = false;
+  RecognizedReceipt get receipt => _lastReceipt;
 
-  int _bestPercent = 0;
+  List<RecognizedPosition> get addedPositions => _progress.addedPositions;
 
   int get bestPercent => _bestPercent;
+
+  bool get isBusy => _busy;
+
+  bool get isAccepted =>
+      (receipt.isValid && receipt.isConfirmed) || _manuallyAccepted;
 
   void resetBestPercent() {
     _bestPercent = 0;
     notifyListeners();
   }
 
-  RecognizedReceipt get lastReceipt => _lastReceipt;
-
-  int get progressPercent => (_progress?.estimatedPercentage ?? 0);
-
-  RecognizedScanProgress? get progress => _progress;
-
-  bool get busy => _busy;
-
-  Future<RecognizedReceipt> processImage(InputImage image) async {
-    if (_busy) return _lastReceipt;
+  Future<void> processImage(InputImage image) async {
+    if (isBusy || isAccepted) return;
 
     _busy = true;
     try {
       _lastReceipt = await _recognizer.processImage(image);
       notifyListeners();
-      return _lastReceipt;
+      return;
     } catch (e) {
-      return _lastReceipt;
+      return;
     } finally {
       _busy = false;
     }
   }
 
-  Future<RecognizedReceipt> acceptCurrent() async {
-    final accepted = _recognizer.acceptReceipt(_lastReceipt);
-    _lastReceipt = accepted;
-    _bestPercent = _bestPercent < 100 ? 100 : _bestPercent;
+  Future<void> acceptCurrent() async {
+    _lastReceipt = _recognizer.acceptReceipt(_lastReceipt);
+    _bestPercent = 100;
+    _manuallyAccepted = true;
+    _busy = false;
     notifyListeners();
-    return accepted;
   }
 
   Future<void> disposeAsync() => _recognizer.close();
 
   void _onScanUpdate(RecognizedScanProgress p) {
+    if (isAccepted) return;
     _progress = p;
-    final merged = p.mergedReceipt;
-    if (merged != null) _lastReceipt = merged;
+    _bestPercent =
+        p.estimatedPercentage > bestPercent
+            ? p.estimatedPercentage
+            : bestPercent;
+    _lastReceipt = p.mergedReceipt;
     notifyListeners();
   }
 
   void _onScanComplete(RecognizedReceipt r) {
+    if (isAccepted) return;
     _lastReceipt = r;
     if (_bestPercent < 100) _bestPercent = 100;
     notifyListeners();

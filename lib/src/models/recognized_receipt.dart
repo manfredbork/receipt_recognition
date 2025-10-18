@@ -206,6 +206,20 @@ final class RecognizedScanProgress {
     required this.estimatedPercentage,
     required this.mergedReceipt,
   });
+
+  /// Empty scan progress with empty receipt.
+  factory RecognizedScanProgress.empty() => RecognizedScanProgress(
+    positions: [],
+    addedPositions: [],
+    updatedPositions: [],
+    validationResult: ReceiptValidationResult(
+      status: ReceiptCompleteness.invalid,
+      matchPercentage: 0,
+      message: '',
+    ),
+    estimatedPercentage: 0,
+    mergedReceipt: RecognizedReceipt.empty(),
+  );
 }
 
 /// Completeness level of a recognized receipt.

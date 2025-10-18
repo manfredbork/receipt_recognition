@@ -34,7 +34,7 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
   'tuning': {
     'totalTolerance': 0.009,
     'heuristicQuarter': 0.25,
-    'verticalTolerance': 25,
+    'verticalTolerance': 50,
     'outlierTau': 1,
     'outlierMaxCandidates': 12,
     'outlierLowConfThreshold': 35,

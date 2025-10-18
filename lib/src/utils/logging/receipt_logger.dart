@@ -30,25 +30,27 @@ final class ReceiptLogger {
   static String grpKey(RecognizedGroup g) =>
       'G${g.hashCode.toRadixString(16)}(${g.members.length})';
 
-  /// Logs a detailed summary of the [optimizedReceipt] and its [validation] result.
+  /// Logs a detailed summary of the [receipt] and optional its [validation] result.
   ///
   /// Prints store, positions, calculated sum, detected sum, and final sum label for debugging.
   static void logReceipt(
-    RecognizedReceipt optimizedReceipt,
-    ReceiptValidationResult validation,
-  ) {
-    if (optimizedReceipt.positions.isNotEmpty) {
+    RecognizedReceipt receipt, {
+    ReceiptValidationResult? validation,
+  }) {
+    if (receipt.positions.isNotEmpty) {
+      if (validation != null) {
+        debugPrint('🧾${'-' * 48}');
+        debugPrint('✅ Validation status: ${validation.status}');
+        debugPrint('💬 Message: ${validation.message}');
+      }
       debugPrint('🧾${'-' * 48}');
-      debugPrint('✅ Validation status: ${validation.status}');
-      debugPrint('💬 Message: ${validation.message}');
-      debugPrint('🧾${'-' * 48}');
-      debugPrint('🏪 Supermarket: ${optimizedReceipt.store?.value ?? 'N/A'}');
+      debugPrint('🏪 Supermarket: ${receipt.store?.value ?? 'N/A'}');
       debugPrint(
-        '📅 Purchase date: ${optimizedReceipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
+        '📅 Purchase date: ${receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
       );
       const int padFullWidth = 25;
       final int padHalfWidth = (padFullWidth / 2).toInt();
-      for (final position in optimizedReceipt.positions) {
+      for (final position in receipt.positions) {
         final product = position.product.normalizedText;
         final price = position.price.formattedValue;
         final confidence = position.confidence;
@@ -65,13 +67,11 @@ final class ReceiptLogger {
         );
       }
       debugPrint(
-        '🧮 Calculated total: ${optimizedReceipt.calculatedTotal.formattedValue}',
+        '🧮 Calculated total: ${receipt.calculatedTotal.formattedValue}',
       );
+      debugPrint('🧾 Total in receipt: ${receipt.total?.formattedValue}');
       debugPrint(
-        '🧾 Total in receipt: ${optimizedReceipt.total?.formattedValue}',
-      );
-      debugPrint(
-        '📌 Optimizer final total label: ${optimizedReceipt.totalLabel?.formattedValue}',
+        '📌 Optimizer final total label: ${receipt.totalLabel?.formattedValue}',
       );
     }
   }

@@ -47,3 +47,5 @@ export 'src/utils/configuration/index.dart'
         MergePolicy,
         kReceiptDefaultOptions,
         ReceiptRuntime;
+/// ── Logger + debug output ──
+export 'src/utils/logging/index.dart' show ReceiptLogger;
