@@ -42,6 +42,12 @@ final class ReceiptParser {
   /// Right X of an entity’s TextLine.
   static double _right(RecognizedEntity e) => _rightL(e.line);
 
+  /// Top Y of an entity’s TextLine.
+  static double _top(RecognizedEntity e) => _topL(e.line);
+
+  /// Bottom Y of an entity’s TextLine.
+  static double _bottom(RecognizedEntity e) => _bottomL(e.line);
+
   /// Center-Y of a Rect.
   static double _cyR(Rect r) => r.center.dy;
 
@@ -107,14 +113,14 @@ final class ReceiptParser {
 
   /// Pattern to filter out suspicious or metadata-like product names.
   static final RegExp _suspiciousProductName = RegExp(
-    r'\bx\s?\d+',
+    r'\bx\s?\d+|^\s*[\[(]?\s*\d{1,3}[.,]\d{3}\b',
     caseSensitive: false,
   );
 
   /// Effective geometric tolerance from runtime.
   static int get _tol => ReceiptRuntime.tuning.verticalTolerance;
 
-  /// Shorthand for the active parser options provided by [ReceiptRuntime].
+  /// Shorthand for the active options provided by [ReceiptRuntime].
   static ReceiptOptions get _opts => ReceiptRuntime.options;
 
   /// Parses [text] with [options] and returns a structured [RecognizedReceipt].
@@ -390,7 +396,7 @@ final class ReceiptParser {
     double maxX = _rightL(lines.first);
     double minY = _topL(lines.first);
     double maxY = _bottomL(lines.first);
-    for (var i = 1; i < lines.length; i++) {
+    for (int i = 1; i < lines.length; i++) {
       final l = lines[i];
       final left = _leftL(l),
           right = _rightL(l),
@@ -656,7 +662,7 @@ final class ReceiptParser {
   /// Returns absolute ΔY if within vertical tolerance, otherwise `double.infinity` (lower is better).
   static double _distanceScore(TextLine totalLabel, TextLine amount) {
     final dy = _dy(totalLabel, amount);
-    return (dy < _tol) ? dy : double.infinity;
+    return (dy < totalLabel.boundingBox.height) ? dy : double.infinity;
   }
 
   /// Filters left-alignment outliers among unknown product lines.
@@ -848,7 +854,7 @@ final class ReceiptParser {
         ..clear()
         ..addAll(List<double>.filled(xs.length, 0.0));
     }
-    for (var i = 0; i < xs.length; i++) {
+    for (int i = 0; i < xs.length; i++) {
       scratch[i] = (xs[i] - med).abs();
     }
     return _medianInPlace(scratch);
@@ -919,8 +925,8 @@ final class ReceiptParser {
       final betweenTotalLabelAndTotal =
           totalLabel != null &&
           total != null &&
-          _cy(entity) > _cy(totalLabel) &&
-          _cy(entity) < _cy(total);
+          _cy(entity) > _top(totalLabel) &&
+          _cy(entity) < _bottom(total);
 
       if (!betweenUnknownAndAmount && !betweenTotalLabelAndTotal) {
         filtered.add(entity);

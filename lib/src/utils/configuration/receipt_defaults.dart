@@ -43,7 +43,7 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
     'optimizerLoopThreshold': 10,
     'optimizerPrecisionNormal': 15,
     'optimizerPrecisionHigh': 20,
-    'optimizerConfidenceThreshold': 90,
+    'optimizerConfidenceThreshold': 80,
     'optimizerStabilityThreshold': 50,
     'optimizerInvalidateIntervalMs': 3000,
     'optimizerEwmaAlpha': 0.3,

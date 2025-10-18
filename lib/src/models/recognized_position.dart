@@ -100,7 +100,7 @@ final class RecognizedGroup {
         _members.map((b) => ratio(product.value, b.product.value)).toList();
     if (scores.isEmpty) return Confidence(value: 0);
 
-    var total = 0.0, totalSq = 0.0;
+    double total = 0.0, totalSq = 0.0;
     for (final s in scores) {
       total += s;
       totalSq += s * s;
