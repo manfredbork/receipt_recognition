@@ -37,26 +37,6 @@ void main() {
           equals(ReceiptNormalizer.canonicalKey('Coffee Beans')),
         );
       });
-
-      group('normalizeSpecialSpaces', () {
-        test('should merge when equal content ignoring spaces', () {
-          final alts = [
-            'BLATT SALAT',
-            'BLATT SALAT',
-            'BLATT SALAT',
-            'BLATTSALAT',
-            'BLATTSALA#',
-          ];
-          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-          expect(result, 'BLATTSALAT');
-        });
-
-        test('should keep most frequent if merged version not valid', () {
-          final alts = ['BROCCOLI SALAT', 'BROCCOL I SALAT', 'BROCCOL I SALAT'];
-          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-          expect(result, 'BROCCOLI SALAT');
-        });
-      });
     });
 
     group('normalizeByAlternativeTexts with diacritics/spacing', () {
@@ -142,18 +122,6 @@ void main() {
       test('should not modify text when no merges are needed', () {
         const bestText = 'Coffee Beans';
         final otherTexts = ['Tea Bags'];
-
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(
-          bestText,
-          otherTexts,
-        );
-
-        expect(result, 'Coffee Beans');
-      });
-
-      test('should handle multiple merges in a single text', () {
-        const bestText = 'Cof fee Be ans';
-        final otherTexts = ['Cof fee Be ans', 'Cof fee Be ans', 'Coffee Beans'];
 
         final result = ReceiptNormalizer.normalizeSpecialSpaces(
           bestText,

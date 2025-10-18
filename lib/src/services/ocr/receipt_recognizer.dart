@@ -4,7 +4,6 @@ import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/services/optimizer/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
-import 'package:receipt_recognition/src/utils/logging/index.dart';
 
 /// Main orchestrator for recognizing receipts from images.
 ///
@@ -71,14 +70,9 @@ final class ReceiptRecognizer {
     final accepted = _handleValidationResult(now, optimized, validation);
 
     if (accepted.isValid && accepted.isConfirmed) {
-      ReceiptLogger.logReceipt(accepted, validation);
-
       _lastReceipt = accepted;
-
       return Future.delayed(_scanCompleteDelay, () => accepted);
     }
-
-    ReceiptLogger.logReceipt(optimized, validation);
 
     _lastReceipt = optimized;
 

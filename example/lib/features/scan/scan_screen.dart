@@ -18,12 +18,6 @@ class _ScanScreenState extends State<ScanScreen>
     with CameraHandlerMixin<ScanScreen> {
   late final ScanController _ctrl;
 
-  bool get _isStreamingNow =>
-      cameraController?.value.isStreamingImages ?? false;
-
-  bool get _isReceiptFullyScanned =>
-      _ctrl.lastReceipt.isValid && _ctrl.lastReceipt.isConfirmed;
-
   @override
   void initState() {
     super.initState();
@@ -46,41 +40,20 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _handleInputImage(InputImage input) async {
-    if (_isReceiptFullyScanned) return;
+    if (_ctrl.isAccepted) return;
 
-    final receipt = await _ctrl.processImage(input);
+    await _ctrl.processImage(input);
 
-    if (_isReceiptFullyScanned) {
+    if (_ctrl.isAccepted) {
       await stopLiveFeed();
       if (!mounted) return;
-      GoRouter.of(context).goNamed('result', extra: receipt);
+      _goAcceptedRoute();
     }
   }
 
-  Future<void> _resume() async {
-    try {
-      await startLiveFeed(_handleInputImage);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to start camera: $e')));
-    } finally {
-      if (mounted) setState(() {});
-    }
-  }
-
-  Future<void> _pause() async {
-    try {
-      await stopLiveFeed();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to stop camera: $e')));
-    } finally {
-      if (mounted) setState(() {});
-    }
+  void _goAcceptedRoute() {
+    ReceiptLogger.logReceipt(_ctrl.receipt);
+    GoRouter.of(context).goNamed('result', extra: _ctrl.receipt);
   }
 
   Size? _previewImageSizePortrait() {
@@ -103,8 +76,7 @@ class _ScanScreenState extends State<ScanScreen>
         animation: _ctrl,
         builder: (context, _) {
           final cc = cameraController;
-          final pct = _ctrl.progressPercent.clamp(0, 100);
-
+          final pct = _ctrl.bestPercent;
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -120,11 +92,8 @@ class _ScanScreenState extends State<ScanScreen>
                         ),
                       );
                     }
-
-                    final progress = _ctrl.progress;
-                    final merged = progress?.mergedReceipt;
-                    final positions =
-                        merged?.positions ?? const <RecognizedPosition>[];
+                    final receipt = _ctrl.receipt;
+                    final positions = _ctrl.positions;
                     final scene = SizedBox(
                       width: imageSize.width,
                       height: imageSize.height,
@@ -136,10 +105,10 @@ class _ScanScreenState extends State<ScanScreen>
                             positions: positions,
                             imageSize: imageSize,
                             screenSize: imageSize,
-                            store: merged?.store,
-                            totalLabel: merged?.totalLabel,
-                            total: merged?.total,
-                            purchaseDate: merged?.purchaseDate,
+                            store: receipt.store,
+                            totalLabel: receipt.totalLabel,
+                            total: receipt.total,
+                            purchaseDate: receipt.purchaseDate,
                           ),
                         ],
                       ),
@@ -188,20 +157,12 @@ class _ScanScreenState extends State<ScanScreen>
           duration: const Duration(milliseconds: 200),
           transitionBuilder:
               (child, anim) => FadeTransition(opacity: anim, child: child),
-          child:
-              _isStreamingNow
-                  ? FloatingActionButton.extended(
-                    key: const ValueKey('pauseFab'),
-                    onPressed: _pause,
-                    icon: const Icon(Icons.pause),
-                    label: const Text('Pause'),
-                  )
-                  : FloatingActionButton.extended(
-                    key: const ValueKey('resumeFab'),
-                    onPressed: _resume,
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Resume'),
-                  ),
+          child: FloatingActionButton.extended(
+            key: const ValueKey('accept'),
+            onPressed: () => _ctrl.acceptCurrent(),
+            icon: const Icon(Icons.done),
+            label: const Text('Manually Accept'),
+          ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,

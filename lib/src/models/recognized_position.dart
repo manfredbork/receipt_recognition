@@ -83,7 +83,7 @@ final class RecognizedGroup {
   /// Creates a new recognition group with a maximum size limit.
   RecognizedGroup({int maxGroupSize = 1})
     : _members = <RecognizedPosition>[],
-      _maxGroupSize = max(1, maxGroupSize);
+      _maxGroupSize = maxGroupSize > 1 ? maxGroupSize : 1;
 
   /// Adds a position and enforces capacity.
   void addMember(RecognizedPosition position) {

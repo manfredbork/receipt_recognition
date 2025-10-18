@@ -254,7 +254,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Assigns a position to the best existing group or creates a new one.
   void _processPosition(RecognizedPosition position) {
-    var bestConfidence = 0;
+    var bestConfidence = -1;
     RecognizedGroup? bestGroup;
 
     for (final group in _groups) {
@@ -297,7 +297,6 @@ final class ReceiptOptimizer implements Optimizer {
     final repText = _groupRepresentativeText(group);
     final incText = position.product.normalizedText;
     final fuzzy = ReceiptOcrText.similarity(repText, incText);
-
     final repTok = ReceiptOcrText.tokens(repText);
     final incTok = ReceiptOcrText.tokens(incText);
     final sameBrand =
