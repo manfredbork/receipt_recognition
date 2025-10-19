@@ -57,6 +57,18 @@ final class ReceiptOptimizer implements Optimizer {
   /// Whether we should force a regroup step.
   bool _needsRegrouping = false;
 
+  /// True if a store was detected in the current frame.
+  bool _detectedStoreThisFrame = false;
+
+  /// True if a total label was detected in the current frame.
+  bool _detectedTotalLabelThisFrame = false;
+
+  /// True if a total was detected in the current frame.
+  bool _detectedTotalThisFrame = false;
+
+  /// True if a purchase date was detected in the current frame.
+  bool _detectedPurchaseDateThisFrame = false;
+
   /// Last fingerprint to detect stalling.
   String? _lastFingerprint;
 
@@ -73,6 +85,7 @@ final class ReceiptOptimizer implements Optimizer {
   }) {
     return ReceiptRuntime.runWithOptions(options, () {
       _initializeIfNeeded();
+      _resetFrameFreshness();
       _checkConvergence(receipt);
       _updateStores(receipt);
       _updateTotals(receipt);
@@ -113,6 +126,14 @@ final class ReceiptOptimizer implements Optimizer {
     _lastFingerprint = null;
   }
 
+  /// Resets per-frame detection flags for freshness tracking.
+  void _resetFrameFreshness() {
+    _detectedStoreThisFrame = false;
+    _detectedTotalLabelThisFrame = false;
+    _detectedTotalThisFrame = false;
+    _detectedPurchaseDateThisFrame = false;
+  }
+
   /// Tracks convergence to avoid infinite loops and trigger regrouping.
   void _checkConvergence(RecognizedReceipt receipt) {
     final positionsHash = receipt.positions
@@ -145,6 +166,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// Updates store history cache for later normalization.
   void _updateStores(RecognizedReceipt receipt) {
     final store = receipt.store;
+    _detectedStoreThisFrame = store != null;
     if (store != null) _stores.add(store);
     _trimCache(_stores);
   }
@@ -152,6 +174,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// Updates totals history cache for later normalization.
   void _updateTotals(RecognizedReceipt receipt) {
     final total = receipt.total;
+    _detectedTotalThisFrame = total != null;
     if (total != null) _totals.add(total);
     _trimCache(_totals);
   }
@@ -159,6 +182,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// Updates total labels history cache for later normalization.
   void _updateTotalLabels(RecognizedReceipt receipt) {
     final totalLabel = receipt.totalLabel;
+    _detectedTotalLabelThisFrame = totalLabel != null;
     if (totalLabel != null) _totalLabels.add(totalLabel);
     _trimCache(_totalLabels);
   }
@@ -166,6 +190,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// Updates purchase dates history cache for later normalization.
   void _updatePurchaseDates(RecognizedReceipt receipt) {
     final purchaseDate = receipt.purchaseDate;
+    _detectedPurchaseDateThisFrame = purchaseDate != null;
     if (purchaseDate != null) _purchaseDates.add(purchaseDate);
     _trimCache(_purchaseDates);
   }
@@ -181,15 +206,21 @@ final class ReceiptOptimizer implements Optimizer {
   /// Fills store with the most frequent value in history.
   void _optimizeStore(RecognizedReceipt receipt) {
     if (_stores.isEmpty) return;
-    final mostFrequentStore = ReceiptNormalizer.sortByFrequency(
-      _stores.map((c) => c.value).toList(),
-    );
-    if (_stores.last.value == mostFrequentStore.last) {
-      receipt.store = _stores.last;
+    final most =
+        ReceiptNormalizer.sortByFrequency(
+          _stores.map((c) => c.value).toList(),
+        ).last;
+    final last = _stores.last;
+
+    if (last.value == most) {
+      receipt.store =
+          _detectedStoreThisFrame
+              ? last
+              : last.copyWith(line: ReceiptTextLine(text: last.line.text));
     } else {
-      final store = _stores.lastWhere((s) => s.value == mostFrequentStore.last);
-      receipt.store = store.copyWith(
-        line: ReceiptTextLine(text: store.line.text),
+      final best = _stores.lastWhere((s) => s.value == most);
+      receipt.store = best.copyWith(
+        line: ReceiptTextLine(text: best.line.text),
       );
     }
   }
@@ -197,17 +228,21 @@ final class ReceiptOptimizer implements Optimizer {
   /// Fills total label with the most frequent value in history.
   void _optimizeTotalLabel(RecognizedReceipt receipt) {
     if (_totalLabels.isEmpty) return;
-    final mostFrequentTotalLabel = ReceiptNormalizer.sortByFrequency(
-      _totalLabels.map((c) => c.value).toList(),
-    );
-    if (_totalLabels.last.value == mostFrequentTotalLabel.last) {
-      receipt.totalLabel = _totalLabels.last;
+    final most =
+        ReceiptNormalizer.sortByFrequency(
+          _totalLabels.map((c) => c.value).toList(),
+        ).last;
+    final last = _totalLabels.last;
+
+    if (last.value == most) {
+      receipt.totalLabel =
+          _detectedTotalLabelThisFrame
+              ? last
+              : last.copyWith(line: ReceiptTextLine(text: last.line.text));
     } else {
-      final totalLabel = _totalLabels.lastWhere(
-        (s) => s.value == mostFrequentTotalLabel.last,
-      );
-      receipt.totalLabel = totalLabel.copyWith(
-        line: ReceiptTextLine(text: totalLabel.line.text),
+      final best = _totalLabels.lastWhere((s) => s.value == most);
+      receipt.totalLabel = best.copyWith(
+        line: ReceiptTextLine(text: best.line.text),
       );
     }
   }
@@ -215,17 +250,21 @@ final class ReceiptOptimizer implements Optimizer {
   /// Fills total with the most frequent value in history.
   void _optimizeTotal(RecognizedReceipt receipt) {
     if (_totals.isEmpty) return;
-    final mostFrequentTotal = ReceiptNormalizer.sortByFrequency(
-      _totals.map((c) => c.formattedValue).toList(),
-    );
-    if (_totals.last.formattedValue == mostFrequentTotal.last) {
-      receipt.total = _totals.last;
+    final most =
+        ReceiptNormalizer.sortByFrequency(
+          _totals.map((c) => c.formattedValue).toList(),
+        ).last;
+    final last = _totals.last;
+
+    if (last.formattedValue == most) {
+      receipt.total =
+          _detectedTotalThisFrame
+              ? last
+              : last.copyWith(line: ReceiptTextLine(text: last.line.text));
     } else {
-      final total = _totals.lastWhere(
-        (s) => s.formattedValue == mostFrequentTotal.last,
-      );
-      receipt.total = total.copyWith(
-        line: ReceiptTextLine(text: total.line.text),
+      final best = _totals.lastWhere((s) => s.formattedValue == most);
+      receipt.total = best.copyWith(
+        line: ReceiptTextLine(text: best.line.text),
       );
     }
   }
@@ -233,17 +272,21 @@ final class ReceiptOptimizer implements Optimizer {
   /// Fills purchase date with the most frequent value in history.
   void _optimizePurchaseDate(RecognizedReceipt receipt) {
     if (_purchaseDates.isEmpty) return;
-    final mostFrequentPurchaseDate = ReceiptNormalizer.sortByFrequency(
-      _purchaseDates.map((c) => c.formattedValue).toList(),
-    );
-    if (_purchaseDates.last.formattedValue == mostFrequentPurchaseDate.last) {
-      receipt.purchaseDate = _purchaseDates.last;
+    final most =
+        ReceiptNormalizer.sortByFrequency(
+          _purchaseDates.map((c) => c.formattedValue).toList(),
+        ).last;
+    final last = _purchaseDates.last;
+
+    if (last.formattedValue == most) {
+      receipt.purchaseDate =
+          _detectedPurchaseDateThisFrame
+              ? last
+              : last.copyWith(line: ReceiptTextLine(text: last.line.text));
     } else {
-      final purchaseDate = _purchaseDates.lastWhere(
-        (s) => s.formattedValue == mostFrequentPurchaseDate.last,
-      );
-      receipt.purchaseDate = purchaseDate.copyWith(
-        line: ReceiptTextLine(text: purchaseDate.line.text),
+      final best = _purchaseDates.lastWhere((s) => s.formattedValue == most);
+      receipt.purchaseDate = best.copyWith(
+        line: ReceiptTextLine(text: best.line.text),
       );
     }
   }
@@ -419,16 +462,14 @@ final class ReceiptOptimizer implements Optimizer {
       'total?': receipt.total?.value,
     });
 
-    final stabilityThreshold = _opts.tuning.optimizerStabilityThreshold;
-    final quarter = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 4;
+    final halfStability = _opts.tuning.optimizerStabilityThreshold ~/ 2;
+    final halfCacheSize = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 2;
+
+    bool stable(stab, size) => stab >= halfStability && size >= halfCacheSize;
+
     final stableGroups =
         _groups
-            .where(
-              (g) =>
-                  (g.stability >= stabilityThreshold &&
-                      g.members.length >= quarter) ||
-                  test,
-            )
+            .where((g) => stable(g.stability, g.members.length) || test)
             .toList();
 
     _learnOrder(receipt);
@@ -459,7 +500,8 @@ final class ReceiptOptimizer implements Optimizer {
     mergedReceipt.store = receipt.store ?? mergedReceipt.store;
     mergedReceipt.total = receipt.total ?? mergedReceipt.total;
     mergedReceipt.totalLabel = receipt.totalLabel ?? mergedReceipt.totalLabel;
-    mergedReceipt.purchaseDate = receipt.purchaseDate ?? mergedReceipt.purchaseDate;
+    mergedReceipt.purchaseDate =
+        receipt.purchaseDate ?? mergedReceipt.purchaseDate;
     mergedReceipt.bounds = receipt.bounds ?? mergedReceipt.bounds;
 
     _updateEntities(mergedReceipt);

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Line item position on a receipt (product + price).
 final class RecognizedPosition {
@@ -96,8 +97,11 @@ final class RecognizedGroup {
   /// Calculates an adaptive confidence for a product name based on similarity to group members.
   Confidence calculateProductConfidence(RecognizedProduct product) {
     if (_members.isEmpty) return Confidence(value: 0);
+
     final scores =
-        _members.map((b) => ratio(product.value, b.product.value)).toList();
+        _members
+            .map((b) => partialRatio(product.value, b.product.value))
+            .toList();
     if (scores.isEmpty) return Confidence(value: 0);
 
     double total = 0.0, totalSq = 0.0;
@@ -142,7 +146,9 @@ final class RecognizedGroup {
 
   /// All product texts for normalization.
   List<String> get alternativeTexts =>
-      _members.map((p) => p.product.text).toList();
+      _members
+          .map((p) => ReceiptNormalizer.normalizeTail(p.product.text))
+          .toList();
 
   /// All product postfix texts (amount prefix removed) for categorization.
   List<String> get alternativePostfixTexts =>

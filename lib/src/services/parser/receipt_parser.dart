@@ -975,7 +975,7 @@ final class ReceiptParser {
         out.add(e);
         continue;
       }
-      final isBelow = _top(e) > cutoff;
+      final isBelow = _top(e) > cutoff + _tol;
       if (!isBelow) {
         out.add(e);
       } else {
