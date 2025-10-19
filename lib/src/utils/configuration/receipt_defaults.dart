@@ -32,8 +32,8 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
   'discountKeywords': ['Rabatt', 'Coupon', 'Discount'],
   'depositKeywords': ['Leerg.', 'Leergut', 'Einweg', 'Pfand', 'Deposit'],
   'tuning': {
-    'totalTolerance': 0.009,
-    'verticalTolerance': 50,
+    'optimizerTotalTolerance': 0.009,
+    'optimizerVerticalTolerance': 50,
     'optimizerLoopThreshold': 10,
     'optimizerMaxCacheSize': 15,
     'optimizerConfidenceThreshold': 80,
