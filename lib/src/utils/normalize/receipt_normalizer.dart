@@ -50,6 +50,9 @@ final class ReceiptNormalizer {
     r'[\u0009-\u000D\u0020\u0085\u00A0\u1680\u180E\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+',
   );
 
+  /// Remove only ASCII spaces (keeps punctuation/symbols intact).
+  static String _removeAsciiSpacesOnly(String s) => s.replaceAll(' ', '');
+
   /// Normalizes text by comparing multiple alternative recognitions.
   static String? normalizeByAlternativeTexts(List<String> alternativeTexts) {
     ReceiptLogger.log('norm.in', {
@@ -207,11 +210,30 @@ final class ReceiptNormalizer {
       return a.compareTo(b);
     });
 
-    final picked = sameSignature.first;
+    String picked = sameSignature.first;
+
+    final keyNoSpaces = _removeAsciiSpacesOnly(picked);
+    final spaceOnlyAlts =
+        sameSignature
+            .where((s) => _removeAsciiSpacesOnly(s) == keyNoSpaces)
+            .toList();
+
+    if (spaceOnlyAlts.isNotEmpty) {
+      spaceOnlyAlts.sort((a, b) {
+        final sa = _singleSpace.allMatches(a).length;
+        final sb = _singleSpace.allMatches(b).length;
+        if (sa != sb) return sa - sb;
+        if (a.length != b.length) return a.length - b.length;
+        return a.compareTo(b);
+      });
+      picked = spaceOnlyAlts.first;
+    }
+
     ReceiptLogger.log('norm.spaces', {
       'target': mostFrequent,
       'picked': picked,
       'cands': sameSignature,
+      'rule': 'fewest-spaces-if-space-only-diff',
     });
     return picked;
   }

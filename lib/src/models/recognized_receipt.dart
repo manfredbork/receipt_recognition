@@ -160,18 +160,21 @@ class RecognizedReceipt {
       calculatedTotal.formattedValue == total?.formattedValue &&
       calculatedTotal.value > 0.0;
 
-  /// True if the average group size exceeds one quarter of the configured precision.
-  ///
-  /// Uses `ReceiptRuntime.tuning.optimizerMaxCacheSize` to avoid hardcoding.
+  /// True if every position group meets size, stability, and confidence thresholds.
+  /// Uses one-half of max cache size plus runtime stability/confidence limits.
   bool get isConfirmed {
-    final lengths = positions.map((p) => p.group?.members.length ?? 0).toList();
-    if (lengths.isEmpty) return false;
-
-    final total = lengths.fold<int>(0, (a, b) => a + b);
-    final avg = total ~/ lengths.length;
-
-    final quarter = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 4;
-    return avg >= quarter;
+    final halfSize = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 2;
+    final stabilityThreshold =
+        ReceiptRuntime.tuning.optimizerStabilityThreshold;
+    final confidenceThreshold =
+        ReceiptRuntime.tuning.optimizerConfidenceThreshold;
+    final confirmed = positions.every((p) {
+      final enoughMembers = (p.group?.members.length ?? 0) >= halfSize;
+      final enoughStability = p.stability >= stabilityThreshold;
+      final enoughConfidence = p.confidence >= confidenceThreshold;
+      return enoughMembers && enoughStability && enoughConfidence;
+    });
+    return confirmed;
   }
 }
 

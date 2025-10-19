@@ -420,13 +420,13 @@ final class ReceiptOptimizer implements Optimizer {
     });
 
     final stabilityThreshold = _opts.tuning.optimizerStabilityThreshold;
-    final fifth = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 5;
+    final quarter = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 4;
     final stableGroups =
         _groups
             .where(
               (g) =>
                   (g.stability >= stabilityThreshold &&
-                      g.members.length >= fifth) ||
+                      g.members.length >= quarter) ||
                   test,
             )
             .toList();
@@ -556,7 +556,7 @@ final class ReceiptOptimizer implements Optimizer {
       return;
     }
 
-    final int maxCandidates = beforeLen ~/ 3;
+    final int maxCandidates = beforeLen ~/ 2;
     final candidates = List<RecognizedPosition>.from(receipt.positions)..sort(
       (a, b) => (a.group?.members.length ?? 0).compareTo(
         b.group?.members.length ?? 0,
@@ -785,7 +785,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Returns a representative product text for a group.
   String _groupRepresentativeText(RecognizedGroup g) {
-    final best = maxBy(g.members, (p) => p.confidence);
+    final best = maxBy(g.members, (p) => p.stability);
     return (best?.product.normalizedText ??
         g.members.first.product.normalizedText);
   }

@@ -69,14 +69,19 @@ final class ReceiptParser {
     return c != 0 ? c : _leftL(a).compareTo(_leftL(b));
   }
 
-  /// Matches numeric dates in the format "01.09.2025" or "1/9/25" with a consistent separator.
-  static final RegExp _dateDayMonthYearNumeric = RegExp(
-    r'\b(\d{1,2}([./-])\d{1,2}\2\d{2,4})\b',
+  /// ISO date (YYYY-MM-DD) directly before a time like "T08:50"; accepts unicode dashes.
+  static final RegExp _dateIsoYMD = RegExp(
+    r'(?<!\d)(\d{4}([-–—])\d{1,2}\2\d{1,2})(?=T\d{1,2}[:.]\d{2}(?::\d{2})?(?:[.,]\d+)?\b)',
   );
 
-  /// Matches numeric dates in the format "2025-09-01" or "2025/9/1" with a consistent separator.
+  /// Numeric Y-M-D; accepts -, –, —, ., /; allow time after or a non-alnum/end.
   static final RegExp _dateYearMonthDayNumeric = RegExp(
-    r'\b(\d{4}([./-])\d{1,2}\2\d{1,2})\b',
+    r'(?<!\d)(\d{4}([./\-–—])\d{1,2}\2\d{1,2})(?:(?=[T\s]\d{1,2}[:.]\d{2})|(?![0-9A-Za-z]))',
+  );
+
+  /// Numeric D-M-Y; accepts -, –, —, ., /; allow time after or a non-alnum/end.
+  static final RegExp _dateDayMonthYearNumeric = RegExp(
+    r'(?<!\d)(\d{1,2}([./\-–—])\d{1,2}\2\d{2,4})(?:(?=\s+\d{1,2}[:.]\d{2})|(?![0-9A-Za-z]))',
   );
 
   /// Matches English dates like "1.September 25", "1. September 2025", or "1 September 2025".
@@ -141,25 +146,31 @@ final class ReceiptParser {
         'amounts': parsed.whereType<RecognizedAmount>().length,
       });
 
-      final prunedU = _filterUnknownOutliers(parsed);
+      final prunedUnknowns = _filterUnknownOutliers(parsed);
       ReceiptLogger.log('filter.unknown.outliers', {
         'before': parsed.whereType<RecognizedUnknown>().length,
-        'after': prunedU.whereType<RecognizedUnknown>().length,
+        'after': prunedUnknowns.whereType<RecognizedUnknown>().length,
       });
 
-      final prunedA = _filterAmountOutliers(prunedU);
+      final prunedAmounts = _filterAmountOutliers(prunedUnknowns);
       ReceiptLogger.log('filter.amount.outliers', {
-        'before': prunedU.whereType<RecognizedAmount>().length,
-        'after': prunedA.whereType<RecognizedAmount>().length,
+        'before': prunedUnknowns.whereType<RecognizedAmount>().length,
+        'after': prunedAmounts.whereType<RecognizedAmount>().length,
       });
 
-      final filtered = _filterIntermediaryEntities(prunedA);
+      final prunedIntermediary = _filterIntermediaryEntities(prunedAmounts);
       ReceiptLogger.log('filter.intermediary', {
-        'before': prunedA.length,
-        'after': filtered.length,
+        'before': prunedAmounts.length,
+        'after': prunedIntermediary.length,
       });
 
-      return _buildReceipt(filtered);
+      final prunedBelow = _filterBelowTotalAndLabel(prunedIntermediary);
+      ReceiptLogger.log('filter.below_total.summary', {
+        'before': prunedIntermediary.length,
+        'after': prunedBelow.length,
+      });
+
+      return _buildReceipt(prunedBelow);
     });
   }
 
@@ -267,9 +278,12 @@ final class ReceiptParser {
   static bool _shouldStopIfStopword(TextLine line) =>
       _opts.stopKeywords.hasMatch(line.text);
 
-  /// Fuzzy score for detecting a label *inside* a longer line.
-  /// Use the max of partialRatio and tokenSetRatio to handle substrings and word shuffles.
+  /// Returns the best fuzzy match score (0–100) between [line] and [label].
+  /// Uses partial and token-set ratios for substring and token-based matching.
   static int _scoreFuzzy(String line, String label) {
+    if (line.length < label.length) {
+      return ratio(line, label);
+    }
     final p = partialRatio(line, label);
     final ts = tokenSetRatio(line, label);
     return p > ts ? p : ts;
@@ -321,7 +335,7 @@ final class ReceiptParser {
       final amounts = parsed.whereType<RecognizedAmount>().toList();
       final total = _findClosestTotalAmount(totalLabel, amounts);
       final index = parsed.indexWhere((e) => e == total);
-      if (total != null && index > -1) {
+      if (total != null && index >= 0) {
         parsed[index] = RecognizedTotal(
           value: parsed[index].value,
           line: parsed[index].line,
@@ -421,44 +435,43 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Extracts the first purchase date as a UTC `DateTime` placed directly in `value`,
-  /// using the class-level `_date*` regex patterns (numeric and EN/DE month-name forms).
+  /// Finds the most prominent date: try ISO first, then YMD/DMY, then name-month; use all matches.
   static RecognizedPurchaseDate? _extractDateFromLines(List<TextLine> lines) {
     final patterns = [
+      _dateIsoYMD,
       _dateYearMonthDayNumeric,
       _dateDayMonthYearNumeric,
-      _dateDayMonthYearEn,
       _dateMonthDayYearEn,
+      _dateDayMonthYearEn,
       _dateDayMonthYearDe,
     ];
 
-    RecognizedPurchaseDate? bestPurchaseDate;
-    double maxHeight = 0;
+    RecognizedPurchaseDate? best;
+    double maxH = 0;
+
     for (final line in lines) {
-      final text = line.text;
+      final t = line.text;
       for (final p in patterns) {
-        final m = p.firstMatch(text);
-        if (m == null || m.groupCount < 1) continue;
-        final token = m.group(1)!;
-        DateTime? dt;
-
-        if (identical(p, _dateYearMonthDayNumeric)) {
-          dt = ReceiptFormatter.parseNumericYMD(token);
-        } else if (identical(p, _dateDayMonthYearNumeric)) {
-          dt = ReceiptFormatter.parseNumericDMY(token);
-        } else if (identical(p, _dateMonthDayYearEn)) {
-          dt = ReceiptFormatter.parseNameMDY(token);
-        } else {
-          dt = ReceiptFormatter.parseNameDMY(token);
-        }
-
-        if (dt != null && line.boundingBox.height > maxHeight) {
-          bestPurchaseDate = RecognizedPurchaseDate(value: dt, line: line);
-          maxHeight = line.boundingBox.height;
+        for (final m in p.allMatches(t)) {
+          if (m.groupCount < 1) continue;
+          final s = m.group(1)!;
+          DateTime? dt =
+              identical(p, _dateIsoYMD) ||
+                      identical(p, _dateYearMonthDayNumeric)
+                  ? ReceiptFormatter.parseNumericYMD(s)
+                  : identical(p, _dateDayMonthYearNumeric)
+                  ? ReceiptFormatter.parseNumericDMY(s)
+                  : identical(p, _dateMonthDayYearEn)
+                  ? ReceiptFormatter.parseNameMDY(s)
+                  : ReceiptFormatter.parseNameDMY(s);
+          if (dt != null && line.boundingBox.height > maxH) {
+            best = RecognizedPurchaseDate(value: dt, line: line);
+            maxH = line.boundingBox.height;
+          }
         }
       }
     }
-    return bestPurchaseDate;
+    return best;
   }
 
   /// Returns the first detected store entity if any.
@@ -936,6 +949,48 @@ final class ReceiptParser {
       }
     }
     return filtered;
+  }
+
+  /// Drop entities strictly below total/label (keep RecognizedPurchaseDate).
+  static List<RecognizedEntity> _filterBelowTotalAndLabel(
+    List<RecognizedEntity> entities,
+  ) {
+    final total = _findTotal(entities);
+    final label = _findTotalLabel(entities);
+    if (total == null && label == null) return entities;
+
+    double cutoff = -double.infinity;
+    if (label != null) {
+      cutoff = cutoff > _bottom(label) ? cutoff : _bottom(label);
+    }
+    if (total != null) {
+      cutoff = cutoff > _bottom(total) ? cutoff : _bottom(total);
+    }
+
+    final out = <RecognizedEntity>[];
+    final removed = <String>[];
+
+    for (final e in entities) {
+      if (e is RecognizedPurchaseDate) {
+        out.add(e);
+        continue;
+      }
+      final isBelow = _top(e) > cutoff;
+      if (!isBelow) {
+        out.add(e);
+      } else {
+        removed.add(_dbgId(e));
+      }
+    }
+
+    ReceiptLogger.log('filter.below_total', {
+      'cutoff': cutoff,
+      'tol': _tol,
+      'before': entities.length,
+      'after': out.length,
+      'removed': removed,
+    });
+    return out;
   }
 
   /// Builds a complete receipt from entities and post-filters.
