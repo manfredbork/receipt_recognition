@@ -432,6 +432,8 @@ final class ReceiptParser {
       _dateDayMonthYearDe,
     ];
 
+    RecognizedPurchaseDate? bestPurchaseDate;
+    double maxHeight = 0;
     for (final line in lines) {
       final text = line.text;
       for (final p in patterns) {
@@ -450,12 +452,13 @@ final class ReceiptParser {
           dt = ReceiptFormatter.parseNameDMY(token);
         }
 
-        if (dt != null) {
-          return RecognizedPurchaseDate(value: dt, line: line);
+        if (dt != null && line.boundingBox.height > maxHeight) {
+          bestPurchaseDate = RecognizedPurchaseDate(value: dt, line: line);
+          maxHeight = line.boundingBox.height;
         }
       }
     }
-    return null;
+    return bestPurchaseDate;
   }
 
   /// Returns the first detected store entity if any.

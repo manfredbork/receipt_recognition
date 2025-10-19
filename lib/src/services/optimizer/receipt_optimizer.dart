@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
 import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
@@ -183,7 +184,14 @@ final class ReceiptOptimizer implements Optimizer {
     final mostFrequentStore = ReceiptNormalizer.sortByFrequency(
       _stores.map((c) => c.value).toList(),
     );
-    receipt.store = _stores.lastWhere((s) => s.value == mostFrequentStore.last);
+    if (_stores.last.value == mostFrequentStore.last) {
+      receipt.store = _stores.last;
+    } else {
+      final store = _stores.lastWhere((s) => s.value == mostFrequentStore.last);
+      receipt.store = store.copyWith(
+        line: ReceiptTextLine(text: store.line.text),
+      );
+    }
   }
 
   /// Fills total label with the most frequent value in history.
@@ -192,20 +200,34 @@ final class ReceiptOptimizer implements Optimizer {
     final mostFrequentTotalLabel = ReceiptNormalizer.sortByFrequency(
       _totalLabels.map((c) => c.value).toList(),
     );
-    receipt.totalLabel = _totalLabels.lastWhere(
-      (sl) => sl.value == mostFrequentTotalLabel.last,
-    );
+    if (_totalLabels.last.value == mostFrequentTotalLabel.last) {
+      receipt.totalLabel = _totalLabels.last;
+    } else {
+      final totalLabel = _totalLabels.lastWhere(
+        (s) => s.value == mostFrequentTotalLabel.last,
+      );
+      receipt.totalLabel = totalLabel.copyWith(
+        line: ReceiptTextLine(text: totalLabel.line.text),
+      );
+    }
   }
 
   /// Fills total with the most frequent value in history.
   void _optimizeTotal(RecognizedReceipt receipt) {
     if (_totals.isEmpty) return;
     final mostFrequentTotal = ReceiptNormalizer.sortByFrequency(
-      _totals.map((c) => c.value.toString()).toList(),
+      _totals.map((c) => c.formattedValue).toList(),
     );
-    receipt.total = _totals.lastWhere(
-      (s) => s.value.toString() == mostFrequentTotal.last,
-    );
+    if (_totals.last.formattedValue == mostFrequentTotal.last) {
+      receipt.total = _totals.last;
+    } else {
+      final total = _totals.lastWhere(
+        (s) => s.formattedValue == mostFrequentTotal.last,
+      );
+      receipt.total = total.copyWith(
+        line: ReceiptTextLine(text: total.line.text),
+      );
+    }
   }
 
   /// Fills purchase date with the most frequent value in history.
@@ -214,9 +236,16 @@ final class ReceiptOptimizer implements Optimizer {
     final mostFrequentPurchaseDate = ReceiptNormalizer.sortByFrequency(
       _purchaseDates.map((c) => c.formattedValue).toList(),
     );
-    receipt.purchaseDate = _purchaseDates.lastWhere(
-      (pd) => pd.formattedValue == mostFrequentPurchaseDate.last,
-    );
+    if (_purchaseDates.last.formattedValue == mostFrequentPurchaseDate.last) {
+      receipt.purchaseDate = _purchaseDates.last;
+    } else {
+      final purchaseDate = _purchaseDates.lastWhere(
+        (s) => s.formattedValue == mostFrequentPurchaseDate.last,
+      );
+      receipt.purchaseDate = purchaseDate.copyWith(
+        line: ReceiptTextLine(text: purchaseDate.line.text),
+      );
+    }
   }
 
   /// Removes empty groups and very early weak outliers based on grace/thresholds.
@@ -258,7 +287,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Assigns a position to the best existing group or creates a new one.
   void _processPosition(RecognizedPosition position) {
-    int bestConfidence = -1;
+    int bestConfidence = 0;
     RecognizedGroup? bestGroup;
 
     for (final group in _groups) {
@@ -427,11 +456,11 @@ final class ReceiptOptimizer implements Optimizer {
       mergedReceipt.positions.add(patched);
     }
 
-    mergedReceipt.store ??= receipt.store;
-    mergedReceipt.total ??= receipt.total;
-    mergedReceipt.totalLabel ??= receipt.totalLabel;
-    mergedReceipt.purchaseDate ??= receipt.purchaseDate;
-    mergedReceipt.bounds ??= receipt.bounds;
+    mergedReceipt.store = receipt.store;
+    mergedReceipt.total = receipt.total;
+    mergedReceipt.totalLabel = receipt.totalLabel;
+    mergedReceipt.purchaseDate = receipt.purchaseDate;
+    mergedReceipt.bounds = receipt.bounds;
 
     _updateEntities(mergedReceipt);
 
@@ -527,7 +556,7 @@ final class ReceiptOptimizer implements Optimizer {
       return;
     }
 
-    final int maxCandidates = beforeLen ~/ 4;
+    final int maxCandidates = beforeLen ~/ 3;
     final candidates = List<RecognizedPosition>.from(receipt.positions)..sort(
       (a, b) => (a.group?.members.length ?? 0).compareTo(
         b.group?.members.length ?? 0,
