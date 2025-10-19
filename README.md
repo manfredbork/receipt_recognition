@@ -161,17 +161,14 @@ Parameters (keys inside extend/override, or top-level in flat form)
 - tuning: Map<String, dynamic> (override-only)
     - optimizerConfidenceThreshold (int): min combined confidence (0–100).
     - optimizerStabilityThreshold (int): min stability (0–100).
-    - optimizerPrecisionNormal (int): typical grouping capacity.
-    - optimizerPrecisionHigh (int): higher-capacity variant.
+    - optimizerMaxCacheSize (int): typical grouping capacity.
     - optimizerLoopThreshold (int): stall detection iterations.
     - optimizerEwmaAlpha (double): smoothing for order learning.
     - optimizerAboveCountDecayThreshold (int): decay threshold for order counts.
     - optimizerVariantMinSim (double): min similarity for merging variants.
     - optimizerMinProductSimToMerge (double): min token similarity to merge.
-    - verticalTolerance (int): pixel tolerance for alignment.
-    - totalTolerance (double): amount tolerance when matching totals.
-    - outlierTau, outlierMaxCandidates, outlierLowConfThreshold, outlierMinSamples, outlierSuspectBonus: outlier
-      handling knobs.
+    - optimizerVerticalTolerance (int): pixel tolerance for alignment.
+    - optimizerTotalTolerance (double): amount tolerance when matching totals.
 
 Merge behavior
 

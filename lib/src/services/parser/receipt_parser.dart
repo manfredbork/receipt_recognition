@@ -118,7 +118,7 @@ final class ReceiptParser {
   );
 
   /// Effective geometric tolerance from runtime.
-  static int get _tol => ReceiptRuntime.tuning.verticalTolerance;
+  static int get _tol => ReceiptRuntime.tuning.optimizerVerticalTolerance;
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
   static ReceiptOptions get _opts => ReceiptRuntime.options;

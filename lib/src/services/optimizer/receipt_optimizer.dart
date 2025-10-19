@@ -171,7 +171,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Trims a cache list to the configured precision size.
   void _trimCache(List list) {
-    final maxCacheSize = _opts.tuning.optimizerPrecisionNormal;
+    final maxCacheSize = _opts.tuning.optimizerMaxCacheSize;
     while (list.length > maxCacheSize) {
       list.removeAt(0);
     }
@@ -353,7 +353,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
-    final maxCacheSize = _opts.tuning.optimizerPrecisionNormal;
+    final maxCacheSize = _opts.tuning.optimizerMaxCacheSize;
     final newGroup = RecognizedGroup(maxGroupSize: maxCacheSize);
     position.group = newGroup;
     position.operation = Operation.added;
@@ -391,13 +391,13 @@ final class ReceiptOptimizer implements Optimizer {
     });
 
     final stabilityThreshold = _opts.tuning.optimizerStabilityThreshold;
-    final quarter = ReceiptRuntime.tuning.optimizerPrecisionNormal ~/ 4;
+    final fifth = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 5;
     final stableGroups =
         _groups
             .where(
               (g) =>
                   (g.stability >= stabilityThreshold &&
-                      g.members.length >= quarter) ||
+                      g.members.length >= fifth) ||
                   test,
             )
             .toList();
@@ -502,7 +502,7 @@ final class ReceiptOptimizer implements Optimizer {
     if (total == null) return;
     if (receipt.positions.isEmpty) return;
 
-    final tol = _opts.tuning.totalTolerance;
+    final tol = _opts.tuning.optimizerTotalTolerance;
     final targetC = _toCents(total);
     final beforeC = _sumCents(receipt.positions);
 
@@ -716,7 +716,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
-    final tiePx = _opts.tuning.verticalTolerance.toDouble();
+    final tiePx = _opts.tuning.optimizerTotalTolerance.toDouble();
 
     final sa = _orderStats[a];
     final sb = _orderStats[b];
@@ -744,8 +744,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Detects very early weak outliers.
   bool _isEarlyOutlier(RecognizedGroup g, DateTime now) {
-    final invalidateMs = _opts.tuning.optimizerInvalidateIntervalMs;
-    final grace = Duration(milliseconds: invalidateMs) ~/ 8;
+    final grace = Duration(milliseconds: 500);
 
     final staleForAWhile = now.difference(g.timestamp) >= grace;
     final veryWeak =
