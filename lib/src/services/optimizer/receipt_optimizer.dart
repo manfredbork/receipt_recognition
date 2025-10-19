@@ -456,11 +456,11 @@ final class ReceiptOptimizer implements Optimizer {
       mergedReceipt.positions.add(patched);
     }
 
-    mergedReceipt.store = receipt.store;
-    mergedReceipt.total = receipt.total;
-    mergedReceipt.totalLabel = receipt.totalLabel;
-    mergedReceipt.purchaseDate = receipt.purchaseDate;
-    mergedReceipt.bounds = receipt.bounds;
+    mergedReceipt.store = receipt.store ?? mergedReceipt.store;
+    mergedReceipt.total = receipt.total ?? mergedReceipt.total;
+    mergedReceipt.totalLabel = receipt.totalLabel ?? mergedReceipt.totalLabel;
+    mergedReceipt.purchaseDate = receipt.purchaseDate ?? mergedReceipt.purchaseDate;
+    mergedReceipt.bounds = receipt.bounds ?? mergedReceipt.bounds;
 
     _updateEntities(mergedReceipt);
 
