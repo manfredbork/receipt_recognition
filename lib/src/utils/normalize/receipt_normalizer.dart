@@ -1,3 +1,6 @@
+import 'dart:math';
+
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
@@ -225,6 +228,19 @@ final class ReceiptNormalizer {
     final entries =
         freq.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
     return entries.map((e) => e.key).toList();
+  }
+
+  /// Returns the best fuzzy match score (0–100) between two strings.
+  /// Uses simple, partial and token-set ratios for substring and token-based matching.
+  static int similarity(String a, String b) {
+    final aNoSpaces = a.replaceAll(_allSpaces, '');
+    final bNoSpaces = b.replaceAll(_allSpaces, '');
+    final ratios = [
+      ratio(aNoSpaces, bNoSpaces),
+      partialRatio(aNoSpaces, bNoSpaces),
+      tokenSetRatio(aNoSpaces, bNoSpaces),
+    ];
+    return ratios.reduce(max);
   }
 
   /// Returns true if the string contains combining diacritic marks.

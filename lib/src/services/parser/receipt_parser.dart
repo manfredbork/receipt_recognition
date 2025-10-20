@@ -1,6 +1,6 @@
+import 'dart:math';
 import 'dart:ui';
 
-import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
@@ -198,7 +198,7 @@ final class ReceiptParser {
 
     for (final line in lines) {
       if (_shouldStopIfTotalConfirmed(line, parsed, detectedTotal)) break;
-      if (_shouldStopIfStopword(line)) break;
+      if (_shouldStopIfStopWord(line)) break;
       if (_shouldIgnoreLine(line)) continue;
       if (_shouldSkipLine(line, detectedTotalLabel)) continue;
 
@@ -275,54 +275,47 @@ final class ReceiptParser {
 
   /// Returns `true` if the line matches a configured stop keyword.
   /// Used to terminate parsing once a footer or end-of-receipt marker is seen.
-  static bool _shouldStopIfStopword(TextLine line) =>
+  static bool _shouldStopIfStopWord(TextLine line) =>
       _opts.stopKeywords.hasMatch(line.text);
 
-  /// Returns the best fuzzy match score (0–100) between [line] and [label].
-  /// Uses partial and token-set ratios for substring and token-based matching.
-  static int _scoreFuzzy(String line, String label) {
-    if (line.length < label.length) {
-      return ratio(line, label);
-    }
-    final p = partialRatio(line, label);
-    final ts = tokenSetRatio(line, label);
-    return p > ts ? p : ts;
-  }
-
-  /// Tries to detect a total label using fuzzy matching against configured synonyms.
-  ///
-  /// Picks the best matching label on the current [line] and, if it clears the
-  /// adaptive threshold, appends a [RecognizedTotalLabel] to [parsed].
-  /// Returns `true` on success, `false` otherwise.
+  /// Detects a total label on [line] via fuzzy match and appends it to [parsed]; returns true if added.
   static bool _tryParseTotalLabel(
     TextLine line,
     List<RecognizedEntity> parsed,
     RecognizedTotalLabel? totalLabel,
   ) {
     if (totalLabel != null || _opts.totalLabels.mapping.isEmpty) return false;
+    final label = _findTotalLabelLike(line.text);
+    final canonical = _opts.totalLabels.mapping[label] ?? label;
+    if (canonical != null) {
+      parsed.add(RecognizedTotalLabel(line: line, value: canonical));
+    }
+    return canonical != null;
+  }
+
+  /// Returns true if [text] fuzzy-matches any configured total label above the adaptive threshold.
+  static bool _isTotalLabelLike(String text) {
+    return _findTotalLabelLike(text) != null;
+  }
+
+  /// Best-match total label key for [text] using normalized similarity + adaptive threshold, or null if none.
+  static String? _findTotalLabelLike(String text) {
+    final trimmed = ReceiptFormatter.trim(text).toLowerCase();
     int thr(String label) => _adaptiveThreshold(label);
-    String text = ReceiptFormatter.trim(line.text).toLowerCase();
     String? bestLabel;
     int bestScore = 0;
     for (final label in _opts.totalLabels.mapping.keys) {
-      final s = _scoreFuzzy(text, label);
-      if (s > bestScore) {
+      final s = ReceiptNormalizer.similarity(trimmed, label);
+      if (s > bestScore && text.length >= label.length) {
         bestScore = s;
         bestLabel = label;
       }
     }
-    if (bestLabel == null || bestScore < thr(bestLabel)) return false;
-    final canonical = _opts.totalLabels.mapping[bestLabel] ?? bestLabel;
-    parsed.add(RecognizedTotalLabel(line: line, value: canonical));
-    return true;
+    if (bestLabel == null || bestScore < thr(bestLabel)) return null;
+    return bestLabel;
   }
 
-  /// Tries to parse the total amount on the same or nearby line after a detected label.
-  ///
-  /// When a total label is known, this attempts to parse an amount from [line].
-  /// If successful, it promotes the closest [RecognizedAmount] to a [RecognizedTotal]
-  /// and prunes trailing entities (single-pass selection). Returns `true` if a total
-  /// is produced; otherwise `false`.
+  /// With a known label, parses an amount on [line] and promotes the nearest one to a RecognizedTotal; returns true if set.
   static bool _tryParseTotal(
     TextLine line,
     List<RecognizedEntity> parsed,
@@ -332,19 +325,17 @@ final class ReceiptParser {
   ) {
     if (totalLabel == null || total != null) return false;
     if (_tryParseAmount(line, parsed, median)) {
-      final amounts = parsed.whereType<RecognizedAmount>().toList();
+      final amounts = [
+        RecognizedAmount(value: parsed.last.value, line: parsed.last.line),
+      ];
       final total = _findClosestTotalAmount(totalLabel, amounts);
-      final index = parsed.indexWhere((e) => e == total);
-      if (total != null && index >= 0) {
-        parsed[index] = RecognizedTotal(
-          value: parsed[index].value,
-          line: parsed[index].line,
-        );
-        parsed.removeRange(index + 1, parsed.length);
+      if (total != null) {
+        parsed.last = RecognizedTotal(value: total.value, line: total.line);
         return true;
+      } else {
+        parsed.removeLast();
+        return false;
       }
-      parsed.removeLast();
-      return false;
     }
     return false;
   }
@@ -594,7 +585,7 @@ final class ReceiptParser {
     List<RecognizedUnknown> forbidden,
   ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
-    final isLikelyLabel = _opts.totalLabels.hasMatch(unknownText);
+    final isLikelyLabel = _isTotalLabelLike(unknownText);
     if (forbidden.contains(unknown) || isLikelyLabel) return false;
 
     final isLeftOfAmount = _right(unknown) <= _left(amount);
@@ -947,6 +938,7 @@ final class ReceiptParser {
       if (!betweenUnknownAndAmount && !betweenTotalLabelAndTotal) {
         filtered.add(entity);
       }
+      filtered.add(entity);
     }
     return filtered;
   }
@@ -955,17 +947,12 @@ final class ReceiptParser {
   static List<RecognizedEntity> _filterBelowTotalAndLabel(
     List<RecognizedEntity> entities,
   ) {
+    final totalLabel = _findTotalLabel(entities);
     final total = _findTotal(entities);
-    final label = _findTotalLabel(entities);
-    if (total == null && label == null) return entities;
 
-    double cutoff = -double.infinity;
-    if (label != null) {
-      cutoff = cutoff > _bottom(label) ? cutoff : _bottom(label);
-    }
-    if (total != null) {
-      cutoff = cutoff > _bottom(total) ? cutoff : _bottom(total);
-    }
+    if (totalLabel == null || total == null) return entities;
+
+    double maxBottom = max(_bottom(totalLabel), _bottom(total));
 
     final out = <RecognizedEntity>[];
     final removed = <String>[];
@@ -975,7 +962,7 @@ final class ReceiptParser {
         out.add(e);
         continue;
       }
-      final isBelow = _top(e) > cutoff + _tol;
+      final isBelow = _top(e) > maxBottom + _tol;
       if (!isBelow) {
         out.add(e);
       } else {
@@ -984,7 +971,7 @@ final class ReceiptParser {
     }
 
     ReceiptLogger.log('filter.below_total', {
-      'cutoff': cutoff,
+      'cutoff': maxBottom,
       'tol': _tol,
       'before': entities.length,
       'after': out.length,

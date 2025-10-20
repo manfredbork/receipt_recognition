@@ -109,6 +109,7 @@ final class ReceiptOptimizer implements Optimizer {
   void close() {
     _shouldInitialize = true;
     _initializeIfNeeded();
+    _resetFrameFreshness();
   }
 
   /// Clears caches and resets internal state if flagged.
@@ -435,7 +436,7 @@ final class ReceiptOptimizer implements Optimizer {
     RecognizedReceipt receipt, {
     bool test = false,
   }) {
-    if (!test && receipt.isValid && receipt.isConfirmed) return receipt;
+    if (receipt.isValid && receipt.isConfirmed) return receipt;
 
     ReceiptLogger.log('opt.in', {
       'n': receipt.positions.length,
@@ -457,6 +458,7 @@ final class ReceiptOptimizer implements Optimizer {
     stableGroups.sort(_compareGroupsForOrder);
 
     final mergedReceipt = RecognizedReceipt.empty();
+    final currentGroups = receipt.positions.map((p) => p.group);
 
     for (final group in stableGroups) {
       final best = maxBy(group.members, (p) => p.confidence);
@@ -475,6 +477,8 @@ final class ReceiptOptimizer implements Optimizer {
         'latestTs': latest.timestamp.millisecondsSinceEpoch,
       });
 
+      if (receipt.isValid && !currentGroups.contains(group)) continue;
+
       mergedReceipt.positions.add(patched);
     }
 
@@ -492,6 +496,10 @@ final class ReceiptOptimizer implements Optimizer {
       'calc': mergedReceipt.calculatedTotal.value.toStringAsFixed(2),
       'total?': mergedReceipt.total?.value,
     });
+
+    if (receipt.isValid && !mergedReceipt.isValid) {
+      return receipt;
+    }
 
     return mergedReceipt;
   }
@@ -552,7 +560,7 @@ final class ReceiptOptimizer implements Optimizer {
   void _reconcileToTotal(RecognizedReceipt receipt) {
     final total = receipt.total?.value;
     if (total == null) return;
-    if (receipt.positions.isEmpty) return;
+    if (receipt.isValid || receipt.positions.isEmpty) return;
 
     final tol = _opts.tuning.optimizerTotalTolerance;
     final targetC = _toCents(total);
@@ -796,13 +804,13 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Detects very early weak outliers.
   bool _isEarlyOutlier(RecognizedGroup g, DateTime now) {
-    final grace = Duration(milliseconds: 500);
+    final grace = Duration(seconds: 1);
 
     final staleForAWhile = now.difference(g.timestamp) >= grace;
     final veryWeak =
         g.stability < (_opts.tuning.optimizerStabilityThreshold ~/ 2) &&
         g.confidence < (_opts.tuning.optimizerConfidenceThreshold ~/ 2);
-    final tiny = g.members.length <= 1;
+    final tiny = g.members.length <= 2;
     return staleForAWhile && veryWeak && tiny;
   }
 

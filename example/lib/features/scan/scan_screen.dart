@@ -40,15 +40,18 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _handleInputImage(InputImage input) async {
-    if (_ctrl.isAccepted) return;
-
+    if (await _guardIfAccepted()) return;
     await _ctrl.processImage(input);
+  }
 
+  Future<bool> _guardIfAccepted() async {
     if (_ctrl.isAccepted) {
+      if (!mounted) return false;
       await stopLiveFeed();
-      if (!mounted) return;
       _goAcceptedRoute();
+      return true;
     }
+    return false;
   }
 
   void _goAcceptedRoute() {
@@ -70,14 +73,14 @@ class _ScanScreenState extends State<ScanScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (context, _) {
-          final cc = cameraController;
-          final pct = _ctrl.bestPercent;
-          return Stack(
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final cc = cameraController;
+        final pct = _ctrl.bestPercent;
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
             fit: StackFit.expand,
             children: [
               if (cc != null && cc.value.isInitialized) ...[
@@ -148,22 +151,33 @@ class _ScanScreenState extends State<ScanScreen>
                 ),
               ),
             ],
-          );
-        },
-      ),
-      floatingActionButton:
-          _ctrl.bestPercent > 90
-              ? Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: FloatingActionButton.extended(
-                  key: const ValueKey('accept'),
-                  onPressed: () => _ctrl.acceptCurrent(),
-                  icon: const Icon(Icons.done),
-                  label: const Text('Manually Accept'),
-                ),
-              )
-              : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+          ),
+          floatingActionButton:
+              pct >= 90
+                  ? const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: _AcceptFab(),
+                  )
+                  : null,
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerFloat,
+        );
+      },
+    );
+  }
+}
+
+class _AcceptFab extends StatelessWidget {
+  const _AcceptFab();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.findAncestorStateOfType<_ScanScreenState>()!;
+    return FloatingActionButton.extended(
+      key: const ValueKey('accept'),
+      onPressed: state._ctrl.acceptCurrent,
+      icon: const Icon(Icons.done),
+      label: const Text('Manually Accept'),
     );
   }
 }
