@@ -48,9 +48,6 @@ final class ReceiptLogger {
       debugPrint(
         '📅 Purchase datetime: ${receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
       );
-      debugPrint(
-        '🔤 Purchase raw text: ${receipt.purchaseDate?.line.text ?? 'N/A'}',
-      );
       const int padFullWidth = 25;
       final int padHalfWidth = (padFullWidth / 2).toInt();
       for (final position in receipt.positions) {

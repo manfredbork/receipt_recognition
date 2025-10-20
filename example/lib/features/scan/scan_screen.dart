@@ -151,20 +151,18 @@ class _ScanScreenState extends State<ScanScreen>
           );
         },
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          transitionBuilder:
-              (child, anim) => FadeTransition(opacity: anim, child: child),
-          child: FloatingActionButton.extended(
-            key: const ValueKey('accept'),
-            onPressed: () => _ctrl.acceptCurrent(),
-            icon: const Icon(Icons.done),
-            label: const Text('Manually Accept'),
-          ),
-        ),
-      ),
+      floatingActionButton:
+          _ctrl.bestPercent > 90
+              ? Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: FloatingActionButton.extended(
+                  key: const ValueKey('accept'),
+                  onPressed: () => _ctrl.acceptCurrent(),
+                  icon: const Icon(Icons.done),
+                  label: const Text('Manually Accept'),
+                ),
+              )
+              : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }

@@ -370,27 +370,9 @@ final class ReceiptOptimizer implements Optimizer {
       (p) => position.timestamp == p.timestamp,
     );
 
-    final repText = _groupRepresentativeText(group);
-    final incText = position.product.normalizedText;
-    final fuzzy = ReceiptOcrText.similarity(repText, incText);
-    final repTok = ReceiptOcrText.tokens(repText);
-    final incTok = ReceiptOcrText.tokens(incText);
-    final sameBrand =
-        ReceiptOcrText.brand(repText) == ReceiptOcrText.brand(incText);
-    final variantDifferent =
-        sameBrand &&
-        repTok.isNotEmpty &&
-        incTok.isNotEmpty &&
-        !const SetEquality().equals(repTok, incTok);
-    final baseMin = _opts.tuning.optimizerMinProductSimToMerge;
-    final minNeeded =
-        variantDifferent ? _opts.tuning.optimizerVariantMinSim : baseMin;
-
-    final looksDissimilar = fuzzy < minNeeded;
     final thr = _opts.tuning.optimizerConfidenceThreshold;
     final shouldUseGroup =
         !sameTimestamp &&
-        !looksDissimilar &&
         positionConfidence.confidence >= thr &&
         positionConfidence.confidence > currentBestConfidence;
 
@@ -401,12 +383,11 @@ final class ReceiptOptimizer implements Optimizer {
       'prodC': productConfidence.value,
       'priceC': priceConfidence.value,
       'thr': thr,
-      'fuzzy': fuzzy,
       'use': shouldUseGroup,
       'why':
           sameTimestamp
               ? 'same-ts'
-              : looksDissimilar
+              : sameTimestamp
               ? 'lex-low'
               : positionConfidence.confidence < thr
               ? 'conf-low'
@@ -823,13 +804,6 @@ final class ReceiptOptimizer implements Optimizer {
         g.confidence < (_opts.tuning.optimizerConfidenceThreshold ~/ 2);
     final tiny = g.members.length <= 1;
     return staleForAWhile && veryWeak && tiny;
-  }
-
-  /// Returns a representative product text for a group.
-  String _groupRepresentativeText(RecognizedGroup g) {
-    final best = maxBy(g.members, (p) => p.stability);
-    return (best?.product.normalizedText ??
-        g.members.first.product.normalizedText);
   }
 
   /// Removes [toRemove] from `_groups` and cleans dependent structures.
