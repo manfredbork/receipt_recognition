@@ -107,6 +107,7 @@ final class ReceiptRecognizer {
     ReceiptOptions options,
   ) async {
     final text = await _textRecognizer.processImage(inputImage);
+    print(text.text);
     return ReceiptTextProcessor.processText(text, options);
   }
 
