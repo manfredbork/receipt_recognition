@@ -203,7 +203,7 @@ final class ReceiptParser {
 
     _applyPurchaseDate(lines, parsed);
     _applyBoundingBox(lines, parsed);
-    ReceiptLogger.kRecogVerbose = true;
+
     for (final line in lines) {
       if (_shouldStopIfTotalConfirmed(line, parsed, detectedTotal)) break;
       if (_shouldStopIfStopWord(line)) break;
@@ -256,7 +256,7 @@ final class ReceiptParser {
 
       if (_tryParseUnknown(line, parsed, median)) continue;
     }
-    ReceiptLogger.kRecogVerbose = false;
+
     return parsed;
   }
 
