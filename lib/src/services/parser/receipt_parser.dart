@@ -234,7 +234,7 @@ final class ReceiptParser {
         continue;
       }
 
-      if (_tryParseAmount(line, parsed, median)) {
+      if (_tryParseAmount(line, parsed, median, detectedTotalLabel)) {
         detectedAmount = parsed.last as RecognizedAmount;
 
         ReceiptLogger.log('amount.parsed', {
@@ -430,14 +430,20 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Recognizes right-side numeric lines as amounts and parses values.
+  /// Parses an amount on [line].
+  /// If [nearLabel] is given, it must lie right of the label instead of the page median.
   static bool _tryParseAmount(
     TextLine line,
     List<RecognizedEntity> parsed,
     double median,
+    RecognizedTotalLabel? nearLabel,
   ) {
     final amount = _amount.stringMatch(line.text);
-    if (amount == null || _cxL(line) <= median) return false;
+    if (amount == null) return false;
+
+    final mustBeRightOf = (nearLabel != null) ? _cxL(nearLabel.line) : median;
+    if (_cxL(line) <= mustBeRightOf) return false;
+
     final value = double.parse(ReceiptFormatter.normalizeAmount(amount));
     parsed.add(RecognizedAmount(line: line, value: value));
     return true;
