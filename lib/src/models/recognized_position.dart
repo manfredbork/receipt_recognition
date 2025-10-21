@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
@@ -104,7 +103,10 @@ final class RecognizedGroup {
 
     final scores =
         _members
-            .map((b) => partialRatio(product.value, b.product.value))
+            .map(
+              (b) =>
+                  ReceiptNormalizer.similarity(product.value, b.product.value),
+            )
             .toList();
     if (scores.isEmpty) return Confidence(value: 0);
 

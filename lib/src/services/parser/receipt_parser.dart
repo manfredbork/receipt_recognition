@@ -30,11 +30,8 @@ final class ReceiptParser {
   /// Bottom Y of a TextLine.
   static double _bottomL(TextLine l) => l.boundingBox.bottom;
 
-  /// Width of an entity’s TextLine.
-  static double _widthL(TextLine l) => l.boundingBox.bottom;
-
   /// Height of an entity’s TextLine.
-  static double _heightL(TextLine l) => l.boundingBox.bottom;
+  static double _heightL(TextLine l) => l.boundingBox.height;
 
   /// Center-Y of an entity’s TextLine.
   static double _cy(RecognizedEntity e) => _cyL(e.line);
@@ -74,6 +71,14 @@ final class ReceiptParser {
     final c = _topL(a).compareTo(_topL(b));
     return c != 0 ? c : _leftL(a).compareTo(_leftL(b));
   }
+
+  /// Converts a [RecognizedTotal] into a [RecognizedAmount] with shared value and line.
+  static RecognizedAmount _toAmount(RecognizedTotal total) =>
+      RecognizedAmount(value: total.value, line: total.line);
+
+  /// Converts a [RecognizedAmount] into a [RecognizedTotal] with shared value and line.
+  static RecognizedTotal _toTotal(RecognizedAmount amount) =>
+      RecognizedTotal(value: amount.value, line: amount.line);
 
   /// ISO date (YYYY-MM-DD) directly before a time like "T08:50"; accepts unicode dashes.
   static final RegExp _dateIsoYMD = RegExp(
@@ -198,7 +203,7 @@ final class ReceiptParser {
 
     _applyPurchaseDate(lines, parsed);
     _applyBoundingBox(lines, parsed);
-
+    ReceiptLogger.kRecogVerbose = true;
     for (final line in lines) {
       if (_shouldStopIfTotalConfirmed(line, parsed, detectedTotal)) break;
       if (_shouldStopIfStopWord(line)) break;
@@ -218,29 +223,99 @@ final class ReceiptParser {
 
       if (_tryParseTotalLabel(line, parsed, detectedTotalLabel)) {
         detectedTotalLabel = parsed.last as RecognizedTotalLabel;
-        continue;
-      }
 
-      if (_tryParseTotal(
-        line,
-        parsed,
-        median,
-        detectedTotalLabel,
-        detectedTotal,
-      )) {
-        detectedTotal = parsed.last as RecognizedTotal;
+        ReceiptLogger.log('total.label.detected', {
+          'text': line.text,
+          'cy': _cyL(line),
+          'cx': _cxL(line),
+          'h': _heightL(line),
+        });
+
         continue;
       }
 
       if (_tryParseAmount(line, parsed, median)) {
         detectedAmount = parsed.last as RecognizedAmount;
+
+        ReceiptLogger.log('amount.parsed', {
+          'value': (detectedAmount).value,
+          'formatted': (detectedAmount).formattedValue,
+          'cx': _cxL((detectedAmount).line),
+          'cy': _cyL((detectedAmount).line),
+        });
+
+        if (_promoteIfTotalCandidate(
+          detectedTotalLabel,
+          detectedTotal,
+          parsed,
+        )) {
+          detectedTotal = parsed.last as RecognizedTotal;
+        }
         continue;
       }
 
       if (_tryParseUnknown(line, parsed, median)) continue;
     }
-
+    ReceiptLogger.kRecogVerbose = false;
     return parsed;
+  }
+
+  /// If [totalLabel] exists, promote the last parsed amount to [RecognizedTotal]
+  /// when it's right of and vertically close to the label. Replaces any prior total.
+  static bool _promoteIfTotalCandidate(
+    RecognizedTotalLabel? totalLabel,
+    RecognizedTotal? currentTotal,
+    List<RecognizedEntity> parsed,
+  ) {
+    if (totalLabel == null ||
+        parsed.isEmpty ||
+        parsed.last is! RecognizedAmount) {
+      return false;
+    }
+
+    final labelLine = totalLabel.line;
+    final lastAmount = parsed.last as RecognizedAmount;
+
+    final rightOf = _cxL(lastAmount.line) > _cxL(labelLine);
+    final below = _cyL(lastAmount.line) >= _cyL(labelLine);
+    final vTol = pi * max(_heightL(labelLine), _heightL(lastAmount.line));
+    final dy = _dy(labelLine, lastAmount.line);
+    final dyOk = dy <= vTol;
+
+    ReceiptLogger.log('total.candidate.check', {
+      'amount.formatted': lastAmount.formattedValue,
+      'rightOf': rightOf,
+      'below': below,
+      'dy': dy,
+      'vTol': vTol,
+      'dyOk': dyOk,
+    });
+
+    if (!(rightOf && below && dyOk)) return false;
+
+    if (currentTotal != null) {
+      final currentA = _toAmount(currentTotal);
+      final sNew = _distanceScore(labelLine, lastAmount.line);
+      final sOld = _distanceScore(labelLine, currentA.line);
+      ReceiptLogger.log('total.candidate.compare', {
+        'old.formatted': currentA.formattedValue,
+        'score.new': sNew,
+        'score.old': sOld,
+        'replace': sNew < sOld,
+      });
+      if (sNew >= sOld) return false;
+
+      final ti = parsed.indexOf(currentTotal);
+      if (ti >= 0) parsed[ti] = currentA;
+    }
+
+    parsed[parsed.length - 1] = _toTotal(lastAmount);
+    ReceiptLogger.log('total.promoted', {
+      'formatted': lastAmount.formattedValue,
+      'cx': _cxL(lastAmount.line),
+      'cy': _cyL(lastAmount.line),
+    });
+    return true;
   }
 
   /// Skips lines that are clearly below the detected total label.
@@ -249,8 +324,19 @@ final class ReceiptParser {
     RecognizedTotalLabel? detectedTotalLabel,
   ) {
     if (detectedTotalLabel == null) return false;
-    return _cyL(line) >
+
+    final skip =
+        _cyL(line) >
         _cyL(detectedTotalLabel.line) + _heightL(detectedTotalLabel.line);
+
+    ReceiptLogger.log('guard.skip_line', {
+      'skip': skip,
+      'line.cy': _cyL(line),
+      'label.cy': _cyL(detectedTotalLabel.line),
+      'label.h': _heightL(detectedTotalLabel.line),
+    });
+
+    return skip;
   }
 
   /// Returns true if the line matches ignore keywords.
@@ -271,10 +357,20 @@ final class ReceiptParser {
     if (total == null) return false;
     final amounts = parsed.whereType<RecognizedAmount>().toList();
     if (amounts.isEmpty) return false;
-    final calculatedTotal = CalculatedTotal(
-      value: amounts.fold(0, (a, b) => a + b.value),
-    );
-    return total.formattedValue == calculatedTotal.formattedValue;
+
+    final sum = amounts.fold<double>(0, (a, b) => a + b.value);
+    final formattedSum = CalculatedTotal(value: sum).formattedValue;
+
+    final stop = total.formattedValue == formattedSum;
+
+    ReceiptLogger.log('guard.stop_if_total_confirmed', {
+      'stop': stop,
+      'declared.total': total.formattedValue,
+      'sum.formatted': formattedSum,
+      'count.amounts': amounts.length,
+    });
+
+    return stop;
   }
 
   /// Returns `true` if the line matches a configured stop keyword.
@@ -304,12 +400,11 @@ final class ReceiptParser {
 
   /// Best-match total label key for [text] using normalized similarity + adaptive threshold, or null if none.
   static String? _findTotalLabelLike(String text) {
-    final trimmed = ReceiptFormatter.trim(text).toLowerCase();
     int thr(String label) => _adaptiveThreshold(label);
     String? bestLabel;
     int bestScore = 0;
     for (final label in _opts.totalLabels.mapping.keys) {
-      final s = ReceiptNormalizer.similarity(trimmed, label);
+      final s = ReceiptNormalizer.similarity(text.toLowerCase(), label);
       if (s > bestScore && text.length >= label.length) {
         bestScore = s;
         bestLabel = label;
@@ -317,31 +412,6 @@ final class ReceiptParser {
     }
     if (bestLabel == null || bestScore < thr(bestLabel)) return null;
     return bestLabel;
-  }
-
-  /// With a known label, parses an amount on [line] and promotes the nearest one to a RecognizedTotal; returns true if set.
-  static bool _tryParseTotal(
-    TextLine line,
-    List<RecognizedEntity> parsed,
-    double median,
-    RecognizedTotalLabel? totalLabel,
-    RecognizedTotal? total,
-  ) {
-    if (totalLabel == null || total != null) return false;
-    if (_tryParseAmount(line, parsed, median)) {
-      final amounts = [
-        RecognizedAmount(value: parsed.last.value, line: parsed.last.line),
-      ];
-      final total = _findClosestTotalAmount(totalLabel, amounts);
-      if (total != null) {
-        parsed.last = RecognizedTotal(value: total.value, line: total.line);
-        return true;
-      } else {
-        parsed.removeLast();
-        return false;
-      }
-    }
-    return false;
   }
 
   /// Detects store name via custom map; early-bails if we already saw a store or an amount.
@@ -621,25 +691,6 @@ final class ReceiptParser {
     return position;
   }
 
-  /// Finds the closest amount to a total label using a geometric score (single pass).
-  static RecognizedAmount? _findClosestTotalAmount(
-    RecognizedTotalLabel totalLabel,
-    List<RecognizedAmount> amounts,
-  ) {
-    RecognizedAmount? best;
-    double bestScore = double.infinity;
-    final labelLine = totalLabel.line;
-    for (final a in amounts) {
-      final s = _distanceScore(labelLine, a.line);
-      if (s < bestScore) {
-        bestScore = s;
-        best = a;
-      }
-    }
-    if (bestScore == double.infinity) return null;
-    return best;
-  }
-
   /// Computes an adaptive fuzzy threshold based on label length and
   /// the number of allowed edits. Short labels require near-exact matches,
   /// while longer labels tolerate more deviations.
@@ -673,7 +724,7 @@ final class ReceiptParser {
   /// Returns absolute ΔY if within vertical tolerance, otherwise `double.infinity` (lower is better).
   static double _distanceScore(TextLine totalLabel, TextLine amount) {
     final dy = _dy(totalLabel, amount);
-    return (dy < totalLabel.boundingBox.height) ? dy : double.infinity;
+    return dy < _heightL(totalLabel) ? dy : double.infinity;
   }
 
   /// Filters left-alignment outliers among unknown product lines.
@@ -779,7 +830,7 @@ final class ReceiptParser {
         continue;
       }
       final x = xMetric(e);
-      final tol = _widthL(e.line);
+      final tol = _heightL(e.line);
       final isOutlier =
           dropRightTail ? (x > upperBound + tol) : (x < lowerBound - tol);
 
@@ -943,7 +994,6 @@ final class ReceiptParser {
       if (!betweenUnknownAndAmount && !betweenTotalLabelAndTotal) {
         filtered.add(entity);
       }
-      filtered.add(entity);
     }
     return filtered;
   }
@@ -977,7 +1027,7 @@ final class ReceiptParser {
     }
 
     ReceiptLogger.log('filter.below_total', {
-      'cutoff': maxBottom,
+      'maxBottom': maxBottom,
       'before': entities.length,
       'after': out.length,
       'removed': removed,
