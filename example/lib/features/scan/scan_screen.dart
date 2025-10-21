@@ -153,7 +153,7 @@ class _ScanScreenState extends State<ScanScreen>
             ],
           ),
           floatingActionButton:
-              pct >= 90
+              pct >= _ctrl.nearlyCompleteThreshold
                   ? const Padding(
                     padding: EdgeInsets.only(bottom: 16),
                     child: _AcceptFab(),

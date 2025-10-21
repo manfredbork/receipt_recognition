@@ -26,11 +26,11 @@ final class ReceiptTuning {
   /// Pairwise count threshold before halving to avoid overflow.
   final int optimizerAboveCountDecayThreshold;
 
-  /// Minimum fuzzy similarity required to merge product text variants.
-  final double optimizerVariantMinSim;
+  /// Weight factor influencing product name stability during optimization.
+  final int optimizerProductWeight;
 
-  /// Minimum Jaccard similarity of product tokens required to merge items.
-  final double optimizerMinProductSimToMerge;
+  /// Weight factor influencing price consistency during optimization.
+  final int optimizerPriceWeight;
 
   /// Private real constructor
   ReceiptTuning._internal({
@@ -42,23 +42,23 @@ final class ReceiptTuning {
     required this.optimizerStabilityThreshold,
     required this.optimizerEwmaAlpha,
     required this.optimizerAboveCountDecayThreshold,
-    required this.optimizerVariantMinSim,
-    required this.optimizerMinProductSimToMerge,
+    required this.optimizerProductWeight,
+    required this.optimizerPriceWeight,
   });
 
   /// Public constructor with **optional** named params.
   /// Any omitted field falls back to the default from `kReceiptDefaultOptions['tuning']`.
   factory ReceiptTuning({
     double? optimizerTotalTolerance,
+    double? optimizerEwmaAlpha,
     int? optimizerVerticalTolerance,
     int? optimizerLoopThreshold,
     int? optimizerMaxCacheSize,
     int? optimizerConfidenceThreshold,
     int? optimizerStabilityThreshold,
-    double? optimizerEwmaAlpha,
     int? optimizerAboveCountDecayThreshold,
-    double? optimizerVariantMinSim,
-    double? optimizerMinProductSimToMerge,
+    int? optimizerProductWeight,
+    int? optimizerPriceWeight,
   }) {
     final def = ReceiptTuning.fromJsonLike(
       kReceiptDefaultOptions['tuning'] as Map<String, dynamic>?,
@@ -66,6 +66,7 @@ final class ReceiptTuning {
     return ReceiptTuning._internal(
       optimizerTotalTolerance:
           optimizerTotalTolerance ?? def.optimizerTotalTolerance,
+      optimizerEwmaAlpha: optimizerEwmaAlpha ?? def.optimizerEwmaAlpha,
       optimizerVerticalTolerance:
           optimizerVerticalTolerance ?? def.optimizerVerticalTolerance,
       optimizerLoopThreshold:
@@ -75,14 +76,12 @@ final class ReceiptTuning {
           optimizerConfidenceThreshold ?? def.optimizerConfidenceThreshold,
       optimizerStabilityThreshold:
           optimizerStabilityThreshold ?? def.optimizerStabilityThreshold,
-      optimizerEwmaAlpha: optimizerEwmaAlpha ?? def.optimizerEwmaAlpha,
       optimizerAboveCountDecayThreshold:
           optimizerAboveCountDecayThreshold ??
           def.optimizerAboveCountDecayThreshold,
-      optimizerVariantMinSim:
-          optimizerVariantMinSim ?? def.optimizerVariantMinSim,
-      optimizerMinProductSimToMerge:
-          optimizerMinProductSimToMerge ?? def.optimizerMinProductSimToMerge,
+      optimizerProductWeight:
+          optimizerProductWeight ?? def.optimizerProductWeight,
+      optimizerPriceWeight: optimizerPriceWeight ?? def.optimizerPriceWeight,
     );
   }
 
@@ -117,6 +116,7 @@ final class ReceiptTuning {
 
     return ReceiptTuning._internal(
       optimizerTotalTolerance: numFromKeys<double>(['optimizerTotalTolerance']),
+      optimizerEwmaAlpha: numFromKeys<double>(['optimizerEwmaAlpha']),
       optimizerVerticalTolerance: numFromKeys<int>([
         'optimizerVerticalTolerance',
       ]),
@@ -128,28 +128,25 @@ final class ReceiptTuning {
       optimizerStabilityThreshold: numFromKeys<int>([
         'optimizerStabilityThreshold',
       ]),
-      optimizerEwmaAlpha: numFromKeys<double>(['optimizerEwmaAlpha']),
       optimizerAboveCountDecayThreshold: numFromKeys<int>([
         'optimizerAboveCountDecayThreshold',
       ]),
-      optimizerVariantMinSim: numFromKeys<double>(['optimizerVariantMinSim']),
-      optimizerMinProductSimToMerge: numFromKeys<double>([
-        'optimizerMinProductSimToMerge',
-      ]),
+      optimizerProductWeight: numFromKeys<int>(['optimizerProductWeight']),
+      optimizerPriceWeight: numFromKeys<int>(['optimizerPriceWeight']),
     );
   }
 
   /// Serializes tuning to a JSON-like map.
   Map<String, dynamic> toJsonLike() => {
     'optimizerTotalTolerance': optimizerTotalTolerance,
+    'optimizerEwmaAlpha': optimizerEwmaAlpha,
     'optimizerVerticalTolerance': optimizerVerticalTolerance,
     'optimizerLoopThreshold': optimizerLoopThreshold,
     'optimizerMaxCacheSize': optimizerMaxCacheSize,
     'optimizerConfidenceThreshold': optimizerConfidenceThreshold,
     'optimizerStabilityThreshold': optimizerStabilityThreshold,
-    'optimizerEwmaAlpha': optimizerEwmaAlpha,
     'optimizerAboveCountDecayThreshold': optimizerAboveCountDecayThreshold,
-    'optimizerVariantMinSim': optimizerVariantMinSim,
-    'optimizerMinProductSimToMerge': optimizerMinProductSimToMerge,
+    'optimizerProductWeight': optimizerProductWeight,
+    'optimizerPriceWeight': optimizerPriceWeight,
   };
 }

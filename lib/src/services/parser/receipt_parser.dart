@@ -30,6 +30,12 @@ final class ReceiptParser {
   /// Bottom Y of a TextLine.
   static double _bottomL(TextLine l) => l.boundingBox.bottom;
 
+  /// Width of an entity’s TextLine.
+  static double _widthL(TextLine l) => l.boundingBox.bottom;
+
+  /// Height of an entity’s TextLine.
+  static double _heightL(TextLine l) => l.boundingBox.bottom;
+
   /// Center-Y of an entity’s TextLine.
   static double _cy(RecognizedEntity e) => _cyL(e.line);
 
@@ -121,9 +127,6 @@ final class ReceiptParser {
     r'\bx\s?\d+|^\s*[\[(]?\s*\d{1,3}[.,]\d{3}\b',
     caseSensitive: false,
   );
-
-  /// Effective geometric tolerance from runtime.
-  static int get _tol => ReceiptRuntime.tuning.optimizerVerticalTolerance;
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
   static ReceiptOptions get _opts => ReceiptRuntime.options;
@@ -246,7 +249,8 @@ final class ReceiptParser {
     RecognizedTotalLabel? detectedTotalLabel,
   ) {
     if (detectedTotalLabel == null) return false;
-    return _cyL(line) > _cyL(detectedTotalLabel.line) + _tol;
+    return _cyL(line) >
+        _cyL(detectedTotalLabel.line) + _heightL(detectedTotalLabel.line);
   }
 
   /// Returns true if the line matches ignore keywords.
@@ -363,8 +367,7 @@ final class ReceiptParser {
     double median,
   ) {
     final amount = _amount.stringMatch(line.text);
-    if (amount == null) return false;
-    if (_cxL(line) <= median - _tol) return false;
+    if (amount == null || _cxL(line) <= median) return false;
     final value = double.parse(ReceiptFormatter.normalizeAmount(amount));
     parsed.add(RecognizedAmount(line: line, value: value));
     return true;
@@ -589,7 +592,8 @@ final class ReceiptParser {
     if (forbidden.contains(unknown) || isLikelyLabel) return false;
 
     final isLeftOfAmount = _right(unknown) <= _left(amount);
-    final alignedVertically = _dy(amount.line, unknown.line) <= _tol;
+    final alignedVertically =
+        _dy(amount.line, unknown.line) <= _heightL(amount.line);
 
     return isLeftOfAmount && alignedVertically;
   }
@@ -757,7 +761,6 @@ final class ReceiptParser {
       'lowerBound': lowerBound,
       'upperBound': upperBound,
       'dropRightTail': dropRightTail,
-      'tol': _tol,
     });
     if (madRaw == 0.0) {
       ReceiptLogger.log('filter.note', {
@@ -776,8 +779,9 @@ final class ReceiptParser {
         continue;
       }
       final x = xMetric(e);
+      final tol = _widthL(e.line);
       final isOutlier =
-          dropRightTail ? (x > upperBound + _tol) : (x < lowerBound - _tol);
+          dropRightTail ? (x > upperBound + tol) : (x < lowerBound - tol);
 
       if (!isOutlier) {
         out.add(e);
@@ -925,7 +929,8 @@ final class ReceiptParser {
 
       final dyU = (_cy(entity) - _cy(leftUnknown)).abs();
       final dyA = (_cy(entity) - _cy(rightAmount)).abs();
-      final verticallyAligned = dyU < _tol || dyA < _tol;
+      final verticallyAligned =
+          dyU < _heightL(leftUnknown.line) || dyA < _heightL(rightAmount.line);
 
       final betweenUnknownAndAmount = horizontallyBetween && verticallyAligned;
 
@@ -962,7 +967,8 @@ final class ReceiptParser {
         out.add(e);
         continue;
       }
-      final isBelow = _top(e) > maxBottom + _tol;
+      final tol = _heightL(e.line);
+      final isBelow = _top(e) > maxBottom + tol;
       if (!isBelow) {
         out.add(e);
       } else {
@@ -972,7 +978,6 @@ final class ReceiptParser {
 
     ReceiptLogger.log('filter.below_total', {
       'cutoff': maxBottom,
-      'tol': _tol,
       'before': entities.length,
       'after': out.length,
       'removed': removed,

@@ -4,6 +4,7 @@ import 'package:receipt_recognition/receipt_recognition.dart';
 
 class ScanController extends ChangeNotifier {
   late final ReceiptRecognizer _recognizer;
+  final int _nearlyCompleteThreshold = 90;
 
   RecognizedScanProgress _progress = RecognizedScanProgress.empty();
   RecognizedReceipt _lastReceipt;
@@ -13,18 +14,19 @@ class ScanController extends ChangeNotifier {
 
   ScanController() : _lastReceipt = RecognizedReceipt.empty() {
     _recognizer = ReceiptRecognizer(
+      nearlyCompleteThreshold: _nearlyCompleteThreshold,
       onScanUpdate: _onScanUpdate,
       onScanComplete: _onScanComplete,
       onScanTimeout: _onScanTimeout,
     );
   }
 
-  RecognizedScanProgress get progress => _progress;
-
   RecognizedReceipt get receipt => _lastReceipt;
 
   List<RecognizedPosition> get positions =>
       _progress.addedPositions + _progress.updatedPositions;
+
+  int get nearlyCompleteThreshold => _nearlyCompleteThreshold;
 
   int get bestPercent => _bestPercent;
 

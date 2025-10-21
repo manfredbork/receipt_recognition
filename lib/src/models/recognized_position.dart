@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Line item position on a receipt (product + price).
@@ -87,15 +88,18 @@ final class RecognizedGroup {
       _maxGroupSize = maxGroupSize > 1 ? maxGroupSize : 1;
 
   /// Adds a position and enforces capacity.
-  void addMember(RecognizedPosition position) {
+  void addMember(RecognizedPosition position, ReceiptTuning tuning) {
     position.group = this;
     if (_members.length >= _maxGroupSize) _members.removeAt(0);
     _members.add(position);
-    _recalculateAllConfidences();
+    _recalculateAllConfidences(tuning);
   }
 
   /// Calculates an adaptive confidence for a product name based on similarity to group members.
-  Confidence calculateProductConfidence(RecognizedProduct product) {
+  Confidence calculateProductConfidence(
+    RecognizedProduct product,
+    ReceiptTuning tuning,
+  ) {
     if (_members.isEmpty) return Confidence(value: 0);
 
     final scores =
@@ -115,21 +119,25 @@ final class RecognizedGroup {
     final stddev = sqrt(max(0.0, variance));
     final weight = stddev < 10 ? 1.0 : (100 - stddev) / 100.0;
 
-    return Confidence(value: (avg * weight).clamp(0, 100).toInt());
+    return Confidence(
+      value: (avg * weight).clamp(0, 100).toInt(),
+      weight: tuning.optimizerProductWeight,
+    );
   }
 
   /// Calculates a confidence for a price based on numeric similarity.
-  Confidence calculatePriceConfidence(RecognizedPrice price) {
+  Confidence calculatePriceConfidence(
+    RecognizedPrice price,
+    ReceiptTuning tuning,
+  ) {
     if (_members.isEmpty || price.value == 0) return Confidence(value: 0);
     final scores =
         _members.map((b) {
-          final diff = (price.value - b.price.value).abs();
-          final denom = price.value.abs() + b.price.value.abs();
-          final pctDiff = denom == 0 ? 100.0 : (diff / denom) * 100.0;
-          return (100.0 - pctDiff).clamp(0, 100).toInt();
+          final equalPrice = price.formattedValue == b.price.formattedValue;
+          return equalPrice ? 100 : 0;
         }).toList();
     final avg = scores.reduce((a, b) => a + b) / scores.length;
-    return Confidence(value: avg.toInt());
+    return Confidence(value: avg.toInt(), weight: tuning.optimizerPriceWeight);
   }
 
   /// Removes a leading amount pattern from [postfixText], returning the remainder.
@@ -177,10 +185,10 @@ final class RecognizedGroup {
   }
 
   /// Recomputes confidences for all members.
-  void _recalculateAllConfidences() {
+  void _recalculateAllConfidences(ReceiptTuning tuning) {
     for (final m in _members) {
-      m.product.confidence = calculateProductConfidence(m.product);
-      m.price.confidence = calculatePriceConfidence(m.price);
+      m.product.confidence = calculateProductConfidence(m.product, tuning);
+      m.price.confidence = calculatePriceConfidence(m.price, tuning);
     }
   }
 }

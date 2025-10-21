@@ -161,14 +161,18 @@ Parameters (keys inside extend/override, or top-level in flat form)
 - tuning: Map<String, dynamic> (override-only)
     - optimizerConfidenceThreshold (int): min combined confidence (0–100).
     - optimizerStabilityThreshold (int): min stability (0–100).
+    - optimizerProductWeight (int): weight for product name stability when merging/updating; higher favors consistent
+      names.
+    - optimizerPriceWeight (int): weight for price consistency when merging/updating; higher favors matching prices.
     - optimizerMaxCacheSize (int): typical grouping capacity.
     - optimizerLoopThreshold (int): stall detection iterations.
-    - optimizerEwmaAlpha (double): smoothing for order learning.
     - optimizerAboveCountDecayThreshold (int): decay threshold for order counts.
-    - optimizerVariantMinSim (double): min similarity for merging variants.
-    - optimizerMinProductSimToMerge (double): min token similarity to merge.
     - optimizerVerticalTolerance (int): pixel tolerance for alignment.
     - optimizerTotalTolerance (double): amount tolerance when matching totals.
+    - optimizerEwmaAlpha (double): smoothing for order learning.
+
+⚠️ Note: Changing tuning parameters directly affects scan behavior and result quality; adjust them only if you know what
+you’re doing. For most users, the defaults provide the best balance of accuracy, stability, and performance.
 
 Merge behavior
 

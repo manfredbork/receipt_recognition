@@ -11,22 +11,43 @@ import 'package:receipt_recognition/src/utils/configuration/index.dart';
 ///
 /// Coordinates OCR, parsing, optimization, validation, and progress callbacks.
 final class ReceiptRecognizer {
+  /// OCR engine used to extract text from images.
   final TextRecognizer _textRecognizer;
+
+  /// Aggregator that stabilizes and optimizes recognition across frames.
   final Optimizer _optimizer;
 
-  /// Parser options.
+  /// Tunable options for OCR, parsing, and validation behavior.
   final ReceiptOptions _options;
 
+  /// Percentage at/above which a receipt is treated as nearly complete.
   final int _nearlyCompleteThreshold;
+
+  /// Minimum time gap enforced between consecutive scans (throttle).
   final Duration _scanInterval;
+
+  /// Maximum duration allowed for a scan session before timing out.
   final Duration _scanTimeout;
+
+  /// Optional delay before emitting a completed receipt result.
   final Duration _scanCompleteDelay;
+
+  /// Callback invoked when a scan session reaches timeout.
   final VoidCallback? _onScanTimeout;
+
+  /// Callback invoked on intermediate recognition/validation updates.
   final Function(RecognizedScanProgress)? _onScanUpdate;
+
+  /// Callback invoked when a receipt is finalized and accepted.
   final Function(RecognizedReceipt)? _onScanComplete;
 
+  /// Timestamp when the current scan session was initialized.
   DateTime? _initializedScan;
+
+  /// Timestamp of the most recent scan attempt.
   DateTime? _lastScan;
+
+  /// Latest recognized/optimized receipt snapshot.
   RecognizedReceipt _lastReceipt;
 
   /// Creates a receipt recognizer with configurable parameters and callbacks.
@@ -35,7 +56,6 @@ final class ReceiptRecognizer {
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
     ReceiptOptions? options,
-    bool highPrecision = false,
     @Deprecated('No longer used; auto-completion is handled internally.')
     bool singleScan = false,
     @Deprecated('No longer used; stability/confirmation rules replace it.')
@@ -43,7 +63,7 @@ final class ReceiptRecognizer {
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 100),
     Duration scanTimeout = const Duration(seconds: 30),
-    Duration scanCompleteDelay = const Duration(milliseconds: 100),
+    Duration scanCompleteDelay = Duration.zero,
     VoidCallback? onScanTimeout,
     Function(RecognizedScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
@@ -107,7 +127,6 @@ final class ReceiptRecognizer {
     ReceiptOptions options,
   ) async {
     final text = await _textRecognizer.processImage(inputImage);
-    print(text.text);
     return ReceiptTextProcessor.processText(text, options);
   }
 

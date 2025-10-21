@@ -33,14 +33,14 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
   'depositKeywords': ['Leerg.', 'Leergut', 'Einweg', 'Pfand', 'Deposit'],
   'tuning': {
     'optimizerTotalTolerance': 0.009,
+    'optimizerEwmaAlpha': 0.5,
     'optimizerVerticalTolerance': 50,
     'optimizerLoopThreshold': 10,
     'optimizerMaxCacheSize': 15,
     'optimizerConfidenceThreshold': 90,
     'optimizerStabilityThreshold': 50,
-    'optimizerEwmaAlpha': 0.5,
     'optimizerAboveCountDecayThreshold': 50,
-    'optimizerVariantMinSim': 0.85,
-    'optimizerMinProductSimToMerge': 0.5,
+    'optimizerProductWeight': 1,
+    'optimizerPriceWeight': 1,
   },
 };

@@ -31,10 +31,11 @@ RecognizedProduct makeProduct({
   required String priceLineText,
   ReceiptOptions? options,
 }) {
+  final opts = options ?? ReceiptOptions.empty();
   final product = RecognizedProduct(
     value: productText,
     line: const ReceiptTextLine(text: ''),
-    options: options ?? ReceiptOptions.empty(),
+    options: opts,
   );
   final priceEntity = RecognizedPrice(
     value: price,
@@ -52,7 +53,7 @@ RecognizedProduct makeProduct({
   priceEntity.position = pos;
 
   final group = RecognizedGroup(maxGroupSize: 4);
-  group.addMember(pos);
+  group.addMember(pos, opts.tuning);
 
   return product;
 }

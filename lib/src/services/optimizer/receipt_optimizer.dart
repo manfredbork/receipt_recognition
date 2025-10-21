@@ -359,8 +359,12 @@ final class ReceiptOptimizer implements Optimizer {
   ) {
     final productConfidence = group.calculateProductConfidence(
       position.product,
+      _opts.tuning,
     );
-    final priceConfidence = group.calculatePriceConfidence(position.price);
+    final priceConfidence = group.calculatePriceConfidence(
+      position.price,
+      _opts.tuning,
+    );
 
     final positionConfidence = position.copyWith(
       product: position.product.copyWith(confidence: productConfidence),
@@ -411,7 +415,7 @@ final class ReceiptOptimizer implements Optimizer {
     final newGroup = RecognizedGroup(maxGroupSize: maxCacheSize);
     position.group = newGroup;
     position.operation = Operation.added;
-    newGroup.addMember(position);
+    newGroup.addMember(position, _opts.tuning);
     _groups.add(newGroup);
     ReceiptLogger.log('group.new', {
       'grp': ReceiptLogger.grpKey(newGroup),
@@ -423,7 +427,7 @@ final class ReceiptOptimizer implements Optimizer {
   void _addToExistingGroup(RecognizedPosition position, RecognizedGroup group) {
     position.group = group;
     position.operation = Operation.updated;
-    group.addMember(position);
+    group.addMember(position, _opts.tuning);
     ReceiptLogger.log('group.add', {
       'grp': ReceiptLogger.grpKey(group),
       'pos': ReceiptLogger.posKey(position),
