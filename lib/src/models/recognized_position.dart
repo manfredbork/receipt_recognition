@@ -87,18 +87,15 @@ final class RecognizedGroup {
       _maxGroupSize = maxGroupSize > 1 ? maxGroupSize : 1;
 
   /// Adds a position and enforces capacity.
-  void addMember(RecognizedPosition position, ReceiptTuning tuning) {
+  void addMember(RecognizedPosition position) {
     position.group = this;
     if (_members.length >= _maxGroupSize) _members.removeAt(0);
     _members.add(position);
-    _recalculateAllConfidences(tuning);
+    _recalculateAllConfidences();
   }
 
   /// Calculates an adaptive confidence for a product name based on similarity to group members.
-  Confidence calculateProductConfidence(
-    RecognizedProduct product,
-    ReceiptTuning tuning,
-  ) {
+  Confidence calculateProductConfidence(RecognizedProduct product) {
     if (_members.isEmpty) return Confidence(value: 0);
 
     final scores =
@@ -123,15 +120,12 @@ final class RecognizedGroup {
 
     return Confidence(
       value: (avg * weight).clamp(0, 100).toInt(),
-      weight: tuning.optimizerProductWeight,
+      weight: ReceiptRuntime.tuning.optimizerProductWeight,
     );
   }
 
   /// Calculates a confidence for a price based on numeric similarity.
-  Confidence calculatePriceConfidence(
-    RecognizedPrice price,
-    ReceiptTuning tuning,
-  ) {
+  Confidence calculatePriceConfidence(RecognizedPrice price) {
     if (_members.isEmpty || price.value == 0) return Confidence(value: 0);
     final scores =
         _members.map((b) {
@@ -139,7 +133,10 @@ final class RecognizedGroup {
           return equalPrice ? 100 : 0;
         }).toList();
     final avg = scores.reduce((a, b) => a + b) / scores.length;
-    return Confidence(value: avg.toInt(), weight: tuning.optimizerPriceWeight);
+    return Confidence(
+      value: avg.toInt(),
+      weight: ReceiptRuntime.tuning.optimizerPriceWeight,
+    );
   }
 
   /// Removes a leading amount pattern from [postfixText], returning the remainder.
@@ -187,10 +184,10 @@ final class RecognizedGroup {
   }
 
   /// Recomputes confidences for all members.
-  void _recalculateAllConfidences(ReceiptTuning tuning) {
+  void _recalculateAllConfidences() {
     for (final m in _members) {
-      m.product.confidence = calculateProductConfidence(m.product, tuning);
-      m.price.confidence = calculatePriceConfidence(m.price, tuning);
+      m.product.confidence = calculateProductConfidence(m.product);
+      m.price.confidence = calculatePriceConfidence(m.price);
     }
   }
 }

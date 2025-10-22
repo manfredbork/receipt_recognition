@@ -160,21 +160,27 @@ class RecognizedReceipt {
       calculatedTotal.formattedValue == total?.formattedValue &&
       calculatedTotal.value > 0.0;
 
-  /// True if every position group meets size, stability, and confidence thresholds.
-  /// Uses one-half of max cache size plus runtime stability/confidence limits.
+  /// True if a quorum of positions meet size, stability, and confidence gates.
   bool get isConfirmed {
-    final halfSize = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 2;
-    final stabilityThreshold =
-        ReceiptRuntime.tuning.optimizerStabilityThreshold;
-    final confidenceThreshold =
-        ReceiptRuntime.tuning.optimizerConfidenceThreshold;
-    final confirmed = positions.every((p) {
-      final enoughMembers = (p.group?.members.length ?? 0) >= halfSize;
-      final enoughStability = p.stability >= stabilityThreshold;
-      final enoughConfidence = p.confidence >= confidenceThreshold;
-      return enoughMembers && enoughStability && enoughConfidence;
-    });
-    return confirmed;
+    final t = ReceiptRuntime.tuning;
+    final half = t.optimizerMaxCacheSize ~/ 2;
+    final minSize = half < 4 ? 4 : (half > 8 ? 8 : half);
+    final confThr = (t.optimizerConfidenceThreshold - 5).clamp(0, 100);
+    final stabThr = t.optimizerStabilityThreshold;
+    final passing =
+        positions.where((p) {
+          final enoughMembers = (p.group?.members.length ?? 0) >= minSize;
+          final enoughStability = p.stability >= stabThr;
+          final enoughConfidence = p.confidence >= confThr;
+          return enoughMembers && enoughStability && enoughConfidence;
+        }).length;
+
+    final need =
+        positions.length <= 3
+            ? positions.length
+            : (positions.length * 0.75).ceil();
+
+    return passing >= need;
   }
 }
 

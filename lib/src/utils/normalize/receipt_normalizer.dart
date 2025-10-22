@@ -59,13 +59,20 @@ final class ReceiptNormalizer {
       'n': alternativeTexts.length,
       'alts': alternativeTexts,
     });
+
     if (alternativeTexts.isEmpty) {
       ReceiptLogger.log('norm.out', {'result': null, 'why': 'empty'});
       return null;
     }
 
+    final lengths = alternativeTexts.map((s) => s.length).toList();
+    final maxLen = lengths.fold<int>(0, (u, v) => v > u ? v : u);
+    final minKeep = maxLen ~/ 2;
+    final filteredTexts =
+        alternativeTexts.where((f) => f.length > minKeep).toList();
+
     final Map<String, List<String>> buckets = {};
-    for (final t in alternativeTexts) {
+    for (final t in filteredTexts) {
       final key = _canonicalGroupingKey(t);
       (buckets[key] ??= <String>[]).add(t);
     }
@@ -99,21 +106,18 @@ final class ReceiptNormalizer {
       final fb = freq[b] ?? 0;
       if (fa != fb) return fb - fa;
 
-      final aa = normalizeTail(a);
-      final bb = normalizeTail(b);
-
-      final aHasSize = hasSizeToken(aa) ? 1 : 0;
-      final bHasSize = hasSizeToken(bb) ? 1 : 0;
+      final aHasSize = hasSizeToken(a) ? 1 : 0;
+      final bHasSize = hasSizeToken(b) ? 1 : 0;
       if (aHasSize != bHasSize) return bHasSize - aHasSize;
 
-      final ad = _hasDiacritics(aa) ? 1 : 0;
-      final bd = _hasDiacritics(bb) ? 1 : 0;
+      final ad = _hasDiacritics(a) ? 1 : 0;
+      final bd = _hasDiacritics(b) ? 1 : 0;
       if (ad != bd) return ad - bd;
 
-      if (aa.length != bb.length) return aa.length - bb.length;
+      if (a.length != b.length) return a.length - b.length;
 
-      final aspc = _spaceRunCount(aa);
-      final bspc = _spaceRunCount(bb);
+      final aspc = _spaceRunCount(a);
+      final bspc = _spaceRunCount(b);
       if (aspc != bspc) return aspc - bspc;
 
       return a.compareTo(b);
@@ -126,9 +130,7 @@ final class ReceiptNormalizer {
       'ranked': candidates,
     });
 
-    final bestTailStripped = normalizeTail(mostFrequent);
-    final allTailStripped = alternativeTexts.map(normalizeTail).toList();
-    final spaced = normalizeSpecialSpaces(bestTailStripped, allTailStripped);
+    final spaced = normalizeSpecialSpaces(mostFrequent, filteredTexts);
 
     ReceiptLogger.log('norm.out', {'result': spaced});
     return spaced;
@@ -241,6 +243,25 @@ final class ReceiptNormalizer {
       tokenSetRatio(aNoSpaces, bNoSpaces),
     ];
     return ratios.reduce(max);
+  }
+
+  /// Returns a merge-friendly similarity in [0,1].
+  /// Wraps [similarity] (0–100) and scales for thresholding in grouping/merging.
+  static double stringSimilarity(String a, String b) {
+    return similarity(a, b) / 100.0;
+  }
+
+  /// Tokenizes for matching; lowercase, diacritic-free, alnum-only.
+  static Set<String> tokensForMatch(String s) {
+    final n = canonicalKey(s).replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+    return n.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toSet();
+  }
+
+  /// Returns a simple specificity score favoring longer, richer strings.
+  static int specificity(String s) {
+    final t = tokensForMatch(s);
+    final chars = t.join().length;
+    return t.length * 10 + chars;
   }
 
   /// Returns true if the string contains combining diacritic marks.

@@ -103,6 +103,7 @@ final class ReceiptRecognizer {
 
   /// Manually accepts a receipt and resets internal state.
   RecognizedReceipt acceptReceipt(RecognizedReceipt receipt) {
+    _optimizer.accept(receipt);
     init();
     return receipt;
   }

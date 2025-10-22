@@ -53,7 +53,7 @@ RecognizedProduct makeProduct({
   priceEntity.position = pos;
 
   final group = RecognizedGroup(maxGroupSize: 4);
-  group.addMember(pos, opts.tuning);
+  group.addMember(pos);
 
   return product;
 }

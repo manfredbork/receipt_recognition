@@ -347,19 +347,23 @@ final class ReceiptParser {
     RecognizedTotalLabel? totalLabel,
   ) {
     if (totalLabel == null) return false;
-    final amounts = parsed.whereType<RecognizedAmount>().toList();
-    final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
-    if (closestAmount == null) {
-      parsed.removeLast();
-      return false;
-    } else {
-      final i = parsed.indexWhere((e) => e is RecognizedTotal);
-      if (i >= 0) {
-        parsed[i] = _toAmount(parsed[i] as RecognizedTotal);
+    if (_tryParseAmount(line, parsed, median)) {
+      final amounts = parsed.whereType<RecognizedAmount>().toList();
+      final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
+      if (closestAmount == null) {
+        parsed.removeLast();
+        return false;
+      } else {
+        final i = parsed.indexWhere((e) => e is RecognizedTotal);
+        if (i >= 0) {
+          parsed[i] = _toAmount(parsed[i] as RecognizedTotal);
+        }
+        parsed.removeWhere((e) => identical(e, closestAmount));
+        parsed.add(_toTotal(closestAmount));
+        return true;
       }
-      parsed[parsed.length - 1] = _toTotal(closestAmount);
-      return true;
     }
+    return false;
   }
 
   /// Detects store name via custom map; early-bails if we already saw a store or an amount.

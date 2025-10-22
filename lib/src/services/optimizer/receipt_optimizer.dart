@@ -21,6 +21,9 @@ abstract class Optimizer {
     bool test = false,
   });
 
+  /// Public entry to finalize and reconcile a manually accepted receipt.
+  void accept(RecognizedReceipt receipt);
+
   /// Releases resources used by the optimizer.
   void close();
 }
@@ -96,6 +99,8 @@ final class ReceiptOptimizer implements Optimizer {
       _optimizeTotalLabel(receipt);
       _optimizePurchaseDate(receipt);
       _cleanupGroups();
+      _maybeMergeSimilarGroups(receipt);
+      _suppressGenericBrandGroups();
       _resetOperations();
       _processPositions(receipt);
       _reconcileToTotal(receipt);
@@ -103,6 +108,11 @@ final class ReceiptOptimizer implements Optimizer {
       return _createOptimizedReceipt(receipt, test: test);
     });
   }
+
+  /// Accepts a receipt manually and finalizes reconciliation if needed.
+  @override
+  void accept(RecognizedReceipt receipt) =>
+      _reconcileToTotal(receipt, allowAdditions: true);
 
   /// Releases all resources used by the optimizer.
   @override
@@ -308,6 +318,170 @@ final class ReceiptOptimizer implements Optimizer {
     if (earlyOutliers.isNotEmpty) _purgeGroups(earlyOutliers.toSet());
   }
 
+  /// Merges cross-frame groups that likely represent the same line item (never same-frame), before reconciliation.
+  void _maybeMergeSimilarGroups(RecognizedReceipt receipt) {
+    if (_groups.length < 2) return;
+
+    final total = receipt.total?.value;
+    final calc = receipt.calculatedTotal.value;
+    final overshoot = (total == null) ? null : (calc - total);
+    final shouldRun = total == null || overshoot! > 0.0;
+    if (!shouldRun) return;
+
+    final yTol = _dynamicYTolerancePx();
+
+    final byPrice = <int, List<RecognizedGroup>>{};
+    for (final g in _groups) {
+      if (g.members.isEmpty) continue;
+      final cents = _groupCents(g);
+      (byPrice[cents] ??= []).add(g);
+    }
+
+    final toRemove = <RecognizedGroup>{};
+    double plannedReduction = 0.0;
+
+    for (final entry in byPrice.entries) {
+      final gs = entry.value;
+      if (gs.length < 2) continue;
+
+      double scorePair(RecognizedGroup a, RecognizedGroup b) {
+        if (_groupsCoOccur(a, b)) {
+          final dy = (_groupY(a) - _groupY(b)).abs();
+          if (dy > yTol) return 0.0;
+        }
+        final prodSim = ReceiptNormalizer.stringSimilarity(
+          _groupBestText(a),
+          _groupBestText(b),
+        );
+        final dy = (_groupY(a) - _groupY(b)).abs();
+        final yClose = dy <= (prodSim >= 0.95 ? yTol * 1.25 : yTol);
+        final okSupport = a.members.length >= 2 && b.members.length >= 2;
+        if (!okSupport || !yClose || prodSim < 0.86) return 0.0;
+        return 0.6 + 0.4 * prodSim;
+      }
+
+      final bestFor = <RecognizedGroup, (RecognizedGroup, double)>{};
+      for (final g in gs) {
+        var best = (null as RecognizedGroup?, 0.0);
+        for (final h in gs) {
+          if (identical(g, h)) continue;
+          final s = scorePair(g, h);
+          if (s > best.$2) best = (h, s);
+        }
+        if (best.$1 != null) bestFor[g] = (best.$1!, best.$2);
+      }
+
+      const mergeThresh = 0.7;
+      final pairs = <(RecognizedGroup, RecognizedGroup, double)>[];
+      for (final g in gs) {
+        final bg = bestFor[g];
+        if (bg == null) continue;
+        final h = bg.$1;
+        final bh = bestFor[h];
+        if (bh == null) continue;
+        final force = bg.$2 >= 0.95 && bh.$2 >= 0.95;
+        if ((identical(bh.$1, g) &&
+                bg.$2 >= mergeThresh &&
+                bh.$2 >= mergeThresh) ||
+            force) {
+          final a = _groups.indexOf(g) < _groups.indexOf(h) ? g : h;
+          final b = identical(a, g) ? h : g;
+          pairs.add((a, b, (bg.$2 + bh.$2) * 0.5));
+        }
+      }
+
+      final seen = <Set<RecognizedGroup>>{};
+      final uniquePairs = <(RecognizedGroup, RecognizedGroup, double)>[];
+      for (final p in pairs) {
+        final key = {p.$1, p.$2};
+        if (seen.add(key)) uniquePairs.add(p);
+      }
+      uniquePairs.sort((x, y) => y.$3.compareTo(x.$3));
+
+      for (final (a, b, _) in uniquePairs) {
+        if (toRemove.contains(a) || toRemove.contains(b)) continue;
+
+        if (overshoot != null) {
+          final reduc = entry.key / 100.0;
+          if (plannedReduction + reduc >
+              overshoot + _opts.tuning.optimizerTotalTolerance) {
+            break;
+          }
+          plannedReduction += reduc;
+        }
+
+        for (final p in b.members) {
+          p.group = a;
+          a.addMember(p);
+        }
+        toRemove.add(b);
+
+        _orderStats.remove(b);
+        for (final s in _orderStats.values) {
+          s.aboveCounts.remove(b);
+        }
+      }
+    }
+
+    if (toRemove.isNotEmpty) _purgeGroups(toRemove);
+  }
+
+  /// Drops brand-only groups that are token-subsets of a nearby, more specific group at the same price.
+  void _suppressGenericBrandGroups() {
+    if (_groups.length < 2) return;
+
+    final yTol = _dynamicYTolerancePx();
+
+    final byPrice = <int, List<RecognizedGroup>>{};
+    for (final g in _groups) {
+      if (g.members.isEmpty) continue;
+      final c = _groupCents(g);
+      (byPrice[c] ??= []).add(g);
+    }
+
+    final toRemove = <RecognizedGroup>{};
+
+    for (final entry in byPrice.entries) {
+      final gs = entry.value;
+      if (gs.length < 2) continue;
+
+      final tokens = <RecognizedGroup, Set<String>>{};
+      final spec = <RecognizedGroup, int>{};
+      final ymap = <RecognizedGroup, double>{};
+
+      for (final g in gs) {
+        final t = _groupBestText(g);
+        tokens[g] = ReceiptNormalizer.tokensForMatch(t);
+        spec[g] = ReceiptNormalizer.specificity(t);
+        ymap[g] = _groupY(g);
+      }
+
+      for (int i = 0; i < gs.length; i++) {
+        for (int j = i + 1; j < gs.length; j++) {
+          final a = gs[i], b = gs[j];
+          final ya = ymap[a]!, yb = ymap[b]!;
+          if ((ya - yb).abs() > yTol) continue;
+
+          final ta = tokens[a]!, tb = tokens[b]!;
+          final aSubset =
+              ta.isNotEmpty &&
+              ta.difference(tb).isEmpty &&
+              tb.length > ta.length;
+          final bSubset =
+              tb.isNotEmpty &&
+              tb.difference(ta).isEmpty &&
+              ta.length > tb.length;
+
+          if (aSubset && (spec[a]! + 5 < spec[b]!)) toRemove.add(a);
+          if (bSubset && (spec[b]! + 5 < spec[a]!)) toRemove.add(b);
+        }
+      }
+    }
+
+    if (toRemove.isEmpty) return;
+    _purgeGroups(toRemove);
+  }
+
   /// Resets per-frame operation markers on positions.
   void _resetOperations() {
     for (final group in _groups) {
@@ -331,16 +505,16 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Assigns a position to the best existing group or creates a new one.
   void _processPosition(RecognizedPosition position) {
-    int bestConfidence = 0;
+    int bestConf = -1;
     RecognizedGroup? bestGroup;
 
     for (final group in _groups) {
-      final result = _calculateConfidence(position, group, bestConfidence);
-      if (result.shouldUseGroup) {
-        bestConfidence = result.confidence;
+      final r = _calculateConfidence(position, group, bestConf);
+      if (r.shouldUseGroup) {
+        bestConf = r.confidence;
         bestGroup = group;
-        position.product.confidence = result.productConfidence;
-        position.price.confidence = result.priceConfidence;
+        position.product.confidence = r.productConfidence;
+        position.price.confidence = r.priceConfidence;
       }
     }
 
@@ -349,6 +523,11 @@ final class ReceiptOptimizer implements Optimizer {
     } else {
       _addToExistingGroup(position, bestGroup);
     }
+
+    ReceiptLogger.log('group.skip', {
+      'pos': ReceiptLogger.posKey(position),
+      'bestConf': bestConf,
+    });
   }
 
   /// Computes position→group confidence and selection decision.
@@ -359,12 +538,8 @@ final class ReceiptOptimizer implements Optimizer {
   ) {
     final productConfidence = group.calculateProductConfidence(
       position.product,
-      _opts.tuning,
     );
-    final priceConfidence = group.calculatePriceConfidence(
-      position.price,
-      _opts.tuning,
-    );
+    final priceConfidence = group.calculatePriceConfidence(position.price);
 
     final positionConfidence = position.copyWith(
       product: position.product.copyWith(confidence: productConfidence),
@@ -375,7 +550,12 @@ final class ReceiptOptimizer implements Optimizer {
       (p) => position.timestamp == p.timestamp,
     );
 
-    final thr = _opts.tuning.optimizerConfidenceThreshold;
+    final closeY = _isYCloseToGroup(position, group);
+    final samePrice = _hasSamePriceInGroup(position, group);
+    final thrNew = _opts.tuning.optimizerConfidenceThreshold;
+    final thrBase = (thrNew - 5).clamp(0, 100);
+    final thr = (samePrice && closeY) ? (thrBase - 5).clamp(0, 100) : thrBase;
+
     final shouldUseGroup =
         !sameTimestamp &&
         positionConfidence.confidence >= thr &&
@@ -391,9 +571,7 @@ final class ReceiptOptimizer implements Optimizer {
       'use': shouldUseGroup,
       'why':
           sameTimestamp
-              ? 'same-ts'
-              : sameTimestamp
-              ? 'lex-low'
+              ? 'same-frame-same-line'
               : positionConfidence.confidence < thr
               ? 'conf-low'
               : positionConfidence.confidence <= currentBestConfidence
@@ -409,13 +587,77 @@ final class ReceiptOptimizer implements Optimizer {
     );
   }
 
+  /// Returns the group price in cents based on its highest-confidence member.
+  int _groupCents(RecognizedGroup g) =>
+      _toCents(maxBy(g.members, (p) => p.confidence)!.price.value);
+
+  /// Returns the best normalized product text for a group.
+  String _groupBestText(RecognizedGroup g) =>
+      maxBy(g.members, (p) => p.confidence)!.product.normalizedText;
+
+  /// Returns the learned Y or the median Y for a group.
+  double _groupY(RecognizedGroup g) {
+    final s = _orderStats[g];
+    if (s != null && s.hasY) return s.orderY;
+    return _medianProjectedY(g);
+  }
+
+  /// Returns true if two groups have any members from the same frame.
+  bool _groupsCoOccur(RecognizedGroup a, RecognizedGroup b) =>
+      a.members.any((p) => b.members.any((q) => p.timestamp == q.timestamp));
+
+  /// Returns true if the position's Y is close to the group's learned Y (or median Y) within a dynamic tolerance.
+  bool _isYCloseToGroup(RecognizedPosition pos, RecognizedGroup group) {
+    final gy =
+        _orderStats[group]?.hasY == true
+            ? _orderStats[group]!.orderY
+            : _medianProjectedY(group);
+    if (!gy.isFinite) return false;
+    final py = pos.product.line.boundingBox.center.dy;
+    final tol = _dynamicYTolerancePx();
+    return (py - gy).abs() <= tol;
+  }
+
+  /// Returns true if the position's price matches any member's price in the group (exact cents).
+  bool _hasSamePriceInGroup(RecognizedPosition pos, RecognizedGroup group) {
+    final cents = _toCents(pos.price.value);
+    for (final m in group.members) {
+      if (_toCents(m.price.value) == cents) return true;
+    }
+    return false;
+  }
+
+  /// Computes a dynamic vertical tolerance in pixels using the median line height across groups.
+  double _dynamicYTolerancePx() {
+    final hs = <double>[];
+    for (final g in _groups) {
+      for (final p in g.members) {
+        hs.add(p.product.line.boundingBox.height);
+      }
+    }
+    if (hs.isEmpty) return 6.0;
+    hs.sort();
+    final med = hs[hs.length ~/ 2];
+    final clamped = med.clamp(4.0, 10.0);
+    return clamped * 0.45;
+  }
+
+  /// Returns the median projected Y for a group's members (fallback when no learned Y exists).
+  double _medianProjectedY(RecognizedGroup g) {
+    if (g.members.isEmpty) return double.infinity;
+    final ys =
+        g.members.map((p) => p.product.line.boundingBox.center.dy).toList()
+          ..sort();
+    return ys[ys.length ~/ 2];
+  }
+
   /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
     final maxCacheSize = _opts.tuning.optimizerMaxCacheSize;
     final newGroup = RecognizedGroup(maxGroupSize: maxCacheSize);
     position.group = newGroup;
     position.operation = Operation.added;
-    newGroup.addMember(position, _opts.tuning);
+    newGroup.addMember(position);
     _groups.add(newGroup);
     ReceiptLogger.log('group.new', {
       'grp': ReceiptLogger.grpKey(newGroup),
@@ -427,7 +669,7 @@ final class ReceiptOptimizer implements Optimizer {
   void _addToExistingGroup(RecognizedPosition position, RecognizedGroup group) {
     position.group = group;
     position.operation = Operation.updated;
-    group.addMember(position, _opts.tuning);
+    group.addMember(position);
     ReceiptLogger.log('group.add', {
       'grp': ReceiptLogger.grpKey(group),
       'pos': ReceiptLogger.posKey(position),
@@ -561,12 +803,18 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  void _reconcileToTotal(RecognizedReceipt receipt) {
+  /// Reconciles the receipt to its declared total by dropping excess or, if enabled, adding plausible missing positions.
+  /// Reconciles the receipt to its declared total by dropping excess or, if enabled, adding plausible missing positions.
+  void _reconcileToTotal(
+    RecognizedReceipt receipt, {
+    bool allowAdditions = false,
+  }) {
     final total = receipt.total?.value;
     if (total == null) return;
     if (receipt.isValid || receipt.positions.isEmpty) return;
 
     final tol = _opts.tuning.optimizerTotalTolerance;
+    final tolC = (tol * 100).round();
     final targetC = _toCents(total);
     final beforeC = _sumCents(receipt.positions);
 
@@ -582,7 +830,7 @@ final class ReceiptOptimizer implements Optimizer {
 
     int currentC = _sumCents(receipt.positions);
     final deltaC = currentC - targetC;
-    if (deltaC.abs() <= (tol * 100).round()) {
+    if (deltaC.abs() <= tolC) {
       ReceiptLogger.log('recon.within_tol', {
         'sum': currentC / 100.0,
         'target': targetC / 100.0,
@@ -591,58 +839,145 @@ final class ReceiptOptimizer implements Optimizer {
       return;
     }
 
-    final int maxCandidates = beforeLen ~/ 2;
-    final candidates = List<RecognizedPosition>.from(receipt.positions)..sort(
-      (a, b) => (a.group?.members.length ?? 0).compareTo(
-        b.group?.members.length ?? 0,
-      ),
-    );
-    final pool = candidates.take(maxCandidates).toList();
+    if (deltaC > 0) {
+      final int maxCandidates = beforeLen ~/ 2;
+      final candidates = List<RecognizedPosition>.from(receipt.positions)..sort(
+        (a, b) => (a.group?.members.length ?? 0).compareTo(
+          b.group?.members.length ?? 0,
+        ),
+      );
+      final pool = candidates.take(maxCandidates).toList();
 
-    if (pool.length <= 1) return;
+      if (pool.length <= 1) return;
 
-    final targetRemove = deltaC.abs();
-    final toRemoveIdx = _pickSubsetToDrop(pool, targetRemove, beamWidth: 256);
+      final targetRemove = deltaC.abs();
+      final toRemoveIdx = _pickSubsetToDrop(pool, targetRemove, beamWidth: 256);
 
-    if (toRemoveIdx.isEmpty) {
-      final beforeErr = (currentC - targetC).abs();
-      for (final p in pool) {
-        final after =
-            currentC - _toCents(p.price.value) * (deltaC > 0 ? 1 : -1);
-        final afterErr = (after - targetC).abs();
-        if (afterErr < beforeErr) {
-          receipt.positions.remove(p);
-          p.group?.members.remove(p);
-          ReceiptLogger.log('recon.greedy_drop', {
-            'price': p.price.value,
-            'conf': p.confidence,
-            'err_before': beforeErr / 100.0,
-            'err_after': afterErr / 100.0,
-          });
-          currentC = after;
-          break;
+      if (toRemoveIdx.isEmpty) {
+        final beforeErr = (currentC - targetC).abs();
+        for (final p in pool) {
+          final after = currentC - _toCents(p.price.value);
+          final afterErr = (after - targetC).abs();
+          if (afterErr < beforeErr) {
+            receipt.positions.remove(p);
+            p.group?.members.remove(p);
+            ReceiptLogger.log('recon.greedy_drop', {
+              'price': p.price.value,
+              'conf': p.confidence,
+              'err_before': beforeErr / 100.0,
+              'err_after': afterErr / 100.0,
+            });
+            currentC = after;
+            break;
+          }
         }
+      } else {
+        final toRemove = toRemoveIdx.map((i) => pool[i]).toSet();
+        int removedCount = 0;
+        int removedCents = 0;
+        for (final p in toRemove) {
+          removedCount += receipt.positions.remove(p) ? 1 : 0;
+          p.group?.members.remove(p);
+          removedCents += _toCents(p.price.value);
+        }
+        ReceiptLogger.log('recon.subset_drop', {
+          'removed': removedCount,
+          'removed_sum': removedCents / 100.0,
+          'sum_before': beforeC / 100.0,
+          'sum_after': _sumCents(receipt.positions) / 100.0,
+          'target': targetC / 100.0,
+        });
       }
-    } else {
-      final toRemove = toRemoveIdx.map((i) => pool[i]).toSet();
-      int removedCount = 0;
-      int removedCents = 0;
-      for (final p in toRemove) {
-        removedCount += receipt.positions.remove(p) ? 1 : 0;
-        p.group?.members.remove(p);
-        removedCents += _toCents(p.price.value);
-      }
-      ReceiptLogger.log('recon.subset_drop', {
-        'removed': removedCount,
-        'removed_sum': removedCents / 100.0,
-        'sum_before': beforeC / 100.0,
-        'sum_after': _sumCents(receipt.positions) / 100.0,
-        'target': targetC / 100.0,
-      });
+
+      final emptied = _groups.where((g) => g.members.isEmpty).toList();
+      if (emptied.isNotEmpty) _purgeGroups(emptied.toSet());
+      return;
     }
 
-    final emptied = _groups.where((g) => g.members.isEmpty).toList();
-    if (emptied.isNotEmpty) _purgeGroups(emptied.toSet());
+    if (deltaC < 0 && allowAdditions) {
+      final presentSig = <String>{};
+      for (final p in receipt.positions) {
+        final cents = _toCents(p.price.value);
+        final key =
+            '${ReceiptNormalizer.canonicalKey(p.product.normalizedText)}|$cents';
+        presentSig.add(key);
+      }
+
+      final existingGroups = receipt.positions.map((p) => p.group).toSet();
+      final groupBest = <RecognizedGroup, RecognizedPosition>{};
+      for (final g in _groups) {
+        if (g.members.isEmpty) continue;
+        if (existingGroups.contains(g)) continue;
+        final best = maxBy(g.members, (p) => p.confidence);
+        if (best == null) continue;
+        final cents = _toCents(best.price.value);
+        final key =
+            '${ReceiptNormalizer.canonicalKey(best.product.normalizedText)}|$cents';
+        if (!presentSig.contains(key)) groupBest[g] = best;
+      }
+      if (groupBest.isEmpty) return;
+
+      final unused = groupBest.values.toList();
+      final targetAdd = -deltaC;
+
+      final toAddIdx = _pickSubsetToDrop(unused, targetAdd, beamWidth: 256);
+
+      int currentC2 = _sumCents(receipt.positions);
+      if (toAddIdx.isEmpty) {
+        final beforeErr = (currentC2 - targetC).abs();
+        unused.sort((a, b) {
+          final da = (_toCents(a.price.value) - targetAdd).abs();
+          final db = (_toCents(b.price.value) - targetAdd).abs();
+          if (da != db) return da.compareTo(db);
+          return b.confidence.compareTo(a.confidence);
+        });
+        for (final p in unused) {
+          final after = currentC2 + _toCents(p.price.value);
+          final afterErr = (after - targetC).abs();
+          if (afterErr < beforeErr && after <= targetC + tolC) {
+            final cents = _toCents(p.price.value);
+            final key =
+                '${ReceiptNormalizer.canonicalKey(p.product.normalizedText)}|$cents';
+            if (!presentSig.contains(key)) {
+              receipt.positions.add(p);
+              presentSig.add(key);
+              ReceiptLogger.log('recon.greedy_add', {
+                'price': p.price.value,
+                'conf': p.confidence,
+                'stability': p.stability,
+              });
+              currentC2 = after;
+            }
+            break;
+          }
+        }
+      } else {
+        final toAdd = toAddIdx.map((i) => unused[i]).toList();
+        int addedCount = 0;
+        int addedCents = 0;
+        for (final p in toAdd) {
+          final nextC = currentC2 + _toCents(p.price.value);
+          if (nextC <= targetC + tolC) {
+            final cents = _toCents(p.price.value);
+            final key =
+                '${ReceiptNormalizer.canonicalKey(p.product.normalizedText)}|$cents';
+            if (!presentSig.contains(key)) {
+              receipt.positions.add(p);
+              presentSig.add(key);
+              addedCount += 1;
+              addedCents += cents;
+              currentC2 = nextC;
+            }
+          }
+        }
+        ReceiptLogger.log('recon.subset_add', {
+          'added': addedCount,
+          'added_sum': addedCents / 100.0,
+          'sum_after': _sumCents(receipt.positions) / 100.0,
+          'target': targetC / 100.0,
+        });
+      }
+    }
   }
 
   /// Picks a subset (indexes into [pool]) to drop so that the sum of their prices
@@ -829,15 +1164,6 @@ final class ReceiptOptimizer implements Optimizer {
         s.aboveCounts.remove(g);
       }
     }
-  }
-
-  /// Median Y for all members of [g].
-  double _medianProjectedY(RecognizedGroup g) {
-    if (g.members.isEmpty) return double.infinity;
-    final ys =
-        g.members.map((p) => p.product.line.boundingBox.center.dy).toList()
-          ..sort();
-    return ys[ys.length ~/ 2];
   }
 
   /// Earliest timestamp in [ps], or epoch for empty lists.
