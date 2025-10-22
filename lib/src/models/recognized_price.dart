@@ -111,7 +111,7 @@ final class RecognizedTotalLabel extends RecognizedEntity<String> {
       RecognizedTotalLabel(value: value ?? this.value, line: line ?? this.line);
 
   @override
-  String format(String value) => value;
+  String format(String value) => value.toUpperCase();
 }
 
 /// Label for the sum (e.g., "Total", "Summe").

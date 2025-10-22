@@ -23,8 +23,6 @@ ReceiptOptions makeOptionsFromLists({
   );
 }
 
-/// Wire up a minimal product/price/position/group so postfix extraction works.
-/// Supply a `priceLineText` like "3.49 FOODX" so the group can derive postfix "FOODX".
 RecognizedProduct makeProduct({
   required num price,
   required String productText,
