@@ -226,13 +226,7 @@ final class ReceiptParser {
         continue;
       }
 
-      if (_tryParseTotal(
-        line,
-        parsed,
-        median,
-        detectedTotalLabel,
-        detectedTotal,
-      )) {
+      if (_tryParseTotal(line, parsed, median, detectedTotalLabel)) {
         detectedTotal = parsed.last as RecognizedTotal;
         continue;
       }
@@ -351,35 +345,21 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
     RecognizedTotalLabel? totalLabel,
-    RecognizedTotal? total,
   ) {
     if (totalLabel == null) return false;
-    if (_tryParseAmount(line, parsed, median)) {
-      final amounts = [parsed.last as RecognizedAmount];
-      if (total != null) {
-        amounts.add(_toAmount(total));
+    final amounts = parsed.whereType<RecognizedAmount>().toList();
+    final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
+    if (closestAmount == null) {
+      parsed.removeLast();
+      return false;
+    } else {
+      final i = parsed.indexWhere((e) => e is RecognizedTotal);
+      if (i >= 0) {
+        parsed[i] = _toAmount(parsed[i] as RecognizedTotal);
       }
-      final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
-      if (closestAmount == null) {
-        parsed.removeLast();
-        return false;
-      }
-      if (total != null && identical(closestAmount, amounts.first)) {
-        final i = parsed.lastIndexOf(total);
-        if (i >= 0) {
-          parsed[i] = _toAmount(total);
-        }
-        parsed[parsed.length - 1] = _toTotal(closestAmount);
-        return true;
-      } else if (total == null && identical(closestAmount, amounts.first)) {
-        parsed[parsed.length - 1] = _toTotal(closestAmount);
-        return true;
-      } else if (total != null && identical(closestAmount, amounts.last)) {
-        parsed.removeLast();
-        return false;
-      }
+      parsed[parsed.length - 1] = _toTotal(closestAmount);
+      return true;
     }
-    return false;
   }
 
   /// Detects store name via custom map; early-bails if we already saw a store or an amount.
@@ -711,7 +691,7 @@ final class ReceiptParser {
   /// Returns absolute ΔY if within vertical tolerance, otherwise `double.infinity` (lower is better).
   static double _distanceScore(TextLine totalLabel, TextLine amount) {
     final dy = _dy(totalLabel, amount);
-    return dy < _heightL(totalLabel) ? dy : double.infinity;
+    return dy < _heightL(totalLabel) * pi ? dy : double.infinity;
   }
 
   /// Filters left-alignment outliers among unknown product lines.
