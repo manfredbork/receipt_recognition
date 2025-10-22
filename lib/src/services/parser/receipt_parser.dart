@@ -223,34 +223,22 @@ final class ReceiptParser {
 
       if (_tryParseTotalLabel(line, parsed, detectedTotalLabel)) {
         detectedTotalLabel = parsed.last as RecognizedTotalLabel;
+        continue;
+      }
 
-        ReceiptLogger.log('total.label.detected', {
-          'text': line.text,
-          'cy': _cyL(line),
-          'cx': _cxL(line),
-          'h': _heightL(line),
-        });
-
+      if (_tryParseTotal(
+        line,
+        parsed,
+        median,
+        detectedTotalLabel,
+        detectedTotal,
+      )) {
+        detectedTotal = parsed.last as RecognizedTotal;
         continue;
       }
 
       if (_tryParseAmount(line, parsed, median)) {
         detectedAmount = parsed.last as RecognizedAmount;
-
-        ReceiptLogger.log('amount.parsed', {
-          'value': (detectedAmount).value,
-          'formatted': (detectedAmount).formattedValue,
-          'cx': _cxL((detectedAmount).line),
-          'cy': _cyL((detectedAmount).line),
-        });
-
-        if (_promoteIfTotalCandidate(
-          detectedTotalLabel,
-          detectedTotal,
-          parsed,
-        )) {
-          detectedTotal = parsed.last as RecognizedTotal;
-        }
         continue;
       }
 
@@ -258,64 +246,6 @@ final class ReceiptParser {
     }
 
     return parsed;
-  }
-
-  /// If [totalLabel] exists, promote the last parsed amount to [RecognizedTotal]
-  /// when it's right of and vertically close to the label. Replaces any prior total.
-  static bool _promoteIfTotalCandidate(
-    RecognizedTotalLabel? totalLabel,
-    RecognizedTotal? currentTotal,
-    List<RecognizedEntity> parsed,
-  ) {
-    if (totalLabel == null ||
-        parsed.isEmpty ||
-        parsed.last is! RecognizedAmount) {
-      return false;
-    }
-
-    final labelLine = totalLabel.line;
-    final lastAmount = parsed.last as RecognizedAmount;
-
-    final rightOf = _cxL(lastAmount.line) > _cxL(labelLine);
-    final below = _cyL(lastAmount.line) >= _cyL(labelLine);
-    final vTol = pi * max(_heightL(labelLine), _heightL(lastAmount.line));
-    final dy = _dy(labelLine, lastAmount.line);
-    final dyOk = dy <= vTol;
-
-    ReceiptLogger.log('total.candidate.check', {
-      'amount.formatted': lastAmount.formattedValue,
-      'rightOf': rightOf,
-      'below': below,
-      'dy': dy,
-      'vTol': vTol,
-      'dyOk': dyOk,
-    });
-
-    if (!(rightOf && below && dyOk)) return false;
-
-    if (currentTotal != null) {
-      final currentA = _toAmount(currentTotal);
-      final sNew = _distanceScore(labelLine, lastAmount.line);
-      final sOld = _distanceScore(labelLine, currentA.line);
-      ReceiptLogger.log('total.candidate.compare', {
-        'old.formatted': currentA.formattedValue,
-        'score.new': sNew,
-        'score.old': sOld,
-        'replace': sNew < sOld,
-      });
-      if (sNew >= sOld) return false;
-
-      final ti = parsed.indexOf(currentTotal);
-      if (ti >= 0) parsed[ti] = currentA;
-    }
-
-    parsed[parsed.length - 1] = _toTotal(lastAmount);
-    ReceiptLogger.log('total.promoted', {
-      'formatted': lastAmount.formattedValue,
-      'cx': _cxL(lastAmount.line),
-      'cy': _cyL(lastAmount.line),
-    });
-    return true;
   }
 
   /// Skips lines that are clearly below the detected total label.
@@ -412,6 +342,44 @@ final class ReceiptParser {
     }
     if (bestLabel == null || bestScore < thr(bestLabel)) return null;
     return bestLabel;
+  }
+
+  /// Finds the amount nearest to [totalLabel] and marks it as [RecognizedTotal].
+  /// Adds it to [parsed] and returns `true` if successful.
+  static bool _tryParseTotal(
+    TextLine line,
+    List<RecognizedEntity> parsed,
+    double median,
+    RecognizedTotalLabel? totalLabel,
+    RecognizedTotal? total,
+  ) {
+    if (totalLabel == null) return false;
+    if (_tryParseAmount(line, parsed, median)) {
+      final amounts = [parsed.last as RecognizedAmount];
+      if (total != null) {
+        amounts.add(_toAmount(total));
+      }
+      final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
+      if (closestAmount == null) {
+        parsed.removeLast();
+        return false;
+      }
+      if (total != null && identical(closestAmount, amounts.first)) {
+        final i = parsed.lastIndexOf(total);
+        if (i >= 0) {
+          parsed[i] = _toAmount(total);
+        }
+        parsed[parsed.length - 1] = _toTotal(closestAmount);
+        return true;
+      } else if (total == null && identical(closestAmount, amounts.first)) {
+        parsed[parsed.length - 1] = _toTotal(closestAmount);
+        return true;
+      } else if (total != null && identical(closestAmount, amounts.last)) {
+        parsed.removeLast();
+        return false;
+      }
+    }
+    return false;
   }
 
   /// Detects store name via custom map; early-bails if we already saw a store or an amount.
@@ -689,6 +657,25 @@ final class ReceiptParser {
     product.position = position;
     price.position = position;
     return position;
+  }
+
+  /// Finds the closest amount to a total label using a geometric score (single pass).
+  static RecognizedAmount? _findClosestTotalAmount(
+    RecognizedTotalLabel totalLabel,
+    List<RecognizedAmount> amounts,
+  ) {
+    RecognizedAmount? best;
+    double bestScore = double.infinity;
+    final labelLine = totalLabel.line;
+    for (final a in amounts) {
+      final s = _distanceScore(labelLine, a.line);
+      if (s < bestScore) {
+        bestScore = s;
+        best = a;
+      }
+    }
+    if (bestScore == double.infinity) return null;
+    return best;
   }
 
   /// Computes an adaptive fuzzy threshold based on label length and
