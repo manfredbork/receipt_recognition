@@ -63,7 +63,7 @@ final class ReceiptRecognizer {
     @Deprecated('No longer used; stability/confirmation rules replace it.')
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
-    Duration scanInterval = const Duration(milliseconds: 100),
+    Duration scanInterval = const Duration(milliseconds: 50),
     Duration scanTimeout = const Duration(seconds: 30),
     Duration scanCompleteDelay = Duration.zero,
     VoidCallback? onScanTimeout,

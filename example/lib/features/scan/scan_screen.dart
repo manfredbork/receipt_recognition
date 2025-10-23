@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Screen that manages live scanning and shows camera preview with overlays.
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
 
@@ -39,11 +40,13 @@ class _ScanScreenState extends State<ScanScreen>
     super.dispose();
   }
 
+  /// Handles each incoming input image from the live feed.
   Future<void> _handleInputImage(InputImage input) async {
     if (await _guardIfAccepted()) return;
     await _ctrl.processImage(input);
   }
 
+  /// Stops scanning and navigates away if the receipt is accepted.
   Future<bool> _guardIfAccepted() async {
     if (_ctrl.isAccepted) {
       if (!mounted) return false;
@@ -54,11 +57,13 @@ class _ScanScreenState extends State<ScanScreen>
     return false;
   }
 
+  /// Navigates to the result screen with the recognized receipt.
   void _goAcceptedRoute() {
     ReceiptLogger.logReceipt(_ctrl.receipt);
     GoRouter.of(context).goNamed('result', extra: _ctrl.receipt);
   }
 
+  /// Calculates the preview image size in portrait orientation.
   Size? _previewImageSizePortrait() {
     final cc = cameraController;
     if (cc == null || !cc.value.isInitialized) return null;
@@ -167,6 +172,7 @@ class _ScanScreenState extends State<ScanScreen>
   }
 }
 
+/// Floating action button to manually accept a nearly complete receipt.
 class _AcceptFab extends StatelessWidget {
   const _AcceptFab();
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Overlay that draws recognized receipt fields and positions on top of the preview.
 class OverlayScreen extends StatelessWidget {
   final List<RecognizedPosition> positions;
   final RecognizedStore? store;
@@ -24,7 +25,7 @@ class OverlayScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _PositionPainter(
+      painter: _OverlayPainter(
         positions: positions,
         imageSize: imageSize,
         screenSize: screenSize,
@@ -37,7 +38,8 @@ class OverlayScreen extends StatelessWidget {
   }
 }
 
-class _PositionPainter extends CustomPainter {
+/// Painter that renders bounding boxes and labels for recognized elements.
+class _OverlayPainter extends CustomPainter {
   final List<RecognizedPosition> positions;
   final RecognizedStore? store;
   final RecognizedTotalLabel? totalLabel;
@@ -46,7 +48,7 @@ class _PositionPainter extends CustomPainter {
   final Size imageSize;
   final Size screenSize;
 
-  _PositionPainter({
+  _OverlayPainter({
     required this.positions,
     required this.imageSize,
     required this.screenSize,
@@ -159,7 +161,7 @@ class _PositionPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PositionPainter old) =>
+  bool shouldRepaint(covariant _OverlayPainter old) =>
       old.positions != positions ||
       old.imageSize != imageSize ||
       old.screenSize != screenSize ||

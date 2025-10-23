@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Screen that displays the final recognized receipt details.
 class ResultScreen extends StatelessWidget {
   final RecognizedReceipt receipt;
 
@@ -115,6 +116,7 @@ class ResultScreen extends StatelessWidget {
   }
 }
 
+/// Decorative zigzag separator widget for the receipt card edges.
 class ZigzagEdgeWidget extends StatelessWidget {
   final bool isTop;
   final double zigzagWidth;
@@ -145,6 +147,7 @@ class ZigzagEdgeWidget extends StatelessWidget {
   }
 }
 
+/// Painter that draws a horizontal zigzag edge.
 class _ZigzagEdgePainter extends CustomPainter {
   final bool isTop;
   final double zigzagWidth;

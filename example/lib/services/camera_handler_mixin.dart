@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+/// Mixin that encapsulates camera initialization and live feed handling.
 mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
   CameraDescription? cameraBack;
   CameraController? cameraController;
@@ -21,6 +22,7 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
   bool _streamActive = false;
   void Function(CameraImage)? _imageListener;
 
+  /// Initializes the first available camera with a preferred resolution.
   Future<void> initCamera(List<CameraDescription> cameras) async {
     for (CameraDescription cam in cameras) {
       if (cam.lensDirection == CameraLensDirection.back) {
@@ -31,6 +33,7 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
+  /// Starts the live camera feed and forwards frames to [onImage] as InputImage.
   Future<void> startLiveFeed(Function(InputImage) processImage) async {
     if (cameraController != null && cameraController!.value.isStreamingImages) {
       try {
@@ -82,6 +85,7 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
     });
   }
 
+  /// Stops the live camera feed and releases the image stream subscription.
   Future<void> stopLiveFeed() async {
     if (cameraController == null) return;
 
@@ -108,6 +112,7 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
     });
   }
 
+  /// Converts a platform camera image to an ML Kit InputImage if possible.
   InputImage? convertToInputImage(CameraImage image) {
     if (image.planes.isEmpty) return null;
 
