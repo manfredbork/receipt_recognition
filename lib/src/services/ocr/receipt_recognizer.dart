@@ -20,6 +20,9 @@ final class ReceiptRecognizer {
   /// Tunable options for OCR, parsing, and validation behavior.
   final ReceiptOptions _options;
 
+  /// If true, optimizations assume a single-frame scan (no cross-frame stabilization).
+  final bool _singleScan;
+
   /// Percentage at/above which a receipt is treated as nearly complete.
   final int _nearlyCompleteThreshold;
 
@@ -56,7 +59,6 @@ final class ReceiptRecognizer {
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
     ReceiptOptions? options,
-    @Deprecated('No longer used; auto-completion is handled internally.')
     bool singleScan = false,
     @Deprecated('No longer used; stability/confirmation rules replace it.')
     int minValidScans = 3,
@@ -70,6 +72,7 @@ final class ReceiptRecognizer {
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(),
        _options = options ?? ReceiptOptions.defaults(),
+       _singleScan = singleScan,
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
@@ -87,7 +90,13 @@ final class ReceiptRecognizer {
     _lastScan = now;
 
     final receipt = await _recognizeReceipt(inputImage, _options);
-    final optimized = _optimizer.optimize(receipt, _options);
+
+    final optimized = _optimizer.optimize(
+      receipt,
+      _options,
+      singleScan: _singleScan,
+    );
+
     final validation = _validateReceipt(optimized);
     final accepted = _handleValidationResult(now, optimized, validation);
 

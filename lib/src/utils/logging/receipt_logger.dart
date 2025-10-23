@@ -39,17 +39,15 @@ final class ReceiptLogger {
   }) {
     if (receipt.positions.isNotEmpty) {
       if (validation != null) {
-        debugPrint('🧾${'-' * 48}');
         debugPrint('✅ Validation status: ${validation.status}');
         debugPrint('💬 Message: ${validation.message}');
       }
-      debugPrint('🧾${'-' * 48}');
       debugPrint('🏪 Supermarket: ${receipt.store?.value ?? 'N/A'}');
       debugPrint(
         '📅 Purchase datetime: ${receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
       );
-      const int padFullWidth = 25;
-      final int padHalfWidth = (padFullWidth / 2).toInt();
+      const int padFullWidth = 30;
+      final int padHalfWidth = padFullWidth ~/ 2;
       for (final position in receipt.positions) {
         final product = position.product.normalizedText;
         final price = position.price.formattedValue;

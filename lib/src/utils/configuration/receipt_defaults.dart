@@ -42,5 +42,6 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
     'optimizerAboveCountDecayThreshold': 50,
     'optimizerProductWeight': 1,
     'optimizerPriceWeight': 1,
+    'optimizerUnrecognizedProductName': 'UNRECOGNIZED ITEMS',
   },
 };

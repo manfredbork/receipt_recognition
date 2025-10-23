@@ -32,6 +32,9 @@ final class ReceiptTuning {
   /// Weight factor influencing price consistency during optimization.
   final int optimizerPriceWeight;
 
+  /// Default name used for unrecognized products.
+  final String optimizerUnrecognizedProductName;
+
   /// Private real constructor
   ReceiptTuning._internal({
     required this.optimizerTotalTolerance,
@@ -44,6 +47,7 @@ final class ReceiptTuning {
     required this.optimizerAboveCountDecayThreshold,
     required this.optimizerProductWeight,
     required this.optimizerPriceWeight,
+    required this.optimizerUnrecognizedProductName,
   });
 
   /// Public constructor with **optional** named params.
@@ -59,6 +63,7 @@ final class ReceiptTuning {
     int? optimizerAboveCountDecayThreshold,
     int? optimizerProductWeight,
     int? optimizerPriceWeight,
+    String? optimizerUnrecognizedProductName,
   }) {
     final def = ReceiptTuning.fromJsonLike(
       kReceiptDefaultOptions['tuning'] as Map<String, dynamic>?,
@@ -82,6 +87,9 @@ final class ReceiptTuning {
       optimizerProductWeight:
           optimizerProductWeight ?? def.optimizerProductWeight,
       optimizerPriceWeight: optimizerPriceWeight ?? def.optimizerPriceWeight,
+      optimizerUnrecognizedProductName:
+          optimizerUnrecognizedProductName ??
+          def.optimizerUnrecognizedProductName,
     );
   }
 
@@ -114,6 +122,14 @@ final class ReceiptTuning {
       throw StateError('Missing tuning value for keys: ${keys.join(", ")}');
     }
 
+    String strFromKeys(List<String> keys) {
+      for (final k in keys) {
+        final v = merged[k];
+        if (v is String && v.trim().isNotEmpty) return v;
+      }
+      throw StateError('Missing tuning value for keys: ${keys.join(", ")}');
+    }
+
     return ReceiptTuning._internal(
       optimizerTotalTolerance: numFromKeys<double>(['optimizerTotalTolerance']),
       optimizerEwmaAlpha: numFromKeys<double>(['optimizerEwmaAlpha']),
@@ -133,6 +149,9 @@ final class ReceiptTuning {
       ]),
       optimizerProductWeight: numFromKeys<int>(['optimizerProductWeight']),
       optimizerPriceWeight: numFromKeys<int>(['optimizerPriceWeight']),
+      optimizerUnrecognizedProductName: strFromKeys([
+        'optimizerUnrecognizedProductName',
+      ]),
     );
   }
 
@@ -148,5 +167,6 @@ final class ReceiptTuning {
     'optimizerAboveCountDecayThreshold': optimizerAboveCountDecayThreshold,
     'optimizerProductWeight': optimizerProductWeight,
     'optimizerPriceWeight': optimizerPriceWeight,
+    'optimizerUnrecognizedProductName': optimizerUnrecognizedProductName,
   };
 }

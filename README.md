@@ -170,6 +170,8 @@ Parameters (keys inside extend/override, or top-level in flat form)
     - optimizerVerticalTolerance (int): pixel tolerance for alignment.
     - optimizerTotalTolerance (double): amount tolerance when matching totals.
     - optimizerEwmaAlpha (double): smoothing for order learning.
+    - optimizerUnrecognizedProductName (string) — the default name used when a product line cannot be confidently
+      recognized.
 
 ⚠️ Note: Changing tuning parameters directly affects scan behavior and result quality; adjust them only if you know what
 you’re doing. For most users, the defaults provide the best balance of accuracy, stability, and performance.

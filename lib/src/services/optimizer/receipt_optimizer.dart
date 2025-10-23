@@ -13,12 +13,10 @@ abstract class Optimizer {
   void init();
 
   /// Processes a receipt and returns an optimized version.
-  ///
-  /// Set [test] to true to always return a merged/optimized receipt.
   RecognizedReceipt optimize(
     RecognizedReceipt receipt,
     ReceiptOptions options, {
-    bool test = false,
+    bool singleScan = false,
   });
 
   /// Public entry to finalize and reconcile a manually accepted receipt.
@@ -84,7 +82,7 @@ final class ReceiptOptimizer implements Optimizer {
   RecognizedReceipt optimize(
     RecognizedReceipt receipt,
     ReceiptOptions options, {
-    bool test = false,
+    bool singleScan = true,
   }) {
     return ReceiptRuntime.runWithOptions(options, () {
       _initializeIfNeeded();
@@ -103,16 +101,16 @@ final class ReceiptOptimizer implements Optimizer {
       _suppressGenericBrandGroups();
       _resetOperations();
       _processPositions(receipt);
-      _reconcileToTotal(receipt);
+      _reconcileToTotal(receipt, singleScan);
       _updateEntities(receipt);
-      return _createOptimizedReceipt(receipt, test: test);
+
+      return _createOptimizedReceipt(receipt, singleScan: singleScan);
     });
   }
 
   /// Accepts a receipt manually and finalizes reconciliation if needed.
   @override
-  void accept(RecognizedReceipt receipt) =>
-      _reconcileToTotal(receipt, allowAdditions: true);
+  void accept(RecognizedReceipt receipt) => _reconcileToTotal(receipt, true);
 
   /// Releases all resources used by the optimizer.
   @override
@@ -505,7 +503,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Assigns a position to the best existing group or creates a new one.
   void _processPosition(RecognizedPosition position) {
-    int bestConf = -1;
+    int bestConf = 0;
     RecognizedGroup? bestGroup;
 
     for (final group in _groups) {
@@ -680,7 +678,7 @@ final class ReceiptOptimizer implements Optimizer {
   /// Builds a merged, ordered receipt from stable groups and updates entities.
   RecognizedReceipt _createOptimizedReceipt(
     RecognizedReceipt receipt, {
-    bool test = false,
+    bool singleScan = false,
   }) {
     if (receipt.isValid && receipt.isConfirmed) return receipt;
 
@@ -697,7 +695,7 @@ final class ReceiptOptimizer implements Optimizer {
 
     final stableGroups =
         _groups
-            .where((g) => stable(g.stability, g.members.length) || test)
+            .where((g) => stable(g.stability, g.members.length) || singleScan)
             .toList();
 
     _learnOrder(receipt);
@@ -804,11 +802,7 @@ final class ReceiptOptimizer implements Optimizer {
   }
 
   /// Reconciles the receipt to its declared total by dropping excess or, if enabled, adding plausible missing positions.
-  /// Reconciles the receipt to its declared total by dropping excess or, if enabled, adding plausible missing positions.
-  void _reconcileToTotal(
-    RecognizedReceipt receipt, {
-    bool allowAdditions = false,
-  }) {
+  void _reconcileToTotal(RecognizedReceipt receipt, bool allowAdditions) {
     final total = receipt.total?.value;
     if (total == null) return;
     if (receipt.isValid || receipt.positions.isEmpty) return;
@@ -915,7 +909,24 @@ final class ReceiptOptimizer implements Optimizer {
             '${ReceiptNormalizer.canonicalKey(best.product.normalizedText)}|$cents';
         if (!presentSig.contains(key)) groupBest[g] = best;
       }
-      if (groupBest.isEmpty) return;
+      if (groupBest.isEmpty) {
+        final product = RecognizedProduct(
+          line: ReceiptTextLine(),
+          value: _opts.tuning.optimizerUnrecognizedProductName,
+        );
+        final price = RecognizedPrice(
+          line: ReceiptTextLine(),
+          value: -deltaC / 100,
+        );
+        final position = RecognizedPosition(
+          product: product,
+          price: price,
+          timestamp: receipt.timestamp,
+          operation: Operation.none,
+        );
+        _createNewGroup(position);
+        return;
+      }
 
       final unused = groupBest.values.toList();
       final targetAdd = -deltaC;

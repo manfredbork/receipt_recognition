@@ -34,19 +34,12 @@ void main() {
       tester,
     ) async {
       final img = await _inputImageFromAssetAsPng(
-        'integration_test/assets/rewe_01.png',
+        'integration_test/assets/rewe_1.png',
       );
-
-      final tr = TextRecognizer(script: TextRecognitionScript.latin);
-      final raw = await tr.processImage(img);
-      await tr.close();
-      // ignore: avoid_print
-      print(raw.text);
-
-      final rr = ReceiptRecognizer();
+      final rr = ReceiptRecognizer(singleScan: true);
       try {
         final receipt = await rr.processImage(img);
-
+        ReceiptLogger.logReceipt(receipt);
         expect(receipt.totalLabel?.formattedValue, equals('SUMME'));
         expect(receipt.total?.formattedValue, equals('30.82'));
         expect(receipt.store?.formattedValue, equals('REWE'));
