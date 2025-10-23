@@ -911,11 +911,14 @@ final class ReceiptOptimizer implements Optimizer {
         if (!presentSig.contains(key)) groupBest[g] = best;
       }
       if (groupBest.isEmpty) {
+        final lastText = receipt.positions.last.product.normalizedText;
+        final upperCase = lastText == lastText.toUpperCase();
+        final productName = _opts.tuning.optimizerUnrecognizedProductName;
         final product = RecognizedProduct(
           line: ReceiptTextLine(
             boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
           ),
-          value: _opts.tuning.optimizerUnrecognizedProductName,
+          value: upperCase ? productName.toUpperCase() : productName,
         );
         final price = RecognizedPrice(
           line: ReceiptTextLine(
