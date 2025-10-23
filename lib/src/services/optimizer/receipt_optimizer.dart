@@ -28,6 +28,9 @@ abstract class Optimizer {
 }
 
 /// Default implementation of receipt optimizer that uses confidence scoring and grouping.
+///
+/// Groups similar positions across frames, stabilizes values, reconciles to totals,
+/// and produces an ordered, merged receipt snapshot.
 final class ReceiptOptimizer implements Optimizer {
   /// Working position groups.
   final List<RecognizedGroup> _groups = [];
@@ -79,6 +82,8 @@ final class ReceiptOptimizer implements Optimizer {
   void init() => _shouldInitialize = true;
 
   /// Processes a receipt and returns an optimized version driven by [options] tuning.
+  ///
+  /// When [singleScan] is true, cross-frame stabilization heuristics are relaxed.
   @override
   RecognizedReceipt optimize(
     RecognizedReceipt receipt,

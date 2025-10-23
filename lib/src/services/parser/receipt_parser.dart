@@ -10,6 +10,8 @@ import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Parses OCR output into a structured receipt by extracting entities, ordering by
 /// vertical position, filtering outliers, and assembling positions, total, store, and bounds.
+///
+/// Use [ReceiptTextProcessor.processText] to run this off the UI thread.
 final class ReceiptParser {
   /// Center-Y of a TextLine.
   static double _cyL(TextLine l) => l.boundingBox.center.dy;
@@ -183,6 +185,8 @@ final class ReceiptParser {
   }
 
   /// Flattens text blocks to lines sorted by top Y (and left X).
+  ///
+  /// Returns a new list; does not mutate the input [text].
   static List<TextLine> _convertText(RecognizedText text) {
     return text.blocks.expand((block) => block.lines).toList()
       ..sort(_cmpTopThenLeft);
