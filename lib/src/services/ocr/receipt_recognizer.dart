@@ -121,7 +121,6 @@ final class ReceiptRecognizer {
   void init() {
     _initializedScan = null;
     _lastScan = null;
-    _lastReceipt = RecognizedReceipt.empty();
     _optimizer.init();
   }
 

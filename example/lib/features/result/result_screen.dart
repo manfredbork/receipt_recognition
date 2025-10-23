@@ -52,13 +52,19 @@ class ResultScreen extends StatelessWidget {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                position.product.normalizedText,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.black,
+                              Expanded(
+                                child: Text(
+                                  position.product.normalizedText,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Text(
                                 position.price.formattedValue,
                                 style: const TextStyle(

@@ -5,7 +5,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
-import 'package:receipt_recognition/src/utils/geometry/index.dart';
 import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
@@ -144,6 +143,7 @@ final class ReceiptParser {
   ) {
     return ReceiptRuntime.runWithOptions(options, () {
       final lines = _convertText(text);
+
       lines.sort(_cmpCyThenCx);
       ReceiptLogger.log('parse.start', {'lines': lines.length});
 
@@ -193,16 +193,18 @@ final class ReceiptParser {
     if (lines.isEmpty) return <RecognizedEntity>[];
 
     final parsed = <RecognizedEntity>[];
-    final rect = _extractRectFromLines(lines);
-    final median = _cxR(rect);
 
+    RecognizedBounds? detectedBounds;
     RecognizedStore? detectedStore;
     RecognizedTotalLabel? detectedTotalLabel;
     RecognizedTotal? detectedTotal;
     RecognizedAmount? detectedAmount;
 
-    _applyPurchaseDate(lines, parsed);
-    _applyBoundingBox(lines, parsed);
+    if (_applyBounds(lines, parsed)) {
+      detectedBounds = parsed.last as RecognizedBounds;
+    }
+
+    final median = _cxR(detectedBounds?.boundingBox ?? Rect.zero);
 
     for (final line in lines) {
       if (_shouldStopIfTotalConfirmed(line, parsed, detectedTotal)) break;
@@ -239,6 +241,8 @@ final class ReceiptParser {
       if (_tryParseUnknown(line, parsed, median)) continue;
     }
 
+    _applyPurchaseDate(lines, parsed);
+
     return parsed;
   }
 
@@ -251,7 +255,7 @@ final class ReceiptParser {
 
     final skip =
         _cyL(line) >
-        _cyL(detectedTotalLabel.line) + _heightL(detectedTotalLabel.line);
+        _cyL(detectedTotalLabel.line) + _heightL(detectedTotalLabel.line) * pi;
 
     ReceiptLogger.log('guard.skip_line', {
       'skip': skip,
@@ -358,7 +362,9 @@ final class ReceiptParser {
         if (i >= 0) {
           parsed[i] = _toAmount(parsed[i] as RecognizedTotal);
         }
-        parsed.removeWhere((e) => identical(e, closestAmount));
+        parsed.removeWhere(
+          (e) => e is RecognizedAmount && identical(e, closestAmount),
+        );
         parsed.add(_toTotal(closestAmount));
         return true;
       }
@@ -408,12 +414,17 @@ final class ReceiptParser {
   }
 
   /// Appends an aggregate (axis-aligned) receipt bounding box entity derived from all lines.
-  static bool _applyBoundingBox(
+  static bool _applyBounds(
     List<TextLine> lines,
     List<RecognizedEntity> parsed,
   ) {
     if (lines.isEmpty) return false;
-    final line = ReceiptTextLine.fromRect(_extractRectFromLines(lines));
+    final corners = _extractPointsFromLines(lines);
+    final angle = _estimateSkewFromCorners(corners);
+    final line = ReceiptTextLine.fromRect(
+      _extractRectFromLines(lines),
+      angle: angle,
+    );
     parsed.add(RecognizedBounds(line: line, value: line.boundingBox));
     return true;
   }
@@ -438,6 +449,21 @@ final class ReceiptParser {
       if (bottom > maxY) maxY = bottom;
     }
     return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
+  /// Returns all corner points from each line's bounding polygon.
+  /// Uses TextLine.cornerPoints directly. Returns an empty list if [lines] is empty.
+  static List<Point<int>> _extractPointsFromLines(List<TextLine> lines) {
+    if (lines.isEmpty) return const <Point<int>>[];
+
+    final pts = <Point<int>>[];
+    for (final l in lines) {
+      final corners = l.cornerPoints;
+      for (final p in corners) {
+        pts.add(Point<int>(p.x, p.y));
+      }
+    }
+    return pts;
   }
 
   /// Extracts and adds purchase date to the parsed entities if found in the text lines.
@@ -560,8 +586,7 @@ final class ReceiptParser {
     RecognizedBounds? bounds,
     RecognizedReceipt receipt,
   ) {
-    final skewAngle = ReceiptSkewEstimator.estimateDegrees(receipt);
-    receipt.bounds = bounds?.copyWith(skewAngle: skewAngle);
+    receipt.bounds = bounds;
   }
 
   /// Applies the parsed store to the receipt.
@@ -1044,5 +1069,33 @@ final class ReceiptParser {
         receipt.positions.removeWhere((p) => p.group == pos.group);
       }
     }
+  }
+
+  /// Computes skew angle (degrees) from four corner points in clockwise order:
+  /// [top-left, top-right, bottom-right, bottom-left]. Positive = clockwise tilt.
+  static double _estimateSkewFromCorners(List<Point<int>> corners) {
+    if (corners.length != 4) return 0.0;
+
+    final tl = corners[0];
+    final tr = corners[1];
+    final br = corners[2];
+    final bl = corners[3];
+
+    double angleTop = atan2((tr.y - tl.y).toDouble(), (tr.x - tl.x).toDouble());
+    double angleBottom = atan2(
+      (br.y - bl.y).toDouble(),
+      (br.x - bl.x).toDouble(),
+    );
+
+    double angle = (angleTop + angleBottom) * 0.5;
+
+    double deg = angle * 180.0 / pi;
+    while (deg >= 90.0) {
+      deg -= 180.0;
+    }
+    while (deg < -90.0) {
+      deg += 180.0;
+    }
+    return deg;
   }
 }

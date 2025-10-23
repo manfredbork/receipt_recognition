@@ -537,6 +537,8 @@ See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version 
 - [x] Stability-based grouping/merging
 - [ ] Enhanced Android platform integration
 - [ ] Broader international receipt layout support
+- [ ] Extended OCR correction (single-character replacement/removal for common OCR errors)
+- [ ] Unit recognition (e.g., kg, pcs) with price-per-unit parsing and quantity/weight extraction
 
 ---
 

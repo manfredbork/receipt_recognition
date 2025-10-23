@@ -825,7 +825,7 @@ final class ReceiptOptimizer implements Optimizer {
 
     int currentC = _sumCents(receipt.positions);
     final deltaC = currentC - targetC;
-    if (deltaC.abs() <= tolC) {
+    if (deltaC.abs() < tolC) {
       ReceiptLogger.log('recon.within_tol', {
         'sum': currentC / 100.0,
         'target': targetC / 100.0,
@@ -953,7 +953,7 @@ final class ReceiptOptimizer implements Optimizer {
         for (final p in unused) {
           final after = currentC2 + _toCents(p.price.value);
           final afterErr = (after - targetC).abs();
-          if (afterErr < beforeErr && after <= targetC + tolC) {
+          if (afterErr < beforeErr && after < targetC + tolC) {
             final cents = _toCents(p.price.value);
             final key =
                 '${ReceiptNormalizer.canonicalKey(p.product.normalizedText)}|$cents';
@@ -976,7 +976,7 @@ final class ReceiptOptimizer implements Optimizer {
         int addedCents = 0;
         for (final p in toAdd) {
           final nextC = currentC2 + _toCents(p.price.value);
-          if (nextC <= targetC + tolC) {
+          if (nextC < targetC + tolC) {
             final cents = _toCents(p.price.value);
             final key =
                 '${ReceiptNormalizer.canonicalKey(p.product.normalizedText)}|$cents';
@@ -1134,7 +1134,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
-    final tiePx = _opts.tuning.optimizerTotalTolerance.toDouble();
+    final tiePx = _opts.tuning.optimizerTotalTolerance;
 
     final sa = _orderStats[a];
     final sb = _orderStats[b];
