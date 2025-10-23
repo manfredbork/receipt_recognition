@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:collection/collection.dart';
 import 'package:receipt_recognition/src/models/index.dart';
@@ -911,11 +912,15 @@ final class ReceiptOptimizer implements Optimizer {
       }
       if (groupBest.isEmpty) {
         final product = RecognizedProduct(
-          line: ReceiptTextLine(),
+          line: ReceiptTextLine(
+            boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
+          ),
           value: _opts.tuning.optimizerUnrecognizedProductName,
         );
         final price = RecognizedPrice(
-          line: ReceiptTextLine(),
+          line: ReceiptTextLine(
+            boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
+          ),
           value: -deltaC / 100,
         );
         final position = RecognizedPosition(
