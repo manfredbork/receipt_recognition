@@ -42,7 +42,7 @@ final class ReceiptLogger {
         debugPrint('✅ Validation status: ${validation.status}');
         debugPrint('💬 Message: ${validation.message}');
       }
-      debugPrint('🏪 Supermarket: ${receipt.store?.value ?? 'N/A'}');
+      debugPrint('🏪 Supermarket: ${receipt.store?.formattedValue ?? 'N/A'}');
       debugPrint(
         '📅 Purchase datetime: ${receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
       );
