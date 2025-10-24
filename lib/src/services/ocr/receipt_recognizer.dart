@@ -44,6 +44,9 @@ final class ReceiptRecognizer {
   /// Callback invoked when a receipt is finalized and accepted.
   final Function(RecognizedReceipt)? _onScanComplete;
 
+  /// Whether a full reinit is needed.
+  bool _shouldInitialize = false;
+
   /// Timestamp when the current scan session was initialized.
   DateTime? _initializedScan;
 
@@ -84,9 +87,10 @@ final class ReceiptRecognizer {
 
   /// Processes an image and returns a recognized receipt.
   Future<RecognizedReceipt> processImage(InputImage inputImage) async {
+    _initializeIfNeeded();
+
     final now = DateTime.now();
     if (_shouldThrottle(now)) return _lastReceipt;
-
     _lastScan = now;
 
     final receipt = await _recognizeReceipt(inputImage, _options);
@@ -117,12 +121,18 @@ final class ReceiptRecognizer {
     return receipt;
   }
 
-  /// Reinitializes the recognizer for a fresh scan session.
-  void init() {
+  /// Clears caches and resets internal state if flagged.
+  void _initializeIfNeeded() {
+    if (!_shouldInitialize) return;
     _initializedScan = null;
     _lastScan = null;
+    _lastReceipt = RecognizedReceipt.empty();
     _optimizer.init();
+    _shouldInitialize = false;
   }
+
+  /// Marks the recognizer for reinitialization on next recognition.
+  void init() => _shouldInitialize = true;
 
   /// Releases all resources used by the recognizer.
   Future<void> close() async {
