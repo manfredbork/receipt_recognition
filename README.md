@@ -117,11 +117,11 @@ final receiptRecognizer = ReceiptRecognizer(
 
 // Process an image Future
 processReceiptImage(InputImage inputImage) async {
-  // 'snapshot' is the current best; final result arrives via onScanComplete
+  // You receive ongoing snapshots from processImage.
+  // A snapshot is final when isValid && isConfirmed;
+  // onScanComplete will fire at that point.
   final snapshot = await receiptRecognizer.processImage(inputImage);
-  // If you prefer using the current snapshot as the final result:
   if (snapshot.isValid && snapshot.isConfirmed) {
-    // snapshot is already final here; you can use it immediately
     debugPrint('Final (via snapshot): ${snapshot.total?.formattedValue}');
   }
 }
@@ -161,17 +161,20 @@ Parameters (keys inside extend/override, or top-level in flat form)
 - tuning: Map<String, dynamic> (override-only)
     - optimizerConfidenceThreshold (int): min combined confidence (0–100).
     - optimizerStabilityThreshold (int): min stability (0–100).
-    - optimizerPrecisionNormal (int): typical grouping capacity.
-    - optimizerPrecisionHigh (int): higher-capacity variant.
+    - optimizerProductWeight (int): weight for product name stability when merging/updating; higher favors consistent
+      names.
+    - optimizerPriceWeight (int): weight for price consistency when merging/updating; higher favors matching prices.
+    - optimizerMaxCacheSize (int): typical grouping capacity.
     - optimizerLoopThreshold (int): stall detection iterations.
-    - optimizerEwmaAlpha (double): smoothing for order learning.
     - optimizerAboveCountDecayThreshold (int): decay threshold for order counts.
-    - optimizerVariantMinSim (double): min similarity for merging variants.
-    - optimizerMinProductSimToMerge (double): min token similarity to merge.
-    - verticalTolerance (int): pixel tolerance for alignment.
-    - totalTolerance (double): amount tolerance when matching totals.
-    - outlierTau, outlierMaxCandidates, outlierLowConfThreshold, outlierMinSamples, outlierSuspectBonus: outlier
-      handling knobs.
+    - optimizerVerticalTolerance (int): pixel tolerance for alignment.
+    - optimizerTotalTolerance (double): amount tolerance when matching totals.
+    - optimizerEwmaAlpha (double): smoothing for order learning.
+    - optimizerUnrecognizedProductName (string) — the default name used when a product line cannot be confidently
+      recognized.
+
+⚠️ Note: Changing tuning parameters directly affects scan behavior and result quality; adjust them only if you know what
+you’re doing. For most users, the defaults provide the best balance of accuracy, stability, and performance.
 
 Merge behavior
 
@@ -236,16 +239,16 @@ final options = ReceiptOptions.fromJsonLike(flat);
 ### 🎥 Advanced Example: Video Feed Integration
 
 For an advanced use case, we provide an example of using this package with a video feed. You can integrate it with a
-camera feed (via a package like `camera`), and continuously scan receipts in real time.
-
-<p style="width:100vh">
-  <img src="screenshots/screenshot1.png" style="width:25vh" alt="Best Practices" />
-  <img src="screenshots/screenshot2.png" style="width:25vh" alt="Supermarket Receipt" />
-  <img src="screenshots/screenshot3.png" style="width:25vh" alt="Smartphone Receipt" />
-</p>
-
-Refer to the **[example app](example/lib/main.dart)** for an implementation that uses live camera data to recognize and
+camera feed (via a package like `camera`), and continuously scan receipts in real time. Refer to the
+**[example app](example/lib/main.dart)** for an implementation that uses live camera data to recognize and
 process receipts as they appear in the frame.
+
+|                                                                      Screenshots                                                                      |
+|:-----------------------------------------------------------------------------------------------------------------------------------------------------:|
+| ![Best Practices](screenshots/screenshot1.png) ![Supermarket Receipt](screenshots/screenshot2.png) ![Smartphone Receipt](screenshots/screenshot3.png) |
+
+Single-shot scans are supported (singleScan = true), but we recommend the video-feed workflow for the best results.
+Continuous frames allow stabilization and merging, which significantly improves recognition quality.
 
 ---
 
@@ -330,9 +333,6 @@ The optimizer:
 4. **Optimization**: Multiple scans are compared and merged for accuracy
 5. **Data Delivery**: Structured receipt data is provided via callbacks
 
-Note: Finalization occurs when the receipt is both valid (calculated total equals detected total) and confirmed
-(stability-based). Otherwise, scanning continues, and you can manually accept nearly complete results.
-
 ### Implementation Status
 
 ```
@@ -354,7 +354,7 @@ Note: Finalization occurs when the receipt is both valid (calculated total equal
 
 Currently, the package has optimized recognition for:
 
-- **English receipts**: Full support for standard formats
+- **English receipts**: Supported for common layouts.
 - **German receipts**: Full support with specialized detection patterns for:
     - German market chains (Aldi, Rewe, Edeka, etc.)
     - German total labels ("Summe", "Gesamt", "Zu zahlen")
@@ -416,7 +416,7 @@ calculated total (from line items) and the detected total. Four validation state
 | ReceiptCompleteness.    | Perfect match between  | 100%                    |
 | complete                | line items and total   |                         |
 +-------------------------+------------------------+-------------------------+
-| ReceiptCompleteness.    | Very close match,      | 95-99%                  |
+| ReceiptCompleteness.    | Very close match,      | default 95%             |
 | nearlyComplete          | acceptable for most    | (configurable)          |
 |                         | applications           |                         |
 +-------------------------+------------------------+-------------------------+
@@ -429,8 +429,7 @@ calculated total (from line items) and the detected total. Four validation state
 +-------------------------+------------------------+-------------------------+
 ```
 
-Note: The current snapshot is already final when both `isValid` and `isConfirmed` are true (in addition to
-`onScanComplete`).
+Note: You receive ongoing snapshots. A snapshot is final when it isValid && isConfirmed; onScanComplete is then fired.
 
 You can track the validation state through the `onScanUpdate` callback:
 
@@ -534,6 +533,8 @@ See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version 
 - [x] Stability-based grouping/merging
 - [ ] Enhanced Android platform integration
 - [ ] Broader international receipt layout support
+- [ ] Extended OCR correction (single-character replacement/removal for common OCR errors)
+- [ ] Unit recognition (e.g., kg, pcs) with price-per-unit parsing and quantity/weight extraction
 
 ---
 

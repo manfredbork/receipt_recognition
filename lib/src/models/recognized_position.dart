@@ -1,7 +1,8 @@
 import 'dart:math';
 
-import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Line item position on a receipt (product + price).
 final class RecognizedPosition {
@@ -96,8 +97,14 @@ final class RecognizedGroup {
   /// Calculates an adaptive confidence for a product name based on similarity to group members.
   Confidence calculateProductConfidence(RecognizedProduct product) {
     if (_members.isEmpty) return Confidence(value: 0);
+
     final scores =
-        _members.map((b) => ratio(product.value, b.product.value)).toList();
+        _members
+            .map(
+              (b) =>
+                  ReceiptNormalizer.similarity(product.value, b.product.value),
+            )
+            .toList();
     if (scores.isEmpty) return Confidence(value: 0);
 
     double total = 0.0, totalSq = 0.0;
@@ -111,7 +118,10 @@ final class RecognizedGroup {
     final stddev = sqrt(max(0.0, variance));
     final weight = stddev < 10 ? 1.0 : (100 - stddev) / 100.0;
 
-    return Confidence(value: (avg * weight).clamp(0, 100).toInt());
+    return Confidence(
+      value: (avg * weight).clamp(0, 100).toInt(),
+      weight: ReceiptRuntime.tuning.optimizerProductWeight,
+    );
   }
 
   /// Calculates a confidence for a price based on numeric similarity.
@@ -119,13 +129,14 @@ final class RecognizedGroup {
     if (_members.isEmpty || price.value == 0) return Confidence(value: 0);
     final scores =
         _members.map((b) {
-          final diff = (price.value - b.price.value).abs();
-          final denom = price.value.abs() + b.price.value.abs();
-          final pctDiff = denom == 0 ? 100.0 : (diff / denom) * 100.0;
-          return (100.0 - pctDiff).clamp(0, 100).toInt();
+          final equalPrice = price.formattedValue == b.price.formattedValue;
+          return equalPrice ? 100 : 0;
         }).toList();
     final avg = scores.reduce((a, b) => a + b) / scores.length;
-    return Confidence(value: avg.toInt());
+    return Confidence(
+      value: avg.toInt(),
+      weight: ReceiptRuntime.tuning.optimizerPriceWeight,
+    );
   }
 
   /// Removes a leading amount pattern from [postfixText], returning the remainder.
@@ -142,7 +153,9 @@ final class RecognizedGroup {
 
   /// All product texts for normalization.
   List<String> get alternativeTexts =>
-      _members.map((p) => p.product.text).toList();
+      _members
+          .map((p) => ReceiptNormalizer.normalizeTail(p.product.text))
+          .toList();
 
   /// All product postfix texts (amount prefix removed) for categorization.
   List<String> get alternativePostfixTexts =>

@@ -106,8 +106,12 @@ final class RecognizedTotalLabel extends RecognizedEntity<String> {
   /// Creates a total label entity from [value] and [line].
   const RecognizedTotalLabel({required super.value, required super.line});
 
+  /// Returns a copy with updated fields.
+  RecognizedTotalLabel copyWith({String? value, TextLine? line}) =>
+      RecognizedTotalLabel(value: value ?? this.value, line: line ?? this.line);
+
   @override
-  String format(String value) => value;
+  String format(String value) => value.toUpperCase();
 }
 
 /// Label for the sum (e.g., "Total", "Summe").

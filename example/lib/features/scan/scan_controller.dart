@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Controller that orchestrates live scanning and exposes scan state.
 class ScanController extends ChangeNotifier {
   late final ReceiptRecognizer _recognizer;
+  final int _nearlyCompleteThreshold = 90;
 
   RecognizedScanProgress _progress = RecognizedScanProgress.empty();
   RecognizedReceipt _lastReceipt;
@@ -11,33 +13,43 @@ class ScanController extends ChangeNotifier {
   bool _busy = false;
   bool _manuallyAccepted = false;
 
+  /// Creates a controller and wires recognition callbacks.
   ScanController() : _lastReceipt = RecognizedReceipt.empty() {
     _recognizer = ReceiptRecognizer(
+      nearlyCompleteThreshold: _nearlyCompleteThreshold,
       onScanUpdate: _onScanUpdate,
       onScanComplete: _onScanComplete,
       onScanTimeout: _onScanTimeout,
     );
   }
 
-  RecognizedScanProgress get progress => _progress;
-
+  /// Current best recognized receipt snapshot.
   RecognizedReceipt get receipt => _lastReceipt;
 
+  /// Current frame delta positions (added and updated).
   List<RecognizedPosition> get positions =>
       _progress.addedPositions + _progress.updatedPositions;
 
+  /// Threshold at which the result is considered nearly complete.
+  int get nearlyCompleteThreshold => _nearlyCompleteThreshold;
+
+  /// Highest observed completeness percentage.
   int get bestPercent => _bestPercent;
 
+  /// Indicates whether processing is ongoing.
   bool get isBusy => _busy;
 
+  /// True when the receipt is finalized or manually accepted.
   bool get isAccepted =>
       (receipt.isValid && receipt.isConfirmed) || _manuallyAccepted;
 
+  /// Resets the best completeness percentage.
   void resetBestPercent() {
     _bestPercent = 0;
     notifyListeners();
   }
 
+  /// Processes a single input image and updates state.
   Future<void> processImage(InputImage image) async {
     if (isBusy || isAccepted) return;
 
@@ -53,6 +65,7 @@ class ScanController extends ChangeNotifier {
     }
   }
 
+  /// Accepts the current receipt and marks scanning as complete.
   Future<void> acceptCurrent() async {
     _lastReceipt = _recognizer.acceptReceipt(_lastReceipt);
     _bestPercent = 100;
@@ -61,8 +74,10 @@ class ScanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Disposes underlying recognizer resources asynchronously.
   Future<void> disposeAsync() => _recognizer.close();
 
+  /// Callback: updates progress and merges the latest snapshot.
   void _onScanUpdate(RecognizedScanProgress p) {
     if (isAccepted) return;
     _progress = p;
@@ -74,6 +89,7 @@ class ScanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Callback: sets the final receipt when scanning completes.
   void _onScanComplete(RecognizedReceipt r) {
     if (isAccepted) return;
     _lastReceipt = r;
@@ -81,6 +97,7 @@ class ScanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Callback: accepts the current snapshot on timeout.
   void _onScanTimeout() {
     acceptCurrent();
   }

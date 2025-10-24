@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Screen that manages live scanning and shows camera preview with overlays.
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
 
@@ -39,23 +40,30 @@ class _ScanScreenState extends State<ScanScreen>
     super.dispose();
   }
 
+  /// Handles each incoming input image from the live feed.
   Future<void> _handleInputImage(InputImage input) async {
-    if (_ctrl.isAccepted) return;
-
+    if (await _guardIfAccepted()) return;
     await _ctrl.processImage(input);
-
-    if (_ctrl.isAccepted) {
-      await stopLiveFeed();
-      if (!mounted) return;
-      _goAcceptedRoute();
-    }
   }
 
+  /// Stops scanning and navigates away if the receipt is accepted.
+  Future<bool> _guardIfAccepted() async {
+    if (_ctrl.isAccepted) {
+      if (!mounted) return false;
+      await stopLiveFeed();
+      _goAcceptedRoute();
+      return true;
+    }
+    return false;
+  }
+
+  /// Navigates to the result screen with the recognized receipt.
   void _goAcceptedRoute() {
     ReceiptLogger.logReceipt(_ctrl.receipt);
     GoRouter.of(context).goNamed('result', extra: _ctrl.receipt);
   }
 
+  /// Calculates the preview image size in portrait orientation.
   Size? _previewImageSizePortrait() {
     final cc = cameraController;
     if (cc == null || !cc.value.isInitialized) return null;
@@ -70,14 +78,14 @@ class _ScanScreenState extends State<ScanScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (context, _) {
-          final cc = cameraController;
-          final pct = _ctrl.bestPercent;
-          return Stack(
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final cc = cameraController;
+        final pct = _ctrl.bestPercent;
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
             fit: StackFit.expand,
             children: [
               if (cc != null && cc.value.isInitialized) ...[
@@ -148,24 +156,34 @@ class _ScanScreenState extends State<ScanScreen>
                 ),
               ),
             ],
-          );
-        },
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          transitionBuilder:
-              (child, anim) => FadeTransition(opacity: anim, child: child),
-          child: FloatingActionButton.extended(
-            key: const ValueKey('accept'),
-            onPressed: () => _ctrl.acceptCurrent(),
-            icon: const Icon(Icons.done),
-            label: const Text('Manually Accept'),
           ),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+          floatingActionButton:
+              pct >= _ctrl.nearlyCompleteThreshold
+                  ? const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: _AcceptFab(),
+                  )
+                  : null,
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerFloat,
+        );
+      },
+    );
+  }
+}
+
+/// Floating action button to manually accept a nearly complete receipt.
+class _AcceptFab extends StatelessWidget {
+  const _AcceptFab();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.findAncestorStateOfType<_ScanScreenState>()!;
+    return FloatingActionButton.extended(
+      key: const ValueKey('accept'),
+      onPressed: state._ctrl.acceptCurrent,
+      icon: const Icon(Icons.done),
+      label: const Text('Manually Accept'),
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
@@ -160,18 +162,36 @@ class RecognizedReceipt {
       calculatedTotal.formattedValue == total?.formattedValue &&
       calculatedTotal.value > 0.0;
 
-  /// True if the average group size exceeds one quarter of the configured precision.
-  ///
-  /// Uses `ReceiptRuntime.tuning.optimizerPrecisionHigh` to avoid hardcoding.
+  /// True if the receipt has no parsed entities.
+  bool get isEmpty =>
+      (entities == null || entities!.isEmpty) &&
+      positions.isEmpty &&
+      total == null &&
+      store == null &&
+      purchaseDate == null &&
+      (bounds == null || bounds!.boundingBox == Rect.zero);
+
+  /// True if a quorum of positions meet size, stability, and confidence gates.
   bool get isConfirmed {
-    final lengths = positions.map((p) => p.group?.members.length ?? 0).toList();
-    if (lengths.isEmpty) return false;
+    final t = ReceiptRuntime.tuning;
+    final half = t.optimizerMaxCacheSize ~/ 2;
+    final minSize = half < 4 ? 4 : (half > 8 ? 8 : half);
+    final confThr = (t.optimizerConfidenceThreshold - 5).clamp(0, 100);
+    final stabThr = t.optimizerStabilityThreshold;
+    final passing =
+        positions.where((p) {
+          final enoughMembers = (p.group?.members.length ?? 0) >= minSize;
+          final enoughStability = p.stability >= stabThr;
+          final enoughConfidence = p.confidence >= confThr;
+          return enoughMembers && enoughStability && enoughConfidence;
+        }).length;
 
-    final total = lengths.fold<int>(0, (a, b) => a + b);
-    final avg = total ~/ lengths.length;
+    final need =
+        positions.length <= 3
+            ? positions.length
+            : (positions.length * 0.8).ceil();
 
-    final quarter = ReceiptRuntime.tuning.optimizerPrecisionHigh ~/ 4;
-    return avg >= quarter;
+    return passing >= need;
   }
 }
 

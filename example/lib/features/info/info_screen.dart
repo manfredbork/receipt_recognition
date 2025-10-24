@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+/// Intro screen that explains the demo and links to the scanner/result views.
 class InfoScreen extends StatelessWidget {
   const InfoScreen({super.key});
 

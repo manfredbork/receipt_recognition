@@ -5,6 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Entry point that bootstraps the example Flutter application.
+void main() {
+  runApp(const ExampleApp());
+}
+
+/// Global router for app navigation between info, scan, and result screens.
 final _router = GoRouter(
   initialLocation: '/info',
   routes: [
@@ -28,10 +34,7 @@ final _router = GoRouter(
   ],
 );
 
-void main() {
-  runApp(const ExampleApp());
-}
-
+/// Root widget that configures routing and app theme.
 class ExampleApp extends StatelessWidget {
   const ExampleApp({super.key});
 

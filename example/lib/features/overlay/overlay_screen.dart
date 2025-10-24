@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Overlay that draws recognized receipt fields and positions on top of the preview.
 class OverlayScreen extends StatelessWidget {
   final List<RecognizedPosition> positions;
   final RecognizedStore? store;
@@ -24,7 +25,7 @@ class OverlayScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _PositionPainter(
+      painter: _OverlayPainter(
         positions: positions,
         imageSize: imageSize,
         screenSize: screenSize,
@@ -37,7 +38,8 @@ class OverlayScreen extends StatelessWidget {
   }
 }
 
-class _PositionPainter extends CustomPainter {
+/// Painter that renders bounding boxes and labels for recognized elements.
+class _OverlayPainter extends CustomPainter {
   final List<RecognizedPosition> positions;
   final RecognizedStore? store;
   final RecognizedTotalLabel? totalLabel;
@@ -46,7 +48,7 @@ class _PositionPainter extends CustomPainter {
   final Size imageSize;
   final Size screenSize;
 
-  _PositionPainter({
+  _OverlayPainter({
     required this.positions,
     required this.imageSize,
     required this.screenSize,
@@ -88,31 +90,31 @@ class _PositionPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paintPosition =
         Paint()
-          ..color = Colors.orange.withAlpha(192)
+          ..color = Colors.orange.withAlpha(224)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
     final paintStore =
         Paint()
-          ..color = Colors.blueAccent.withAlpha(192)
+          ..color = Colors.blueAccent.withAlpha(224)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
     final paintTotalLabel =
         Paint()
-          ..color = Colors.deepPurpleAccent.withAlpha(192)
+          ..color = Colors.deepPurpleAccent.withAlpha(224)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
     final paintTotal =
         Paint()
-          ..color = Colors.green.withAlpha(192)
+          ..color = Colors.green.withAlpha(224)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
     final paintPurchaseDate =
         Paint()
-          ..color = Colors.amber.withAlpha(192)
+          ..color = Colors.amber.withAlpha(224)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
@@ -127,25 +129,25 @@ class _PositionPainter extends CustomPainter {
       canvas.drawRect(rectPrice, paintPosition);
     }
 
-    if (store != null) {
+    if (store != null && store!.line.boundingBox != Rect.zero) {
       final r = _scale(store!.line.boundingBox);
       _fillHatched(canvas, r, Colors.blueAccent);
       canvas.drawRect(r, paintStore);
     }
 
-    if (totalLabel != null) {
+    if (totalLabel != null && totalLabel!.line.boundingBox != Rect.zero) {
       final r = _scale(totalLabel!.line.boundingBox);
       _fillHatched(canvas, r, Colors.deepPurpleAccent);
       canvas.drawRect(r, paintTotalLabel);
     }
 
-    if (total != null) {
+    if (total != null && total!.line.boundingBox != Rect.zero) {
       final r = _scale(total!.line.boundingBox);
       _fillHatched(canvas, r, Colors.green);
       canvas.drawRect(r, paintTotal);
     }
 
-    if (purchaseDate != null) {
+    if (purchaseDate != null && purchaseDate!.line.boundingBox != Rect.zero) {
       final r = _scale(purchaseDate!.line.boundingBox);
       _fillHatched(canvas, r, Colors.amber);
       canvas.drawRect(r, paintPurchaseDate);
@@ -159,7 +161,7 @@ class _PositionPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PositionPainter old) =>
+  bool shouldRepaint(covariant _OverlayPainter old) =>
       old.positions != positions ||
       old.imageSize != imageSize ||
       old.screenSize != screenSize ||

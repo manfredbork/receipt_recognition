@@ -20,11 +20,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(
-      receipt,
-      ReceiptOptions.defaults(),
-      test: true,
-    );
+    final result = optimizer.optimize(receipt, ReceiptOptions.defaults());
 
     expect(result.positions.length, equals(2));
     expect(result.total?.value, result.calculatedTotal.value);
@@ -36,11 +32,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(
-      receipt,
-      ReceiptOptions.defaults(),
-      test: true,
-    );
+    final result = optimizer.optimize(receipt, ReceiptOptions.defaults());
 
     expect(result.positions.length, equals(2));
     expect(result.total?.value, result.calculatedTotal.value);
@@ -52,11 +44,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(
-      receipt,
-      ReceiptOptions.defaults(),
-      test: true,
-    );
+    final result = optimizer.optimize(receipt, ReceiptOptions.defaults());
 
     expect(result.positions.length, equals(2));
     expect(result.total?.value, result.calculatedTotal.value);
@@ -68,11 +56,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(
-      receipt,
-      ReceiptOptions.defaults(),
-      test: true,
-    );
+    final result = optimizer.optimize(receipt, ReceiptOptions.defaults());
 
     expect(result.positions.length, equals(2));
     expect(result.total?.value, result.calculatedTotal.value);
@@ -84,11 +68,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(
-      receipt,
-      ReceiptOptions.defaults(),
-      test: true,
-    );
+    final result = optimizer.optimize(receipt, ReceiptOptions.defaults());
 
     expect(result.positions.length, equals(2));
     expect(result.total?.value, result.calculatedTotal.value);
@@ -100,11 +80,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(
-      receipt,
-      ReceiptOptions.defaults(),
-      test: true,
-    );
+    final result = optimizer.optimize(receipt, ReceiptOptions.defaults());
 
     expect(result.positions.length, equals(1));
     expect(result.total?.value, result.calculatedTotal.value);
@@ -116,11 +92,7 @@ void main() {
     );
     final optimizer = ReceiptOptimizer();
 
-    final result = optimizer.optimize(
-      receipt,
-      ReceiptOptions.defaults(),
-      test: true,
-    );
+    final result = optimizer.optimize(receipt, ReceiptOptions.defaults());
 
     expect(result.positions.length, equals(1));
     expect(result.total?.value, result.calculatedTotal.value);
@@ -151,11 +123,7 @@ void main() {
     final before = receipt.purchaseDate?.value;
 
     final optimizer = ReceiptOptimizer();
-    final result = optimizer.optimize(
-      receipt,
-      ReceiptOptions.defaults(),
-      test: true,
-    );
+    final result = optimizer.optimize(receipt, ReceiptOptions.defaults());
 
     expect(result.purchaseDate, isNotNull);
     expect(result.purchaseDate!.value, equals(before));

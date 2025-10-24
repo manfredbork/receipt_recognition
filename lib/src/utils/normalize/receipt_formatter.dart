@@ -114,7 +114,7 @@ final class ReceiptFormatter {
     s = s.replaceAll(_reNotNum, '');
 
     final lastDot = s.lastIndexOf('.');
-    if (lastDot != -1) {
+    if (lastDot >= 0) {
       final before = s.substring(0, lastDot).replaceAll('.', '');
       final after = s.substring(lastDot + 1);
       s = '$before.$after';

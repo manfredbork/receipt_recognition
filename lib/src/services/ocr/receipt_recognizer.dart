@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
@@ -9,22 +11,49 @@ import 'package:receipt_recognition/src/utils/configuration/index.dart';
 ///
 /// Coordinates OCR, parsing, optimization, validation, and progress callbacks.
 final class ReceiptRecognizer {
+  /// OCR engine used to extract text from images.
   final TextRecognizer _textRecognizer;
+
+  /// Aggregator that stabilizes and optimizes recognition across frames.
   final Optimizer _optimizer;
 
-  /// Parser options.
+  /// Tunable options for OCR, parsing, and validation behavior.
   final ReceiptOptions _options;
 
+  /// If true, optimizations assume a single-frame scan (no cross-frame stabilization).
+  final bool _singleScan;
+
+  /// Percentage at/above which a receipt is treated as nearly complete.
   final int _nearlyCompleteThreshold;
+
+  /// Minimum time gap enforced between consecutive scans (throttle).
   final Duration _scanInterval;
+
+  /// Maximum duration allowed for a scan session before timing out.
   final Duration _scanTimeout;
+
+  /// Optional delay before emitting a completed receipt result.
   final Duration _scanCompleteDelay;
+
+  /// Callback invoked when a scan session reaches timeout.
   final VoidCallback? _onScanTimeout;
+
+  /// Callback invoked on intermediate recognition/validation updates.
   final Function(RecognizedScanProgress)? _onScanUpdate;
+
+  /// Callback invoked when a receipt is finalized and accepted.
   final Function(RecognizedReceipt)? _onScanComplete;
 
+  /// Whether a full reinit is needed.
+  bool _shouldInitialize = false;
+
+  /// Timestamp when the current scan session was initialized.
   DateTime? _initializedScan;
+
+  /// Timestamp of the most recent scan attempt.
   DateTime? _lastScan;
+
+  /// Latest recognized/optimized receipt snapshot.
   RecognizedReceipt _lastReceipt;
 
   /// Creates a receipt recognizer with configurable parameters and callbacks.
@@ -33,21 +62,20 @@ final class ReceiptRecognizer {
     Optimizer? optimizer,
     TextRecognitionScript script = TextRecognitionScript.latin,
     ReceiptOptions? options,
-    bool highPrecision = false,
-    @Deprecated('No longer used; auto-completion is handled internally.')
     bool singleScan = false,
     @Deprecated('No longer used; stability/confirmation rules replace it.')
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
-    Duration scanInterval = const Duration(milliseconds: 100),
+    Duration scanInterval = const Duration(milliseconds: 50),
     Duration scanTimeout = const Duration(seconds: 30),
-    Duration scanCompleteDelay = const Duration(milliseconds: 100),
+    Duration scanCompleteDelay = Duration.zero,
     VoidCallback? onScanTimeout,
     Function(RecognizedScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(),
        _options = options ?? ReceiptOptions.defaults(),
+       _singleScan = singleScan,
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
@@ -59,13 +87,20 @@ final class ReceiptRecognizer {
 
   /// Processes an image and returns a recognized receipt.
   Future<RecognizedReceipt> processImage(InputImage inputImage) async {
+    _initializeIfNeeded();
+
     final now = DateTime.now();
     if (_shouldThrottle(now)) return _lastReceipt;
-
     _lastScan = now;
 
     final receipt = await _recognizeReceipt(inputImage, _options);
-    final optimized = _optimizer.optimize(receipt, _options);
+
+    final optimized = _optimizer.optimize(
+      receipt,
+      _options,
+      singleScan: _singleScan,
+    );
+
     final validation = _validateReceipt(optimized);
     final accepted = _handleValidationResult(now, optimized, validation);
 
@@ -81,17 +116,23 @@ final class ReceiptRecognizer {
 
   /// Manually accepts a receipt and resets internal state.
   RecognizedReceipt acceptReceipt(RecognizedReceipt receipt) {
+    _optimizer.accept(receipt);
     init();
     return receipt;
   }
 
-  /// Reinitializes the recognizer for a fresh scan session.
-  void init() {
+  /// Clears caches and resets internal state if flagged.
+  void _initializeIfNeeded() {
+    if (!_shouldInitialize) return;
     _initializedScan = null;
     _lastScan = null;
     _lastReceipt = RecognizedReceipt.empty();
     _optimizer.init();
+    _shouldInitialize = false;
   }
+
+  /// Marks the recognizer for reinitialization on next recognition.
+  void init() => _shouldInitialize = true;
 
   /// Releases all resources used by the recognizer.
   Future<void> close() async {

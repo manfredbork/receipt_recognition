@@ -93,7 +93,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   /// Percentage frequency of the most common alternative text.
   int get textConsensusRatio {
     final alts = alternativeTexts;
-    if (alts.isEmpty) return 0;
+    if (alts.isEmpty) return 100;
     final counts = <String, int>{};
     for (final t in alts) {
       counts[t] = (counts[t] ?? 0) + 1;

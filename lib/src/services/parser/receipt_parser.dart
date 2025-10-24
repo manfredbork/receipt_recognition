@@ -1,16 +1,17 @@
+import 'dart:math';
 import 'dart:ui';
 
-import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
-import 'package:receipt_recognition/src/utils/geometry/index.dart';
 import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Parses OCR output into a structured receipt by extracting entities, ordering by
 /// vertical position, filtering outliers, and assembling positions, total, store, and bounds.
+///
+/// Use [ReceiptTextProcessor.processText] to run this off the UI thread.
 final class ReceiptParser {
   /// Center-Y of a TextLine.
   static double _cyL(TextLine l) => l.boundingBox.center.dy;
@@ -29,6 +30,9 @@ final class ReceiptParser {
 
   /// Bottom Y of a TextLine.
   static double _bottomL(TextLine l) => l.boundingBox.bottom;
+
+  /// Height of an entity’s TextLine.
+  static double _heightL(TextLine l) => l.boundingBox.height;
 
   /// Center-Y of an entity’s TextLine.
   static double _cy(RecognizedEntity e) => _cyL(e.line);
@@ -69,14 +73,27 @@ final class ReceiptParser {
     return c != 0 ? c : _leftL(a).compareTo(_leftL(b));
   }
 
-  /// Matches numeric dates in the format "01.09.2025" or "1/9/25" with a consistent separator.
-  static final RegExp _dateDayMonthYearNumeric = RegExp(
-    r'\b(\d{1,2}([./-])\d{1,2}\2\d{2,4})\b',
+  /// Converts a [RecognizedTotal] into a [RecognizedAmount] with shared value and line.
+  static RecognizedAmount _toAmount(RecognizedTotal total) =>
+      RecognizedAmount(value: total.value, line: total.line);
+
+  /// Converts a [RecognizedAmount] into a [RecognizedTotal] with shared value and line.
+  static RecognizedTotal _toTotal(RecognizedAmount amount) =>
+      RecognizedTotal(value: amount.value, line: amount.line);
+
+  /// ISO date (YYYY-MM-DD) directly before a time like "T08:50"; accepts unicode dashes.
+  static final RegExp _dateIsoYMD = RegExp(
+    r'(?<!\d)(\d{4}([-–—])\d{1,2}\2\d{1,2})(?=T\d{1,2}[:.]\d{2}(?::\d{2})?(?:[.,]\d+)?\b)',
   );
 
-  /// Matches numeric dates in the format "2025-09-01" or "2025/9/1" with a consistent separator.
+  /// Numeric Y-M-D; accepts -, –, —, ., /; allow time after or a non-alnum/end.
   static final RegExp _dateYearMonthDayNumeric = RegExp(
-    r'\b(\d{4}([./-])\d{1,2}\2\d{1,2})\b',
+    r'(?<!\d)(\d{4}([./\-–—])\d{1,2}\2\d{1,2})(?:(?=[T\s]\d{1,2}[:.]\d{2})|(?![0-9A-Za-z]))',
+  );
+
+  /// Numeric D-M-Y; accepts -, –, —, ., /; allow time after or a non-alnum/end.
+  static final RegExp _dateDayMonthYearNumeric = RegExp(
+    r'(?<!\d)(\d{1,2}([./\-–—])\d{1,2}\2\d{2,4})(?:(?=\s+\d{1,2}[:.]\d{2})|(?![0-9A-Za-z]))',
   );
 
   /// Matches English dates like "1.September 25", "1. September 2025", or "1 September 2025".
@@ -117,9 +134,6 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  /// Effective geometric tolerance from runtime.
-  static int get _tol => ReceiptRuntime.tuning.verticalTolerance;
-
   /// Shorthand for the active options provided by [ReceiptRuntime].
   static ReceiptOptions get _opts => ReceiptRuntime.options;
 
@@ -131,6 +145,7 @@ final class ReceiptParser {
   ) {
     return ReceiptRuntime.runWithOptions(options, () {
       final lines = _convertText(text);
+
       lines.sort(_cmpCyThenCx);
       ReceiptLogger.log('parse.start', {'lines': lines.length});
 
@@ -141,29 +156,37 @@ final class ReceiptParser {
         'amounts': parsed.whereType<RecognizedAmount>().length,
       });
 
-      final prunedU = _filterUnknownOutliers(parsed);
+      final prunedUnknowns = _filterUnknownOutliers(parsed);
       ReceiptLogger.log('filter.unknown.outliers', {
         'before': parsed.whereType<RecognizedUnknown>().length,
-        'after': prunedU.whereType<RecognizedUnknown>().length,
+        'after': prunedUnknowns.whereType<RecognizedUnknown>().length,
       });
 
-      final prunedA = _filterAmountOutliers(prunedU);
+      final prunedAmounts = _filterAmountOutliers(prunedUnknowns);
       ReceiptLogger.log('filter.amount.outliers', {
-        'before': prunedU.whereType<RecognizedAmount>().length,
-        'after': prunedA.whereType<RecognizedAmount>().length,
+        'before': prunedUnknowns.whereType<RecognizedAmount>().length,
+        'after': prunedAmounts.whereType<RecognizedAmount>().length,
       });
 
-      final filtered = _filterIntermediaryEntities(prunedA);
+      final prunedIntermediary = _filterIntermediaryEntities(prunedAmounts);
       ReceiptLogger.log('filter.intermediary', {
-        'before': prunedA.length,
-        'after': filtered.length,
+        'before': prunedAmounts.length,
+        'after': prunedIntermediary.length,
       });
 
-      return _buildReceipt(filtered);
+      final prunedBelow = _filterBelowTotalAndLabel(prunedIntermediary);
+      ReceiptLogger.log('filter.below_total.summary', {
+        'before': prunedIntermediary.length,
+        'after': prunedBelow.length,
+      });
+
+      return _buildReceipt(prunedBelow);
     });
   }
 
   /// Flattens text blocks to lines sorted by top Y (and left X).
+  ///
+  /// Returns a new list; does not mutate the input [text].
   static List<TextLine> _convertText(RecognizedText text) {
     return text.blocks.expand((block) => block.lines).toList()
       ..sort(_cmpTopThenLeft);
@@ -174,20 +197,22 @@ final class ReceiptParser {
     if (lines.isEmpty) return <RecognizedEntity>[];
 
     final parsed = <RecognizedEntity>[];
-    final rect = _extractRectFromLines(lines);
-    final median = _cxR(rect);
 
+    RecognizedBounds? detectedBounds;
     RecognizedStore? detectedStore;
     RecognizedTotalLabel? detectedTotalLabel;
     RecognizedTotal? detectedTotal;
     RecognizedAmount? detectedAmount;
 
-    _applyPurchaseDate(lines, parsed);
-    _applyBoundingBox(lines, parsed);
+    if (_applyBounds(lines, parsed)) {
+      detectedBounds = parsed.last as RecognizedBounds;
+    }
+
+    final median = _cxR(detectedBounds?.boundingBox ?? Rect.zero);
 
     for (final line in lines) {
       if (_shouldStopIfTotalConfirmed(line, parsed, detectedTotal)) break;
-      if (_shouldStopIfStopword(line)) break;
+      if (_shouldStopIfStopWord(line)) break;
       if (_shouldIgnoreLine(line)) continue;
       if (_shouldSkipLine(line, detectedTotalLabel)) continue;
 
@@ -207,13 +232,7 @@ final class ReceiptParser {
         continue;
       }
 
-      if (_tryParseTotal(
-        line,
-        parsed,
-        median,
-        detectedTotalLabel,
-        detectedTotal,
-      )) {
+      if (_tryParseTotal(line, parsed, median, detectedTotalLabel)) {
         detectedTotal = parsed.last as RecognizedTotal;
         continue;
       }
@@ -226,6 +245,8 @@ final class ReceiptParser {
       if (_tryParseUnknown(line, parsed, median)) continue;
     }
 
+    _applyPurchaseDate(lines, parsed);
+
     return parsed;
   }
 
@@ -235,7 +256,19 @@ final class ReceiptParser {
     RecognizedTotalLabel? detectedTotalLabel,
   ) {
     if (detectedTotalLabel == null) return false;
-    return _cyL(line) > _cyL(detectedTotalLabel.line) + _tol;
+
+    final skip =
+        _cyL(line) >
+        _cyL(detectedTotalLabel.line) + _heightL(detectedTotalLabel.line) * pi;
+
+    ReceiptLogger.log('guard.skip_line', {
+      'skip': skip,
+      'line.cy': _cyL(line),
+      'label.cy': _cyL(detectedTotalLabel.line),
+      'label.h': _heightL(detectedTotalLabel.line),
+    });
+
+    return skip;
   }
 
   /// Returns true if the line matches ignore keywords.
@@ -256,81 +289,89 @@ final class ReceiptParser {
     if (total == null) return false;
     final amounts = parsed.whereType<RecognizedAmount>().toList();
     if (amounts.isEmpty) return false;
-    final calculatedTotal = CalculatedTotal(
-      value: amounts.fold(0, (a, b) => a + b.value),
-    );
-    return total.formattedValue == calculatedTotal.formattedValue;
+
+    final sum = amounts.fold<double>(0, (a, b) => a + b.value);
+    final formattedSum = CalculatedTotal(value: sum).formattedValue;
+
+    final stop = total.formattedValue == formattedSum;
+
+    ReceiptLogger.log('guard.stop_if_total_confirmed', {
+      'stop': stop,
+      'declared.total': total.formattedValue,
+      'sum.formatted': formattedSum,
+      'count.amounts': amounts.length,
+    });
+
+    return stop;
   }
 
   /// Returns `true` if the line matches a configured stop keyword.
   /// Used to terminate parsing once a footer or end-of-receipt marker is seen.
-  static bool _shouldStopIfStopword(TextLine line) =>
+  static bool _shouldStopIfStopWord(TextLine line) =>
       _opts.stopKeywords.hasMatch(line.text);
 
-  /// Fuzzy score for detecting a label *inside* a longer line.
-  /// Use the max of partialRatio and tokenSetRatio to handle substrings and word shuffles.
-  static int _scoreFuzzy(String line, String label) {
-    final p = partialRatio(line, label);
-    final ts = tokenSetRatio(line, label);
-    return p > ts ? p : ts;
-  }
-
-  /// Tries to detect a total label using fuzzy matching against configured synonyms.
-  ///
-  /// Picks the best matching label on the current [line] and, if it clears the
-  /// adaptive threshold, appends a [RecognizedTotalLabel] to [parsed].
-  /// Returns `true` on success, `false` otherwise.
+  /// Detects a total label on [line] via fuzzy match and appends it to [parsed]; returns true if added.
   static bool _tryParseTotalLabel(
     TextLine line,
     List<RecognizedEntity> parsed,
     RecognizedTotalLabel? totalLabel,
   ) {
     if (totalLabel != null || _opts.totalLabels.mapping.isEmpty) return false;
+    final label = _findTotalLabelLike(line.text);
+    final canonical = _opts.totalLabels.mapping[label] ?? label;
+    if (canonical != null) {
+      parsed.add(RecognizedTotalLabel(line: line, value: canonical));
+    }
+    return canonical != null;
+  }
+
+  /// Returns true if [text] fuzzy-matches any configured total label above the adaptive threshold.
+  static bool _isTotalLabelLike(String text) {
+    return _findTotalLabelLike(text) != null;
+  }
+
+  /// Best-match total label key for [text] using normalized similarity + adaptive threshold, or null if none.
+  static String? _findTotalLabelLike(String text) {
     int thr(String label) => _adaptiveThreshold(label);
-    String text = ReceiptFormatter.trim(line.text).toLowerCase();
     String? bestLabel;
     int bestScore = 0;
     for (final label in _opts.totalLabels.mapping.keys) {
-      final s = _scoreFuzzy(text, label);
-      if (s > bestScore) {
+      final s = ReceiptNormalizer.similarity(text.toLowerCase(), label);
+      if (s > bestScore && text.length >= label.length) {
         bestScore = s;
         bestLabel = label;
       }
     }
-    if (bestLabel == null || bestScore < thr(bestLabel)) return false;
-    final canonical = _opts.totalLabels.mapping[bestLabel] ?? bestLabel;
-    parsed.add(RecognizedTotalLabel(line: line, value: canonical));
-    return true;
+    if (bestLabel == null || bestScore < thr(bestLabel)) return null;
+    return bestLabel;
   }
 
-  /// Tries to parse the total amount on the same or nearby line after a detected label.
-  ///
-  /// When a total label is known, this attempts to parse an amount from [line].
-  /// If successful, it promotes the closest [RecognizedAmount] to a [RecognizedTotal]
-  /// and prunes trailing entities (single-pass selection). Returns `true` if a total
-  /// is produced; otherwise `false`.
+  /// Finds the amount nearest to [totalLabel] and marks it as [RecognizedTotal].
+  /// Adds it to [parsed] and returns `true` if successful.
   static bool _tryParseTotal(
     TextLine line,
     List<RecognizedEntity> parsed,
     double median,
     RecognizedTotalLabel? totalLabel,
-    RecognizedTotal? total,
   ) {
-    if (totalLabel == null || total != null) return false;
+    if (totalLabel == null) return false;
     if (_tryParseAmount(line, parsed, median)) {
       final amounts = parsed.whereType<RecognizedAmount>().toList();
-      final total = _findClosestTotalAmount(totalLabel, amounts);
-      final index = parsed.indexWhere((e) => e == total);
-      if (total != null && index > -1) {
-        parsed[index] = RecognizedTotal(
-          value: parsed[index].value,
-          line: parsed[index].line,
+      final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
+      if (closestAmount == null) {
+        parsed.removeLast();
+        return false;
+      } else {
+        final i = parsed.indexWhere((e) => e is RecognizedTotal);
+        if (i >= 0) {
+          parsed[i] = _toAmount(parsed[i] as RecognizedTotal);
+        }
+        parsed.removeWhere(
+          (e) => e is RecognizedAmount && identical(e, closestAmount),
         );
-        parsed.removeRange(index + 1, parsed.length);
+        parsed.add(_toTotal(closestAmount));
         return true;
       }
-      parsed.removeLast();
-      return false;
     }
     return false;
   }
@@ -358,8 +399,7 @@ final class ReceiptParser {
     double median,
   ) {
     final amount = _amount.stringMatch(line.text);
-    if (amount == null) return false;
-    if (_cxL(line) <= median - _tol) return false;
+    if (amount == null || _cxL(line) <= median) return false;
     final value = double.parse(ReceiptFormatter.normalizeAmount(amount));
     parsed.add(RecognizedAmount(line: line, value: value));
     return true;
@@ -378,12 +418,17 @@ final class ReceiptParser {
   }
 
   /// Appends an aggregate (axis-aligned) receipt bounding box entity derived from all lines.
-  static bool _applyBoundingBox(
+  static bool _applyBounds(
     List<TextLine> lines,
     List<RecognizedEntity> parsed,
   ) {
     if (lines.isEmpty) return false;
-    final line = ReceiptTextLine.fromRect(_extractRectFromLines(lines));
+    final corners = _extractPointsFromLines(lines);
+    final angle = _estimateSkewFromCorners(corners);
+    final line = ReceiptTextLine.fromRect(
+      _extractRectFromLines(lines),
+      angle: angle,
+    );
     parsed.add(RecognizedBounds(line: line, value: line.boundingBox));
     return true;
   }
@@ -410,6 +455,21 @@ final class ReceiptParser {
     return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
+  /// Returns all corner points from each line's bounding polygon.
+  /// Uses TextLine.cornerPoints directly. Returns an empty list if [lines] is empty.
+  static List<Point<int>> _extractPointsFromLines(List<TextLine> lines) {
+    if (lines.isEmpty) return const <Point<int>>[];
+
+    final pts = <Point<int>>[];
+    for (final l in lines) {
+      final corners = l.cornerPoints;
+      for (final p in corners) {
+        pts.add(Point<int>(p.x, p.y));
+      }
+    }
+    return pts;
+  }
+
   /// Extracts and adds purchase date to the parsed entities if found in the text lines.
   static bool _applyPurchaseDate(
     List<TextLine> lines,
@@ -421,41 +481,43 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Extracts the first purchase date as a UTC `DateTime` placed directly in `value`,
-  /// using the class-level `_date*` regex patterns (numeric and EN/DE month-name forms).
+  /// Finds the most prominent date: try ISO first, then YMD/DMY, then name-month; use all matches.
   static RecognizedPurchaseDate? _extractDateFromLines(List<TextLine> lines) {
     final patterns = [
+      _dateIsoYMD,
       _dateYearMonthDayNumeric,
       _dateDayMonthYearNumeric,
-      _dateDayMonthYearEn,
       _dateMonthDayYearEn,
+      _dateDayMonthYearEn,
       _dateDayMonthYearDe,
     ];
 
+    RecognizedPurchaseDate? best;
+    double maxH = 0;
+
     for (final line in lines) {
-      final text = line.text;
+      final t = line.text;
       for (final p in patterns) {
-        final m = p.firstMatch(text);
-        if (m == null || m.groupCount < 1) continue;
-        final token = m.group(1)!;
-        DateTime? dt;
-
-        if (identical(p, _dateYearMonthDayNumeric)) {
-          dt = ReceiptFormatter.parseNumericYMD(token);
-        } else if (identical(p, _dateDayMonthYearNumeric)) {
-          dt = ReceiptFormatter.parseNumericDMY(token);
-        } else if (identical(p, _dateMonthDayYearEn)) {
-          dt = ReceiptFormatter.parseNameMDY(token);
-        } else {
-          dt = ReceiptFormatter.parseNameDMY(token);
-        }
-
-        if (dt != null) {
-          return RecognizedPurchaseDate(value: dt, line: line);
+        for (final m in p.allMatches(t)) {
+          if (m.groupCount < 1) continue;
+          final s = m.group(1)!;
+          DateTime? dt =
+              identical(p, _dateIsoYMD) ||
+                      identical(p, _dateYearMonthDayNumeric)
+                  ? ReceiptFormatter.parseNumericYMD(s)
+                  : identical(p, _dateDayMonthYearNumeric)
+                  ? ReceiptFormatter.parseNumericDMY(s)
+                  : identical(p, _dateMonthDayYearEn)
+                  ? ReceiptFormatter.parseNameMDY(s)
+                  : ReceiptFormatter.parseNameDMY(s);
+          if (dt != null && line.boundingBox.height > maxH) {
+            best = RecognizedPurchaseDate(value: dt, line: line);
+            maxH = line.boundingBox.height;
+          }
         }
       }
     }
-    return null;
+    return best;
   }
 
   /// Returns the first detected store entity if any.
@@ -528,8 +590,7 @@ final class ReceiptParser {
     RecognizedBounds? bounds,
     RecognizedReceipt receipt,
   ) {
-    final skewAngle = ReceiptSkewEstimator.estimateDegrees(receipt);
-    receipt.bounds = bounds?.copyWith(skewAngle: skewAngle);
+    receipt.bounds = bounds;
   }
 
   /// Applies the parsed store to the receipt.
@@ -578,11 +639,12 @@ final class ReceiptParser {
     List<RecognizedUnknown> forbidden,
   ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
-    final isLikelyLabel = _opts.totalLabels.hasMatch(unknownText);
+    final isLikelyLabel = _isTotalLabelLike(unknownText);
     if (forbidden.contains(unknown) || isLikelyLabel) return false;
 
     final isLeftOfAmount = _right(unknown) <= _left(amount);
-    final alignedVertically = _dy(amount.line, unknown.line) <= _tol;
+    final alignedVertically =
+        _dy(amount.line, unknown.line) <= _heightL(amount.line);
 
     return isLeftOfAmount && alignedVertically;
   }
@@ -662,7 +724,7 @@ final class ReceiptParser {
   /// Returns absolute ΔY if within vertical tolerance, otherwise `double.infinity` (lower is better).
   static double _distanceScore(TextLine totalLabel, TextLine amount) {
     final dy = _dy(totalLabel, amount);
-    return (dy < totalLabel.boundingBox.height) ? dy : double.infinity;
+    return dy < _heightL(totalLabel) * pi ? dy : double.infinity;
   }
 
   /// Filters left-alignment outliers among unknown product lines.
@@ -750,7 +812,6 @@ final class ReceiptParser {
       'lowerBound': lowerBound,
       'upperBound': upperBound,
       'dropRightTail': dropRightTail,
-      'tol': _tol,
     });
     if (madRaw == 0.0) {
       ReceiptLogger.log('filter.note', {
@@ -769,8 +830,9 @@ final class ReceiptParser {
         continue;
       }
       final x = xMetric(e);
+      final tol = _heightL(e.line);
       final isOutlier =
-          dropRightTail ? (x > upperBound + _tol) : (x < lowerBound - _tol);
+          dropRightTail ? (x > upperBound + tol) : (x < lowerBound - tol);
 
       if (!isOutlier) {
         out.add(e);
@@ -918,7 +980,8 @@ final class ReceiptParser {
 
       final dyU = (_cy(entity) - _cy(leftUnknown)).abs();
       final dyA = (_cy(entity) - _cy(rightAmount)).abs();
-      final verticallyAligned = dyU < _tol || dyA < _tol;
+      final verticallyAligned =
+          dyU < _heightL(leftUnknown.line) || dyA < _heightL(rightAmount.line);
 
       final betweenUnknownAndAmount = horizontallyBetween && verticallyAligned;
 
@@ -933,6 +996,43 @@ final class ReceiptParser {
       }
     }
     return filtered;
+  }
+
+  /// Drop entities strictly below total/label (keep RecognizedPurchaseDate).
+  static List<RecognizedEntity> _filterBelowTotalAndLabel(
+    List<RecognizedEntity> entities,
+  ) {
+    final totalLabel = _findTotalLabel(entities);
+    final total = _findTotal(entities);
+
+    if (totalLabel == null || total == null) return entities;
+
+    double maxBottom = max(_bottom(totalLabel), _bottom(total));
+
+    final out = <RecognizedEntity>[];
+    final removed = <String>[];
+
+    for (final e in entities) {
+      if (e is RecognizedPurchaseDate) {
+        out.add(e);
+        continue;
+      }
+      final tol = _heightL(e.line);
+      final isBelow = _top(e) > maxBottom + tol;
+      if (!isBelow) {
+        out.add(e);
+      } else {
+        removed.add(_dbgId(e));
+      }
+    }
+
+    ReceiptLogger.log('filter.below_total', {
+      'maxBottom': maxBottom,
+      'before': entities.length,
+      'after': out.length,
+      'removed': removed,
+    });
+    return out;
   }
 
   /// Builds a complete receipt from entities and post-filters.
@@ -973,5 +1073,33 @@ final class ReceiptParser {
         receipt.positions.removeWhere((p) => p.group == pos.group);
       }
     }
+  }
+
+  /// Computes skew angle (degrees) from four corner points in clockwise order:
+  /// [top-left, top-right, bottom-right, bottom-left]. Positive = clockwise tilt.
+  static double _estimateSkewFromCorners(List<Point<int>> corners) {
+    if (corners.length != 4) return 0.0;
+
+    final tl = corners[0];
+    final tr = corners[1];
+    final br = corners[2];
+    final bl = corners[3];
+
+    double angleTop = atan2((tr.y - tl.y).toDouble(), (tr.x - tl.x).toDouble());
+    double angleBottom = atan2(
+      (br.y - bl.y).toDouble(),
+      (br.x - bl.x).toDouble(),
+    );
+
+    double angle = (angleTop + angleBottom) * 0.5;
+
+    double deg = angle * 180.0 / pi;
+    while (deg >= 90.0) {
+      deg -= 180.0;
+    }
+    while (deg < -90.0) {
+      deg += 180.0;
+    }
+    return deg;
   }
 }

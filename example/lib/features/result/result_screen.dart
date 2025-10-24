@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:receipt_recognition/receipt_recognition.dart';
 
+/// Screen that displays the final recognized receipt details.
 class ResultScreen extends StatelessWidget {
   final RecognizedReceipt receipt;
 
@@ -52,13 +53,19 @@ class ResultScreen extends StatelessWidget {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                position.product.normalizedText,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.black,
+                              Expanded(
+                                child: Text(
+                                  position.product.normalizedText,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Text(
                                 position.price.formattedValue,
                                 style: const TextStyle(
@@ -109,6 +116,7 @@ class ResultScreen extends StatelessWidget {
   }
 }
 
+/// Decorative zigzag separator widget for the receipt card edges.
 class ZigzagEdgeWidget extends StatelessWidget {
   final bool isTop;
   final double zigzagWidth;
@@ -139,6 +147,7 @@ class ZigzagEdgeWidget extends StatelessWidget {
   }
 }
 
+/// Painter that draws a horizontal zigzag edge.
 class _ZigzagEdgePainter extends CustomPainter {
   final bool isTop;
   final double zigzagWidth;

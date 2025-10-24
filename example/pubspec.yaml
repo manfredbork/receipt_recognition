@@ -40,10 +40,13 @@ dependencies:
   audioplayers: ^5.2.1
   opencv_dart: ^1.2.1
   receipt_recognition:
-    path: ../
+    path: ..
+  flutter_exif_rotation: ^0.5.2
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -95,4 +98,4 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
   assets:
-    - assets/sounds/checkout_beep.mp3
+    - integration_test/assets/
