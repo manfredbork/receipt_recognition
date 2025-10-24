@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - **Pass static analysis**: Reformatted `receipt_recognition-dart` to reach 50/50 points
 
-## 0.1.7 – 2025-10-24
+## [0.1.7] – 2025-10-24
 
 ### ✨ Added
 
