@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
@@ -160,6 +162,15 @@ class RecognizedReceipt {
       calculatedTotal.formattedValue == total?.formattedValue &&
       calculatedTotal.value > 0.0;
 
+  /// True if the receipt has no parsed entities.
+  bool get isEmpty =>
+      (entities == null || entities!.isEmpty) &&
+      positions.isEmpty &&
+      total == null &&
+      store == null &&
+      purchaseDate == null &&
+      (bounds == null || bounds!.boundingBox == Rect.zero);
+
   /// True if a quorum of positions meet size, stability, and confidence gates.
   bool get isConfirmed {
     final t = ReceiptRuntime.tuning;
@@ -178,7 +189,7 @@ class RecognizedReceipt {
     final need =
         positions.length <= 3
             ? positions.length
-            : (positions.length * 0.75).ceil();
+            : (positions.length * 0.8).ceil();
 
     return passing >= need;
   }

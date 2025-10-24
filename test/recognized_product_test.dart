@@ -222,4 +222,43 @@ void main() {
       },
     );
   });
+  group('RecognizedReceipt.isEmpty', () {
+    test('isEmpty == true when there are no positions and no total', () {
+      final r = RecognizedReceipt.empty();
+      expect(r.positions, isEmpty);
+      expect(r.total, isNull);
+      expect(r.isEmpty, isTrue);
+    });
+
+    test('isEmpty == false when there is at least one position or a total', () {
+      final product = RecognizedProduct(
+        value: 'ITEM',
+        line: const ReceiptTextLine(text: ''),
+        options: ReceiptOptions.empty(),
+      );
+      final price = RecognizedPrice(
+        value: 1.23,
+        line: const ReceiptTextLine(text: '1.23'),
+      );
+      final pos = RecognizedPosition(
+        product: product,
+        price: price,
+        timestamp: DateTime.now(),
+        operation: Operation.none,
+      );
+      product.position = pos;
+      price.position = pos;
+
+      final withPosition = RecognizedReceipt.empty();
+      withPosition.positions.add(pos);
+      expect(withPosition.isEmpty, isFalse);
+
+      final withTotal = RecognizedReceipt.empty();
+      withTotal.total = RecognizedTotal(
+        value: 9.99,
+        line: const ReceiptTextLine(text: 'SUM 9.99'),
+      );
+      expect(withTotal.isEmpty, isFalse);
+    });
+  });
 }

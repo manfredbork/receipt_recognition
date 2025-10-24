@@ -37,7 +37,7 @@ final class ReceiptLogger {
     RecognizedReceipt receipt, {
     ReceiptValidationResult? validation,
   }) {
-    if (receipt.positions.isNotEmpty) {
+    if (!receipt.isEmpty) {
       if (validation != null) {
         debugPrint('✅ Validation status: ${validation.status}');
         debugPrint('💬 Message: ${validation.message}');
