@@ -122,12 +122,13 @@ processReceiptImage(InputImage inputImage) async {
   // onScanComplete will fire at that point.
   final snapshot = await receiptRecognizer.processImage(inputImage);
   if (snapshot.isValid && snapshot.isConfirmed) {
-    debugPrint('Final (via snapshot): ${snapshot.total?.formattedValue}');
+    ReceiptLogger.logReceipt(snapshot);
   }
 }
 
 // Dispose
-@override void dispose() {
+@override
+void dispose() {
   receiptRecognizer.close();
   super.dispose();
 }
