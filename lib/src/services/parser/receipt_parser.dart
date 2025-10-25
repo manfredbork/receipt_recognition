@@ -203,11 +203,9 @@ final class ReceiptParser {
     RecognizedTotalLabel? detectedTotalLabel;
     RecognizedTotal? detectedTotal;
     RecognizedAmount? detectedAmount;
-
     if (_applyBounds(lines, parsed)) {
       detectedBounds = parsed.last as RecognizedBounds;
     }
-
     final median = _cxR(detectedBounds?.boundingBox ?? Rect.zero);
 
     for (final line in lines) {
@@ -455,19 +453,30 @@ final class ReceiptParser {
     return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
-  /// Returns all corner points from each line's bounding polygon.
-  /// Uses TextLine.cornerPoints directly. Returns an empty list if [lines] is empty.
+  /// Returns four corners [TL, TR, BR, BL] of the axis-aligned box computed
+  /// from minX/maxX/minY/maxY over all lines’ cornerPoints (length 4).
   static List<Point<int>> _extractPointsFromLines(List<TextLine> lines) {
     if (lines.isEmpty) return const <Point<int>>[];
-
-    final pts = <Point<int>>[];
+    int minX = 0;
+    int maxX = 0;
+    int minY = 0;
+    int maxY = 0;
     for (final l in lines) {
       final corners = l.cornerPoints;
+      if (corners.isEmpty) continue;
       for (final p in corners) {
-        pts.add(Point<int>(p.x, p.y));
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
       }
     }
-    return pts;
+    return <Point<int>>[
+      Point<int>(minX, minY),
+      Point<int>(maxX, minY),
+      Point<int>(maxX, maxY),
+      Point<int>(minX, maxY),
+    ];
   }
 
   /// Extracts and adds purchase date to the parsed entities if found in the text lines.
