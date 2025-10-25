@@ -457,9 +457,9 @@ final class ReceiptParser {
   /// from minX/maxX/minY/maxY over all lines’ cornerPoints (length 4).
   static List<Point<int>> _extractPointsFromLines(List<TextLine> lines) {
     if (lines.isEmpty) return const <Point<int>>[];
-    int minX = 0;
+    int minX = double.maxFinite.toInt();
     int maxX = 0;
-    int minY = 0;
+    int minY = double.maxFinite.toInt();
     int maxY = 0;
     for (final l in lines) {
       final corners = l.cornerPoints;
