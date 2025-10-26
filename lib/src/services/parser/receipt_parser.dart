@@ -565,6 +565,59 @@ final class ReceiptParser {
     receipt.purchaseDate = purchaseDate;
   }
 
+  /// Applies the skew angle to the bounds of the receipt.
+  static void _processSkewAngle(RecognizedReceipt receipt) {
+    int minX = double.maxFinite.toInt();
+    int maxX = 0;
+    int minY = double.maxFinite.toInt();
+    int maxY = 0;
+    for (final pos in receipt.positions) {
+      final productP = pos.product.line.cornerPoints;
+      final priceP = pos.product.line.cornerPoints;
+      if (productP.length != 4 || priceP.length != 4) continue;
+      final x1 = min(productP[0].x, productP[3].x);
+      final x2 = max(priceP[1].x, priceP[2].x);
+      final y1 = min(productP[0].y, productP[1].y);
+      final y2 = max(productP[2].y, productP[3].y);
+      if (x1 < minX) minX = x1;
+      if (x2 > maxX) maxX = x2;
+      if (y1 < minY) minY = y1;
+      if (y2 > maxY) maxY = y2;
+    }
+
+    final dx = (maxX - minX).toDouble();
+    final dy = (maxY - minY).toDouble();
+
+    if (dx == 0 && dy == 0) return;
+
+    final angleX = atan2(dy, dx);
+
+    double skewRad = angleX - (pi / 2);
+
+    while (skewRad <= -pi) {
+      skewRad += 2 * pi;
+    }
+    while (skewRad > pi) {
+      skewRad -= 2 * pi;
+    }
+
+    final skewDeg = skewRad * 180 / pi;
+    if (receipt.bounds != null) {
+      receipt.bounds = receipt.bounds!.copyWith(skewAngle: skewDeg);
+    }
+
+    ReceiptLogger.log('bounds.skew', {
+      'minX': minX,
+      'maxX': maxX,
+      'minY': minY,
+      'maxY': maxY,
+      'dx': dx,
+      'dy': dy,
+      'skewRad': skewRad,
+      'skewDeg': skewDeg,
+    });
+  }
+
   /// Applies the parsed bounds to the receipt.
   static void _processBounds(
     RecognizedBounds? bounds,
@@ -1049,8 +1102,9 @@ final class ReceiptParser {
     _processTotalLabel(totalLabel, receipt);
     _processTotal(total, receipt);
     _processPurchaseDate(purchaseDate, receipt);
-    _processBounds(bounds, receipt);
     _processSuspicious(receipt);
+    _processBounds(bounds, receipt);
+    _processSkewAngle(receipt);
 
     return receipt.copyWith(entities: entities);
   }
