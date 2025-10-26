@@ -294,7 +294,6 @@ Analyzes the raw text to identify and categorize receipt elements:
 - Store name (e.g., Aldi, Rewe, Edeka, Penny, Lidl, Kaufland, Netto in German markets)
 - Total ("Summe", "Gesamt", "Total")
 - Line items (products and prices)
-- Date and time information
 - Total label normalization
 - Purchase date extraction
 - Receipt bounds and skew angle estimation
@@ -332,7 +331,7 @@ The optimizer:
 2. **Text Detection**: ML Kit processes the image to extract raw text
 3. **Structured Parsing**: A raw text is analyzed to identify receipt elements
 4. **Optimization**: Multiple scans are compared and merged for accuracy
-5. **Data Delivery**: Structured receipt data is provided via callbacks
+5. **Data Delivery**: Structured receipt data is returned directly; callbacks are optional for progress tracking
 
 ### Implementation Status
 
