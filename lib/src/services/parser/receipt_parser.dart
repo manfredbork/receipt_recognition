@@ -601,9 +601,8 @@ final class ReceiptParser {
       skewRad -= 2 * pi;
     }
 
-    final skewDeg = skewRad * 180 / pi;
     if (receipt.bounds != null) {
-      receipt.bounds = receipt.bounds!.copyWith(skewAngle: skewDeg);
+      receipt.bounds = receipt.bounds!.copyWith(skewAngle: skewRad);
     }
 
     ReceiptLogger.log('bounds.skew', {
@@ -614,7 +613,7 @@ final class ReceiptParser {
       'dx': dx,
       'dy': dy,
       'skewRad': skewRad,
-      'skewDeg': skewDeg,
+      'skewDeg': skewRad * 180 / pi,
     });
   }
 

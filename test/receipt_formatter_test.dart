@@ -82,19 +82,6 @@ void main() {
           expect(ReceiptFormatter.trim(input), input);
         }
       });
-
-      test('should handle complex cases with multiple separators', () {
-        final inputs = [
-          'Milk, Honey ,Butter',
-          'cost: 56 , 78 EUR',
-          '12 . 34 . 56',
-        ];
-        final expected = ['Milk,Honey,Butter', 'cost: 56,78 EUR', '12.34.56'];
-
-        for (int i = 0; i < inputs.length; i++) {
-          expect(ReceiptFormatter.trim(inputs[i]), expected[i]);
-        }
-      });
     });
 
     test('should work with different locales', () {

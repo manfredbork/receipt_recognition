@@ -17,7 +17,7 @@ final class ReceiptNormalizer {
   );
 
   /// Matches trailing price-like tails for grouping key stripping.
-  static final RegExp _stripPriceTail = RegExp(r'\s*\d+[.,]?\d{2,3}.*\$');
+  static final RegExp _stripPriceTail = RegExp(r'\s*\d+[.,]?\d{2,3}.*$');
 
   /// Finds number–unit splits to glue (e.g., '250 g' -> '250g').
   static final RegExp _numberUnitSplit = RegExp(r'(\d+)\s+([a-z])\b');
@@ -347,20 +347,34 @@ final class ReceiptNormalizer {
   static String _canonicalGroupingKey(String input) {
     final base = canonicalKey(input);
     final noTail = base.replaceFirst(_stripPriceTail, '');
-    final glued = noTail.replaceAll(_numberUnitSplit, r'$1$2');
+    final glued = noTail.replaceAllMapped(
+      _numberUnitSplit,
+      (m) => '${m[1]}${m[2]}',
+    );
     final noPunct = glued.replaceAll(_punctDotsCommas, '');
     return noPunct.replaceAll(_spacesRun, ' ').trim();
   }
 
-  /// Removes trailing price-like numeric patterns while leaving normal text intact.
-  /// Example: 'PRODUCT NAME 1,99' -> 'PRODUCT NAME'
+  /// Add this near the other regexes:
+  static final RegExp _trailingStandaloneInt = RegExp(r'(.*\S)\s+(\d+)\s*$');
+
+  /// Removes trailing price-like numeric patterns *or* a standalone integer at the end,
+  /// while leaving normal text intact. Examples:
+  /// 'PRODUCT NAME 1,99'   -> 'PRODUCT NAME'
+  /// 'PRODUCT NAME 123'    -> 'PRODUCT NAME'
+  /// 'PRODUCT NAME 1,99 EURO' stays unchanged (explicit currency keyword).
   static String normalizeTail(String value) {
-    final hadPriceTail =
-        _priceTail.hasMatch(value) && !_euroAmount.hasMatch(value);
-    if (!hadPriceTail) return value;
-    final stripped =
-        value.replaceAllMapped(_priceTail, (m) => '${m[1]}').trim();
-    return stripped;
+    final v = value.trim();
+
+    if (_euroAmount.hasMatch(v)) return v;
+
+    final price = _priceTail.firstMatch(v);
+    if (price != null) return price.group(1)!.trim();
+
+    final bareInt = _trailingStandaloneInt.firstMatch(v);
+    if (bareInt != null) return bareInt.group(1)!.trim();
+
+    return v;
   }
 
   /// Normalizes spaces by comparing the most frequent text with its peers.

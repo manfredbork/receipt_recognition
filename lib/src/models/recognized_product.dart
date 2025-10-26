@@ -61,7 +61,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   }
 
   @override
-  String format(String value) => value;
+  String format(String value) => ReceiptFormatter.trim(value);
 
   /// Formatted product text.
   String get text => formattedValue;
