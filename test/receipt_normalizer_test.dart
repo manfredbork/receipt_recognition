@@ -163,5 +163,192 @@ void main() {
         expect(result.contains('date'), isTrue);
       });
     });
+
+    group('canonicalKey – unicode/whitespace edge cases', () {
+      test('handles NBSP and exotic spaces', () {
+        // "Cafe\u00A0Creme" uses NBSP between words
+        expect(
+          ReceiptNormalizer.canonicalKey('Café\u00A0Crème'),
+          equals('cafe creme'),
+        );
+
+        // Mix of tabs, thin space (U+2009), and em space (U+2003)
+        expect(
+          ReceiptNormalizer.canonicalKey('  Elite\tItem\u2009—\u2003Deluxe  '),
+          equals('elite item — deluxe'),
+        );
+      });
+    });
+
+    group('normalizeByAlternativeTexts – OCR + single-space removal + truncation', () {
+      test('corrects OCR confusions using peer alternatives', () {
+        final alts = [
+          '8io Weidemilch', // OCR: 8 -> B
+          'Bio Weidemilch',
+          'B!o Weidemilch', // OCR: ! -> i
+        ];
+        // Should converge on the clean variant seen in peers
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(result, equals('Bio Weidemilch'));
+      });
+
+      test(
+        'glues single erroneous space when exact one-space difference matches',
+        () {
+          final alts = [
+            'Weide milch',
+            'Weidemilch',
+            'WEIDE MILCH', // case noise should not prevent merge
+          ];
+          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+          expect(result, equals('Weidemilch'));
+        },
+      );
+
+      test('filters truncated leading token alternatives', () {
+        final alts = ['GOETTERSP.', 'GOETTERSP. WALD', 'GOETTERSP. WALD'];
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(result, equals('GOETTERSP. WALD'));
+      });
+
+      test('tie-breaker prefers size token on equal frequency', () {
+        final alts = [
+          'Coke Zero',
+          'Coke Zero 330ml',
+          'Coke Zero',
+          'Coke Zero 330ml',
+        ];
+        // Equal freq; should pick the one with a size token
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(result, equals('Coke Zero 330ml'));
+      });
+
+      test(
+        'tie-breaker prefers variant without diacritics when otherwise tied',
+        () {
+          final alts = ['Cafe Creme', 'Café Crème'];
+          // Same bucket; prefers no diacritics
+          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+          expect(result, equals('Cafe Creme'));
+        },
+      );
+
+      test('number–unit split is normalized for grouping (e.g., 1 l vs 1l)', () {
+        final alts = ['Milk 1 l', 'MILK 1l', 'milk 1  l'];
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        // With same signature and bucket, special-spaces should prefer glued number-unit
+        // only if frequencies tie after bucketing. All are same bucket; ensure a glued pick is allowed.
+        expect(
+          result,
+          anyOf(equals('MILK 1l'), equals('Milk 1l'), equals('milk 1l')),
+        );
+      });
+    });
+
+    group('normalizeTail – euro exception & tricky tails', () {
+      test('does not strip explicit EURO amounts', () {
+        expect(
+          ReceiptNormalizer.normalizeTail('Butter 1,99 EURO'),
+          equals('Butter 1,99 EURO'),
+        );
+        expect(
+          ReceiptNormalizer.normalizeTail('Butter 2.49 EURO'),
+          equals('Butter 2.49 EURO'),
+        );
+      });
+
+      test('strips price-like tails without EURO keyword', () {
+        expect(
+          ReceiptNormalizer.normalizeTail('Butter 1,99'),
+          equals('Butter'),
+        );
+        expect(
+          ReceiptNormalizer.normalizeTail('Cola 0,89 xyz'),
+          equals('Cola'),
+        );
+        expect(ReceiptNormalizer.normalizeTail('Tea 3.50 @'), equals('Tea'));
+      });
+    });
+
+    group('normalizeSpecialSpaces – signature-based selection', () {
+      test('prefers candidate with glued number–unit on tie', () {
+        const mostFrequent = 'Milk 1 l';
+        final peers = ['Milk 1l', 'Milk 1 l'];
+        final result = ReceiptNormalizer.normalizeSpecialSpaces(
+          mostFrequent,
+          peers,
+        );
+        // with same signature and frequency, glued number-unit should win
+        expect(result, equals('Milk 1l'));
+      });
+
+      test('prefers fewer spaces, then shorter, then lexicographical', () {
+        const mostFrequent = 'Coke  Zero';
+        final peers = [
+          'Coke Zero',
+          // fewer spaces -> should win
+          'Coke  Zero',
+          // same as mostFrequent
+          'Coke Zero  ',
+          // extra trailing spaces ignored by canonicalization but counted here
+        ];
+        final result = ReceiptNormalizer.normalizeSpecialSpaces(
+          mostFrequent,
+          peers,
+        );
+        expect(result, equals('Coke Zero'));
+      });
+
+      test('returns original when no same-signature peers', () {
+        const best = 'Coffee Beans';
+        final others = ['Tea-Bags']; // different signature set
+        final result = ReceiptNormalizer.normalizeSpecialSpaces(best, others);
+        expect(result, equals('Coffee Beans'));
+      });
+    });
+
+    group('similarity & stringSimilarity – fuzzy wrappers', () {
+      test('similarity higher for close variants than unrelated strings', () {
+        final close = ReceiptNormalizer.similarity('Coke Zero', 'Coke Zer0');
+        final far = ReceiptNormalizer.similarity('Coke Zero', 'Orange Juice');
+        expect(close, greaterThan(far));
+        expect(
+          close,
+          greaterThanOrEqualTo(70),
+        ); // typical fuzzy baseline for small typos
+      });
+
+      test('stringSimilarity is scaled to [0,1]', () {
+        final s1 = ReceiptNormalizer.stringSimilarity('Milk 1l', 'Milk 1 l');
+        final s2 = ReceiptNormalizer.stringSimilarity('Milk 1l', 'Shampoo');
+        expect(s1, inInclusiveRange(0.0, 1.0));
+        expect(s2, inInclusiveRange(0.0, 1.0));
+        expect(s1, greaterThan(s2));
+      });
+    });
+
+    group('tokensForMatch & specificity', () {
+      test('tokenization is lowercase, diacritic-free, alnum-only', () {
+        final tokens = ReceiptNormalizer.tokensForMatch('Café-Öl 250ml (BIO!)');
+        expect(tokens, equals({'cafe', 'ol', '250ml', 'bio'}));
+      });
+
+      test('specificity favors more/longer tokens', () {
+        final a = ReceiptNormalizer.specificity('Milk');
+        final b = ReceiptNormalizer.specificity('Organic Milk 1l');
+        expect(b, greaterThan(a));
+      });
+    });
+
+    group('sortByFrequency – stability on ties (sanity)', () {
+      test('contains same elements and orders by frequency ascending', () {
+        final values = ['x', 'y', 'x', 'z', 'y', 'x', 'w', 'w'];
+        final result = ReceiptNormalizer.sortByFrequency(values);
+        // Frequencies: z:1, y:2, w:2, x:3 (y/w order among equals is implementation-defined here)
+        expect(result.first, anyOf(equals('z'))); // least frequent first
+        expect(result.last, equals('x')); // most frequent last
+        expect(result.toSet(), equals(values.toSet()));
+      });
+    });
   });
 }

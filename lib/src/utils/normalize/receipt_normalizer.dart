@@ -34,8 +34,8 @@ final class ReceiptNormalizer {
   /// Detects glued number–unit tokens (e.g., '250g').
   static final RegExp _gluedNumberUnit = RegExp(r'\d+[a-zA-Z]\b');
 
-  /// A single ASCII space matcher for counting spaces.
-  static final RegExp _singleSpace = RegExp(' ');
+  /// A single white space matcher for counting spaces.
+  static final RegExp _singleSpace = RegExp(r'\s');
 
   /// Captures leading text and trailing price-like tail.
   static final RegExp _priceTail = RegExp(r'(.*\S)(\s*\d+[.,]?\d{2,3}.*)');
@@ -220,7 +220,8 @@ final class ReceiptNormalizer {
       for (int i = 0; i < chars.length; i++) {
         final char = chars[i];
 
-        if (_isNormalLetter(char)) continue;
+        // Do not modify normal letters or whitespace
+        if (_isNormalLetter(char) || _isWhitespace(char)) continue;
 
         for (final other in ocrAlternatives) {
           if (other.length > i) {
@@ -228,6 +229,11 @@ final class ReceiptNormalizer {
 
             if (_isNormalLetter(otherChar) &&
                 _isSimilarExceptPosition(text, other, i)) {
+              // Avoid creating a duplicate like "1ll" if the next char already matches
+              if (i + 1 < chars.length &&
+                  chars[i + 1].toLowerCase() == otherChar.toLowerCase()) {
+                continue;
+              }
               chars[i] = otherChar;
               ReceiptLogger.log('ocr.correct', {
                 'original': text,
@@ -272,6 +278,10 @@ final class ReceiptNormalizer {
 
     return false;
   }
+
+  /// Returns true if [ch] is a whitespace character (specifically a single ASCII space).
+  static bool _isWhitespace(String ch) =>
+      ch.isNotEmpty && _singleSpace.hasMatch(ch);
 
   /// Checks if two strings are similar except at a specific position.
   /// Example: isSimilarExceptPosition('0blaten', 'Oblaten', 0) -> true
