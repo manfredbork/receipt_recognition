@@ -412,7 +412,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    if (_tryParseAmount(line, parsed, double.maxFinite)) {
+    if (_tryParseAmount(line, parsed, 0)) {
       parsed.removeLast();
       return false;
     }
