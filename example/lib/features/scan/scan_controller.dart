@@ -98,7 +98,9 @@ class ScanController extends ChangeNotifier {
   }
 
   /// Callback: accepts the current snapshot on timeout.
-  void _onScanTimeout() {
+  void _onScanTimeout(RecognizedReceipt r) {
+    if (isAccepted) return;
+    _lastReceipt = r;
     acceptCurrent();
   }
 }

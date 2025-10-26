@@ -412,6 +412,11 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
+    if (_tryParseAmount(line, parsed, double.maxFinite)) {
+      parsed.removeLast();
+      return false;
+    }
+
     final unknown = _unknown.stringMatch(line.text);
     if (unknown == null || _cxL(line) >= median) return false;
     parsed.add(RecognizedUnknown(line: line, value: line.text));

@@ -1,7 +1,7 @@
 import 'dart:math';
 
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
-import 'package:receipt_recognition/src/utils/logging/index.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
 /// Utility for normalizing and standardizing recognized text from receipts.
@@ -207,20 +207,44 @@ final class ReceiptNormalizer {
 
   /// Applies OCR error correction by comparing alternatives and replacing commonly
   /// confused characters (digits/special chars) with normal letters when appropriate.
+  /// Only corrects alternatives with percentage occurrences below stabilityThreshold.
   /// Example: ['8io Weidemilch', 'Bio Weidemilch'] -> ['Bio Weidemilch', 'Bio Weidemilch']
   static List<String> _applyOcrCorrection(List<String> alternatives) {
     if (alternatives.length < 2) return alternatives;
 
+    final total = alternatives.length;
+    final counts = <String, int>{};
+    for (final text in alternatives) {
+      counts[text] = (counts[text] ?? 0) + 1;
+    }
+    final percentages = <String, int>{};
+    counts.forEach((k, v) => percentages[k] = ((v / total) * 100).round());
+
+    final confidenceThreshold =
+        ReceiptRuntime.options.tuning.optimizerConfidenceThreshold;
+    final stabilityThreshold =
+        ReceiptRuntime.options.tuning.optimizerStabilityThreshold;
+
     final corrected = <String>[];
 
     for (final text in alternatives) {
+      final percentage = percentages[text] ?? 0;
+      final percConfThreshold =
+          alternatives.length <= 2 && percentage >= confidenceThreshold;
+      final percStabThreshold =
+          alternatives.length > 2 && percentage >= stabilityThreshold;
+
+      if (percConfThreshold || percStabThreshold) {
+        corrected.add(text);
+        continue;
+      }
+
       final chars = text.split('');
       final ocrAlternatives = alternatives.where((t) => t != text).toList();
 
       for (int i = 0; i < chars.length; i++) {
         final char = chars[i];
 
-        // Do not modify normal letters or whitespace
         if (_isNormalLetter(char) || _isWhitespace(char)) continue;
 
         for (final other in ocrAlternatives) {
@@ -229,7 +253,6 @@ final class ReceiptNormalizer {
 
             if (_isNormalLetter(otherChar) &&
                 _isSimilarExceptPosition(text, other, i)) {
-              // Avoid creating a duplicate like "1ll" if the next char already matches
               if (i + 1 < chars.length &&
                   chars[i + 1].toLowerCase() == otherChar.toLowerCase()) {
                 continue;
@@ -241,6 +264,8 @@ final class ReceiptNormalizer {
                 'from': char,
                 'to': otherChar,
                 'reference': other,
+                'percentage': percentage,
+                'threshold': stabilityThreshold,
               });
               break;
             }

@@ -166,13 +166,11 @@ void main() {
 
     group('canonicalKey – unicode/whitespace edge cases', () {
       test('handles NBSP and exotic spaces', () {
-        // "Cafe\u00A0Creme" uses NBSP between words
         expect(
           ReceiptNormalizer.canonicalKey('Café\u00A0Crème'),
           equals('cafe creme'),
         );
 
-        // Mix of tabs, thin space (U+2009), and em space (U+2003)
         expect(
           ReceiptNormalizer.canonicalKey('  Elite\tItem\u2009—\u2003Deluxe  '),
           equals('elite item — deluxe'),
@@ -180,70 +178,63 @@ void main() {
       });
     });
 
-    group('normalizeByAlternativeTexts – OCR + single-space removal + truncation', () {
-      test('corrects OCR confusions using peer alternatives', () {
-        final alts = [
-          '8io Weidemilch', // OCR: 8 -> B
-          'Bio Weidemilch',
-          'B!o Weidemilch', // OCR: ! -> i
-        ];
-        // Should converge on the clean variant seen in peers
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-        expect(result, equals('Bio Weidemilch'));
-      });
+    group(
+      'normalizeByAlternativeTexts – OCR + single-space removal + truncation',
+      () {
+        test('corrects OCR confusions using peer alternatives', () {
+          final alts = ['8io Weidemilch', 'Bio Weidemilch', 'B!o Weidemilch'];
+          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+          expect(result, equals('Bio Weidemilch'));
+        });
 
-      test(
-        'glues single erroneous space when exact one-space difference matches',
-        () {
+        test(
+          'glues single erroneous space when exact one-space difference matches',
+          () {
+            final alts = ['Weide milch', 'Weidemilch', 'WEIDE MILCH'];
+            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+            expect(result, equals('Weidemilch'));
+          },
+        );
+
+        test('filters truncated leading token alternatives', () {
+          final alts = ['GOETTERSP.', 'GOETTERSP. WALD', 'GOETTERSP. WALD'];
+          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+          expect(result, equals('GOETTERSP. WALD'));
+        });
+
+        test('tie-breaker prefers size token on equal frequency', () {
           final alts = [
-            'Weide milch',
-            'Weidemilch',
-            'WEIDE MILCH', // case noise should not prevent merge
+            'Coke Zero',
+            'Coke Zero 330ml',
+            'Coke Zero',
+            'Coke Zero 330ml',
           ];
           final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-          expect(result, equals('Weidemilch'));
-        },
-      );
+          expect(result, equals('Coke Zero 330ml'));
+        });
 
-      test('filters truncated leading token alternatives', () {
-        final alts = ['GOETTERSP.', 'GOETTERSP. WALD', 'GOETTERSP. WALD'];
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-        expect(result, equals('GOETTERSP. WALD'));
-      });
-
-      test('tie-breaker prefers size token on equal frequency', () {
-        final alts = [
-          'Coke Zero',
-          'Coke Zero 330ml',
-          'Coke Zero',
-          'Coke Zero 330ml',
-        ];
-        // Equal freq; should pick the one with a size token
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-        expect(result, equals('Coke Zero 330ml'));
-      });
-
-      test(
-        'tie-breaker prefers variant without diacritics when otherwise tied',
-        () {
-          final alts = ['Cafe Creme', 'Café Crème'];
-          // Same bucket; prefers no diacritics
-          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-          expect(result, equals('Cafe Creme'));
-        },
-      );
-
-      test('number–unit split is normalized for grouping (e.g., 1 l vs 1l)', () {
-        final alts = ['Milk 1 l', 'MILK 1l', 'milk 1  l'];
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-        // With same signature and bucket, special-spaces should prefer glued number-unit
-        // only if frequencies tie after bucketing. All are same bucket; ensure a glued pick is allowed.
-        expect(
-          result,
-          anyOf(equals('MILK 1l'), equals('Milk 1l'), equals('milk 1l')),
+        test(
+          'tie-breaker prefers variant without diacritics when otherwise tied',
+          () {
+            final alts = ['Cafe Creme', 'Café Crème'];
+            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+            expect(result, equals('Cafe Creme'));
+          },
         );
-      });
-    });
+
+        test(
+          'number–unit split is normalized for grouping (e.g., 1 l vs 1l)',
+          () {
+            final alts = ['Milk 1 l', 'MILK 1l', 'milk 1  l'];
+            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+            expect(
+              result,
+              anyOf(equals('MILK 1l'), equals('Milk 1l'), equals('milk 1l')),
+            );
+          },
+        );
+      },
+    );
 
     group('normalizeTail – euro exception & tricky tails', () {
       test('does not strip explicit EURO amounts', () {
@@ -278,20 +269,12 @@ void main() {
           mostFrequent,
           peers,
         );
-        // with same signature and frequency, glued number-unit should win
         expect(result, equals('Milk 1l'));
       });
 
       test('prefers fewer spaces, then shorter, then lexicographical', () {
         const mostFrequent = 'Coke  Zero';
-        final peers = [
-          'Coke Zero',
-          // fewer spaces -> should win
-          'Coke  Zero',
-          // same as mostFrequent
-          'Coke Zero  ',
-          // extra trailing spaces ignored by canonicalization but counted here
-        ];
+        final peers = ['Coke Zero', 'Coke  Zero', 'Coke Zero  '];
         final result = ReceiptNormalizer.normalizeSpecialSpaces(
           mostFrequent,
           peers,
@@ -301,7 +284,7 @@ void main() {
 
       test('returns original when no same-signature peers', () {
         const best = 'Coffee Beans';
-        final others = ['Tea-Bags']; // different signature set
+        final others = ['Tea-Bags'];
         final result = ReceiptNormalizer.normalizeSpecialSpaces(best, others);
         expect(result, equals('Coffee Beans'));
       });
@@ -312,10 +295,7 @@ void main() {
         final close = ReceiptNormalizer.similarity('Coke Zero', 'Coke Zer0');
         final far = ReceiptNormalizer.similarity('Coke Zero', 'Orange Juice');
         expect(close, greaterThan(far));
-        expect(
-          close,
-          greaterThanOrEqualTo(70),
-        ); // typical fuzzy baseline for small typos
+        expect(close, greaterThanOrEqualTo(70));
       });
 
       test('stringSimilarity is scaled to [0,1]', () {
@@ -344,9 +324,8 @@ void main() {
       test('contains same elements and orders by frequency ascending', () {
         final values = ['x', 'y', 'x', 'z', 'y', 'x', 'w', 'w'];
         final result = ReceiptNormalizer.sortByFrequency(values);
-        // Frequencies: z:1, y:2, w:2, x:3 (y/w order among equals is implementation-defined here)
-        expect(result.first, anyOf(equals('z'))); // least frequent first
-        expect(result.last, equals('x')); // most frequent last
+        expect(result.first, equals('z'));
+        expect(result.last, equals('x'));
         expect(result.toSet(), equals(values.toSet()));
       });
     });
