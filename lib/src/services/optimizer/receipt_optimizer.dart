@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:collection/collection.dart';
@@ -108,6 +108,7 @@ final class ReceiptOptimizer implements Optimizer {
       _resetOperations();
       _processPositions(receipt);
       _reconcileToTotal(receipt, singleScan);
+      _applySkewAngle(receipt);
       _updateEntities(receipt);
 
       return _createOptimizedReceipt(receipt, singleScan: singleScan);
@@ -119,6 +120,7 @@ final class ReceiptOptimizer implements Optimizer {
   void accept(RecognizedReceipt receipt) {
     _reconcileToTotal(receipt, true);
     _processPositions(receipt);
+    _applySkewAngle(receipt);
     _updateEntities(receipt);
   }
 
@@ -509,6 +511,66 @@ final class ReceiptOptimizer implements Optimizer {
       _forceRegroup();
       _needsRegrouping = false;
     }
+  }
+
+  /// Estimates and writes the receipt’s skew angle (radians) from product-column left edges.
+  void _applySkewAngle(RecognizedReceipt receipt) {
+    final pos = receipt.positions;
+    if (pos.length < 2) return;
+
+    final pts = <Point<double>>[];
+    for (final p in pos) {
+      final b = p.product.line.boundingBox;
+      final yCenter = b.center.dy.toDouble();
+      final xLeft = b.left.toDouble();
+      pts.add(Point<double>(yCenter, xLeft));
+    }
+    if (pts.length < 2) return;
+
+    final slope = _theilSenSlopeXvsY(pts);
+    final skewRad = _wrapAngle(atan(slope));
+
+    if (receipt.bounds != null) {
+      receipt.bounds = receipt.bounds!.copyWith(skewAngle: skewRad * 180 / pi);
+    }
+
+    ReceiptLogger.log('bounds.skew.leftEdge', {
+      'n': pts.length,
+      'slope': slope,
+      'skewRad': skewRad,
+      'skewDeg': skewRad * 180 / pi,
+    });
+  }
+
+  /// Theil–Sen slope (median of all pairwise slopes) for x vs y, using all pairs.
+  double _theilSenSlopeXvsY(List<Point<double>> pts) {
+    const eps = 1e-6;
+    final n = pts.length;
+    final slopes = <double>[];
+    for (var i = 0; i < n; i++) {
+      for (var j = i + 1; j < n; j++) {
+        final dy = pts[j].x - pts[i].x;
+        if (dy.abs() < eps) continue;
+        final dx = pts[j].y - pts[i].y;
+        slopes.add(dx / dy);
+      }
+    }
+
+    if (slopes.isEmpty) return 0.0;
+    slopes.sort();
+    return slopes[slopes.length >> 1];
+  }
+
+  /// Wraps an angle in radians to the range (-π, π].
+  double _wrapAngle(double a) {
+    const twopi = 2 * pi;
+    while (a <= -pi) {
+      a += twopi;
+    }
+    while (a > pi) {
+      a -= twopi;
+    }
+    return a;
   }
 
   /// Assigns a position to the best existing group or creates a new one.
@@ -948,7 +1010,7 @@ final class ReceiptOptimizer implements Optimizer {
 
         final ns = s.sum + price;
         final nm = s.mask | (1 << i);
-        final nw = math.min(s.worstC, conf);
+        final nw = min(s.worstC, conf);
         next.add(_State(ns, nm, nw));
       }
 
@@ -1040,7 +1102,7 @@ final class ReceiptOptimizer implements Optimizer {
     for (final s in _orderStats.values) {
       final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
       if (total > decayThreshold) {
-        s.aboveCounts.updateAll((_, v) => math.max(1, v ~/ 2));
+        s.aboveCounts.updateAll((_, v) => max(1, v ~/ 2));
       }
     }
 
