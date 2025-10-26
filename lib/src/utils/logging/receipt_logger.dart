@@ -44,7 +44,7 @@ final class ReceiptLogger {
       }
       debugPrint('🏪 Supermarket: ${receipt.store?.formattedValue ?? 'N/A'}');
       debugPrint(
-        '📅 Purchase datetime: ${receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
+        '📅 Purchase datetime: ${receipt.purchaseDate?.formattedValue ?? 'N/A'}',
       );
       const int padFullWidth = 30;
       final int padHalfWidth = padFullWidth ~/ 2;
