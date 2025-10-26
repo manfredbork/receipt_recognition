@@ -61,6 +61,11 @@ final class ReceiptParser {
   /// Absolute vertical distance between two TextLines’ centers.
   static double _dy(TextLine a, TextLine b) => (_cyL(a) - _cyL(b)).abs();
 
+  static double _cxMedian(List<RecognizedEntity> parsed) {
+    final bounds = parsed.whereType<RecognizedBounds>();
+    return bounds.isNotEmpty ? _cxR(bounds.last.boundingBox) : 0;
+  }
+
   /// Comparator by center-Y, then center-X (ascending).
   static int _cmpCyThenCx(TextLine a, TextLine b) {
     final c = _cyL(a).compareTo(_cyL(b));
@@ -198,15 +203,15 @@ final class ReceiptParser {
 
     final parsed = <RecognizedEntity>[];
 
-    RecognizedBounds? detectedBounds;
     RecognizedStore? detectedStore;
     RecognizedTotalLabel? detectedTotalLabel;
     RecognizedTotal? detectedTotal;
     RecognizedAmount? detectedAmount;
-    if (_applyBounds(lines, parsed)) {
-      detectedBounds = parsed.last as RecognizedBounds;
-    }
-    final median = _cxR(detectedBounds?.boundingBox ?? Rect.zero);
+
+    _applyPurchaseDate(lines, parsed);
+    _applyBounds(lines, parsed);
+
+    final median = _cxMedian(parsed);
 
     for (final line in lines) {
       if (_shouldStopIfTotalConfirmed(line, parsed, detectedTotal)) break;
@@ -242,8 +247,6 @@ final class ReceiptParser {
 
       if (_tryParseUnknown(line, parsed, median)) continue;
     }
-
-    _applyPurchaseDate(lines, parsed);
 
     return parsed;
   }
@@ -420,13 +423,7 @@ final class ReceiptParser {
     List<TextLine> lines,
     List<RecognizedEntity> parsed,
   ) {
-    if (lines.isEmpty) return false;
-    final corners = _extractPointsFromLines(lines);
-    final angle = _estimateSkewFromCorners(corners);
-    final line = ReceiptTextLine.fromRect(
-      _extractRectFromLines(lines),
-      angle: angle,
-    );
+    final line = ReceiptTextLine.fromRect(_extractRectFromLines(lines));
     parsed.add(RecognizedBounds(line: line, value: line.boundingBox));
     return true;
   }
@@ -451,32 +448,6 @@ final class ReceiptParser {
       if (bottom > maxY) maxY = bottom;
     }
     return Rect.fromLTRB(minX, minY, maxX, maxY);
-  }
-
-  /// Returns four corners [TL, TR, BR, BL] of the axis-aligned box computed
-  /// from minX/maxX/minY/maxY over all lines’ cornerPoints (length 4).
-  static List<Point<int>> _extractPointsFromLines(List<TextLine> lines) {
-    if (lines.isEmpty) return const <Point<int>>[];
-    int minX = double.maxFinite.toInt();
-    int maxX = 0;
-    int minY = double.maxFinite.toInt();
-    int maxY = 0;
-    for (final l in lines) {
-      final corners = l.cornerPoints;
-      if (corners.isEmpty) continue;
-      for (final p in corners) {
-        if (p.x < minX) minX = p.x;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.y > maxY) maxY = p.y;
-      }
-    }
-    return <Point<int>>[
-      Point<int>(minX, minY),
-      Point<int>(maxX, minY),
-      Point<int>(maxX, maxY),
-      Point<int>(minX, maxY),
-    ];
   }
 
   /// Extracts and adds purchase date to the parsed entities if found in the text lines.
@@ -618,6 +589,24 @@ final class ReceiptParser {
       if (entity is! RecognizedAmount) continue;
       if (receipt.total?.line == entity.line) continue;
       _createPositionForAmount(entity, yUnknowns, receipt, forbidden);
+    }
+  }
+
+  /// Removes obviously suspicious product-name positions.
+  static void _processSuspicious(RecognizedReceipt receipt) {
+    final toRemove = <RecognizedPosition>[];
+    for (final pos in receipt.positions) {
+      final productText = ReceiptFormatter.trim(pos.product.value);
+      if (_suspiciousProductName.hasMatch(productText)) {
+        toRemove.add(pos);
+      }
+    }
+    for (final pos in toRemove) {
+      receipt.positions.remove(pos);
+      pos.group?.members.remove(pos);
+      if ((pos.group?.members.isEmpty ?? false)) {
+        receipt.positions.removeWhere((p) => p.group == pos.group);
+      }
     }
   }
 
@@ -1061,54 +1050,8 @@ final class ReceiptParser {
     _processTotal(total, receipt);
     _processPurchaseDate(purchaseDate, receipt);
     _processBounds(bounds, receipt);
-    _filterSuspiciousProducts(receipt);
+    _processSuspicious(receipt);
 
     return receipt.copyWith(entities: entities);
-  }
-
-  /// Removes obviously suspicious product-name positions.
-  static void _filterSuspiciousProducts(RecognizedReceipt receipt) {
-    final toRemove = <RecognizedPosition>[];
-    for (final pos in receipt.positions) {
-      final productText = ReceiptFormatter.trim(pos.product.value);
-      if (_suspiciousProductName.hasMatch(productText)) {
-        toRemove.add(pos);
-      }
-    }
-    for (final pos in toRemove) {
-      receipt.positions.remove(pos);
-      pos.group?.members.remove(pos);
-      if ((pos.group?.members.isEmpty ?? false)) {
-        receipt.positions.removeWhere((p) => p.group == pos.group);
-      }
-    }
-  }
-
-  /// Computes skew angle (degrees) from four corner points in clockwise order:
-  /// [top-left, top-right, bottom-right, bottom-left]. Positive = clockwise tilt.
-  static double _estimateSkewFromCorners(List<Point<int>> corners) {
-    if (corners.length != 4) return 0.0;
-
-    final tl = corners[0];
-    final tr = corners[1];
-    final br = corners[2];
-    final bl = corners[3];
-
-    double angleTop = atan2((tr.y - tl.y).toDouble(), (tr.x - tl.x).toDouble());
-    double angleBottom = atan2(
-      (br.y - bl.y).toDouble(),
-      (br.x - bl.x).toDouble(),
-    );
-
-    double angle = (angleTop + angleBottom) * 0.5;
-
-    double deg = angle * 180.0 / pi;
-    while (deg >= 90.0) {
-      deg -= 180.0;
-    }
-    while (deg < -90.0) {
-      deg += 180.0;
-    }
-    return deg;
   }
 }
