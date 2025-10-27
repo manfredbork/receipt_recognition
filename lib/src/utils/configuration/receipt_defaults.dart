@@ -36,7 +36,7 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
     'optimizerEwmaAlpha': 0.5,
     'optimizerVerticalTolerance': 50,
     'optimizerLoopThreshold': 10,
-    'optimizerMaxCacheSize': 15,
+    'optimizerMaxCacheSize': 12,
     'optimizerConfidenceThreshold': 90,
     'optimizerStabilityThreshold': 40,
     'optimizerAboveCountDecayThreshold': 50,
