@@ -162,6 +162,9 @@ class RecognizedReceipt {
       calculatedTotal.formattedValue == total?.formattedValue &&
       calculatedTotal.value > 0.0;
 
+  /// True if the receipt has parsed entities.
+  bool get isNotEmpty => !isEmpty;
+
   /// True if the receipt has no parsed entities.
   bool get isEmpty =>
       (entities == null || entities!.isEmpty) &&

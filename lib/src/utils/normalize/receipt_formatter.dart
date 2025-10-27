@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 /// Utility for locale-aware number formatting and robust parsing/normalization of receipt text and dates.
 final class ReceiptFormatter {
   /// Collapses whitespace around comma/dot separators: "12 , 34" -> "12,34".
-  static final RegExp _reCommaDotSpaces = RegExp(r'\s*([,.])\s*');
+  static final RegExp _reCommaDotSpaces = RegExp(r'(\d)\s*([,.])\s*(\d)');
 
   /// Matches any Unicode dash/minus-like character to normalize as ASCII '-'.
   static final RegExp _reAnyDash = RegExp(r'[‐-‒–—−-]');
@@ -82,7 +82,10 @@ final class ReceiptFormatter {
 
   /// Trims [value] and collapses spaces around commas/dots (e.g. `12 , 34` → `12,34`).
   static String trim(String value) {
-    return value.replaceAllMapped(_reCommaDotSpaces, (m) => m.group(1)!).trim();
+    return value.trim().replaceAllMapped(
+      _reCommaDotSpaces,
+      (m) => '${m[1]}${m[2]}${m[3]}',
+    );
   }
 
   /// Normalizes a raw amount string to a plain ASCII decimal:

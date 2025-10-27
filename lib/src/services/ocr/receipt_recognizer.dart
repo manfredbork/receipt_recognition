@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
@@ -35,14 +34,14 @@ final class ReceiptRecognizer {
   /// Optional delay before emitting a completed receipt result.
   final Duration _scanCompleteDelay;
 
-  /// Callback invoked when a scan session reaches timeout.
-  final VoidCallback? _onScanTimeout;
-
   /// Callback invoked on intermediate recognition/validation updates.
   final Function(RecognizedScanProgress)? _onScanUpdate;
 
   /// Callback invoked when a receipt is finalized and accepted.
   final Function(RecognizedReceipt)? _onScanComplete;
+
+  /// Callback invoked when a scan session reaches timeout.
+  final Function(RecognizedReceipt)? _onScanTimeout;
 
   /// Whether a full reinit is needed.
   bool _shouldInitialize = false;
@@ -69,9 +68,9 @@ final class ReceiptRecognizer {
     Duration scanInterval = const Duration(milliseconds: 50),
     Duration scanTimeout = const Duration(seconds: 30),
     Duration scanCompleteDelay = Duration.zero,
-    VoidCallback? onScanTimeout,
     Function(RecognizedScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
+    Function(RecognizedReceipt)? onScanTimeout,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(),
        _options = options ?? ReceiptOptions.defaults(),
@@ -80,9 +79,9 @@ final class ReceiptRecognizer {
        _scanInterval = scanInterval,
        _scanTimeout = scanTimeout,
        _scanCompleteDelay = scanCompleteDelay,
-       _onScanTimeout = onScanTimeout,
        _onScanUpdate = onScanUpdate,
        _onScanComplete = onScanComplete,
+       _onScanTimeout = onScanTimeout,
        _lastReceipt = RecognizedReceipt.empty();
 
   /// Processes an image and returns a recognized receipt.
@@ -236,7 +235,7 @@ final class ReceiptRecognizer {
     if (_initializedScan != null &&
         now.difference(_initializedScan!) >= _scanTimeout) {
       init();
-      _onScanTimeout?.call();
+      _onScanTimeout?.call(receipt);
     }
     return receipt;
   }

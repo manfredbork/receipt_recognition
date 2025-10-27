@@ -129,8 +129,9 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   bool get isNonFood => options.nonFoodKeywords.hasMatch(normalizedPostfixText);
 
   /// Whether this product represents a discount.
-  bool get isDiscount => isCashback && options.discountKeywords.hasMatch(text);
+  bool get isDiscount =>
+      isCashback && options.discountKeywords.hasMatch(normalizedText);
 
   /// Whether this product represents a deposit.
-  bool get isDeposit => options.depositKeywords.hasMatch(text);
+  bool get isDeposit => options.depositKeywords.hasMatch(normalizedText);
 }

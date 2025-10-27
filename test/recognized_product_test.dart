@@ -149,6 +149,7 @@ void main() {
       });
     });
   });
+
   group('RecognizedProduct.isFood / isNonFood', () {
     test(
       'isFood=true when postfix matches a food keyword; isNonFood=false',
@@ -222,6 +223,7 @@ void main() {
       },
     );
   });
+
   group('RecognizedReceipt.isEmpty', () {
     test('isEmpty == true when there are no positions and no total', () {
       final r = RecognizedReceipt.empty();

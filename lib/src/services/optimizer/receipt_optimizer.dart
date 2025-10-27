@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:collection/collection.dart';
@@ -108,6 +108,7 @@ final class ReceiptOptimizer implements Optimizer {
       _resetOperations();
       _processPositions(receipt);
       _reconcileToTotal(receipt, singleScan);
+      _applySkewAngle(receipt);
       _updateEntities(receipt);
 
       return _createOptimizedReceipt(receipt, singleScan: singleScan);
@@ -116,7 +117,12 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Accepts a receipt manually and finalizes reconciliation if needed.
   @override
-  void accept(RecognizedReceipt receipt) => _reconcileToTotal(receipt, true);
+  void accept(RecognizedReceipt receipt) {
+    _reconcileToTotal(receipt, true);
+    _processPositions(receipt);
+    _applySkewAngle(receipt);
+    _updateEntities(receipt);
+  }
 
   /// Releases all resources used by the optimizer.
   @override
@@ -507,6 +513,66 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Estimates and writes the receipt’s skew angle (radians) from product-column left edges.
+  void _applySkewAngle(RecognizedReceipt receipt) {
+    final pos = receipt.positions;
+    if (pos.length < 2) return;
+
+    final pts = <Point<double>>[];
+    for (final p in pos) {
+      final b = p.product.line.boundingBox;
+      final yCenter = b.center.dy.toDouble();
+      final xLeft = b.left.toDouble();
+      pts.add(Point<double>(yCenter, xLeft));
+    }
+    if (pts.length < 2) return;
+
+    final slope = _theilSenSlopeXvsY(pts);
+    final skewRad = _wrapAngle(atan(slope));
+
+    if (receipt.bounds != null) {
+      receipt.bounds = receipt.bounds!.copyWith(skewAngle: skewRad * 180 / pi);
+    }
+
+    ReceiptLogger.log('bounds.skew.leftEdge', {
+      'n': pts.length,
+      'slope': slope,
+      'skewRad': skewRad,
+      'skewDeg': skewRad * 180 / pi,
+    });
+  }
+
+  /// Theil–Sen slope (median of all pairwise slopes) for x vs y, using all pairs.
+  double _theilSenSlopeXvsY(List<Point<double>> pts) {
+    const eps = 1e-6;
+    final n = pts.length;
+    final slopes = <double>[];
+    for (var i = 0; i < n; i++) {
+      for (var j = i + 1; j < n; j++) {
+        final dy = pts[j].x - pts[i].x;
+        if (dy.abs() < eps) continue;
+        final dx = pts[j].y - pts[i].y;
+        slopes.add(dx / dy);
+      }
+    }
+
+    if (slopes.isEmpty) return 0.0;
+    slopes.sort();
+    return slopes[slopes.length >> 1];
+  }
+
+  /// Wraps an angle in radians to the range (-π, π].
+  double _wrapAngle(double a) {
+    const twopi = 2 * pi;
+    while (a <= -pi) {
+      a += twopi;
+    }
+    while (a > pi) {
+      a -= twopi;
+    }
+    return a;
+  }
+
   /// Assigns a position to the best existing group or creates a new one.
   void _processPosition(RecognizedPosition position) {
     int bestConf = 0;
@@ -807,8 +873,8 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Reconciles the receipt to its declared total by dropping excess or, if enabled, adding plausible missing positions.
-  void _reconcileToTotal(RecognizedReceipt receipt, bool allowAdditions) {
+  /// Reconciles the receipt to its declared total by dropping excess or, if enabled, adding pseudo position.
+  void _reconcileToTotal(RecognizedReceipt receipt, bool pseudoPosition) {
     final total = receipt.total?.value;
     if (total == null) return;
     if (receipt.isValid || receipt.positions.isEmpty) return;
@@ -894,113 +960,31 @@ final class ReceiptOptimizer implements Optimizer {
       return;
     }
 
-    if (deltaC < 0 && allowAdditions) {
-      final presentSig = <String>{};
-      for (final p in receipt.positions) {
-        final cents = _toCents(p.price.value);
-        final key =
-            '${ReceiptNormalizer.canonicalKey(p.product.normalizedText)}|$cents';
-        presentSig.add(key);
-      }
-
-      final existingGroups = receipt.positions.map((p) => p.group).toSet();
-      final groupBest = <RecognizedGroup, RecognizedPosition>{};
-      for (final g in _groups) {
-        if (g.members.isEmpty) continue;
-        if (existingGroups.contains(g)) continue;
-        final best = maxBy(g.members, (p) => p.confidence);
-        if (best == null) continue;
-        final cents = _toCents(best.price.value);
-        final key =
-            '${ReceiptNormalizer.canonicalKey(best.product.normalizedText)}|$cents';
-        if (!presentSig.contains(key)) groupBest[g] = best;
-      }
-      if (groupBest.isEmpty) {
-        final lastText = receipt.positions.last.product.normalizedText;
-        final upperCase = lastText == lastText.toUpperCase();
-        final productName = _opts.tuning.optimizerUnrecognizedProductName;
-        final product = RecognizedProduct(
-          line: ReceiptTextLine(
-            boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
-          ),
-          value: upperCase ? productName.toUpperCase() : productName,
-        );
-        final price = RecognizedPrice(
-          line: ReceiptTextLine(
-            boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
-          ),
-          value: -deltaC / 100,
-        );
-        final position = RecognizedPosition(
-          product: product,
-          price: price,
-          timestamp: receipt.timestamp,
-          operation: Operation.none,
-        );
-        _createNewGroup(position);
-        return;
-      }
-
-      final unused = groupBest.values.toList();
-      final targetAdd = -deltaC;
-
-      final toAddIdx = _pickSubsetToDrop(unused, targetAdd, beamWidth: 256);
-
-      int currentC2 = _sumCents(receipt.positions);
-      if (toAddIdx.isEmpty) {
-        final beforeErr = (currentC2 - targetC).abs();
-        unused.sort((a, b) {
-          final da = (_toCents(a.price.value) - targetAdd).abs();
-          final db = (_toCents(b.price.value) - targetAdd).abs();
-          if (da != db) return da.compareTo(db);
-          return b.confidence.compareTo(a.confidence);
-        });
-        for (final p in unused) {
-          final after = currentC2 + _toCents(p.price.value);
-          final afterErr = (after - targetC).abs();
-          if (afterErr < beforeErr && after < targetC + tolC) {
-            final cents = _toCents(p.price.value);
-            final key =
-                '${ReceiptNormalizer.canonicalKey(p.product.normalizedText)}|$cents';
-            if (!presentSig.contains(key)) {
-              receipt.positions.add(p);
-              presentSig.add(key);
-              ReceiptLogger.log('recon.greedy_add', {
-                'price': p.price.value,
-                'conf': p.confidence,
-                'stability': p.stability,
-              });
-              currentC2 = after;
-            }
-            break;
-          }
-        }
-      } else {
-        final toAdd = toAddIdx.map((i) => unused[i]).toList();
-        int addedCount = 0;
-        int addedCents = 0;
-        for (final p in toAdd) {
-          final nextC = currentC2 + _toCents(p.price.value);
-          if (nextC < targetC + tolC) {
-            final cents = _toCents(p.price.value);
-            final key =
-                '${ReceiptNormalizer.canonicalKey(p.product.normalizedText)}|$cents';
-            if (!presentSig.contains(key)) {
-              receipt.positions.add(p);
-              presentSig.add(key);
-              addedCount += 1;
-              addedCents += cents;
-              currentC2 = nextC;
-            }
-          }
-        }
-        ReceiptLogger.log('recon.subset_add', {
-          'added': addedCount,
-          'added_sum': addedCents / 100.0,
-          'sum_after': _sumCents(receipt.positions) / 100.0,
-          'target': targetC / 100.0,
-        });
-      }
+    if (deltaC < 0 && pseudoPosition) {
+      final lastText =
+          receipt.positions.lastOrNull?.product.normalizedText ?? 'abc';
+      final upperCase = lastText == lastText.toUpperCase();
+      final productName = _opts.tuning.optimizerUnrecognizedProductName;
+      final product = RecognizedProduct(
+        line: ReceiptTextLine(
+          boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
+        ),
+        value: upperCase ? productName.toUpperCase() : productName,
+      );
+      final price = RecognizedPrice(
+        line: ReceiptTextLine(
+          boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
+        ),
+        value: -deltaC / 100,
+      );
+      final position = RecognizedPosition(
+        product: product,
+        price: price,
+        timestamp: receipt.timestamp,
+        operation: Operation.none,
+      );
+      _createNewGroup(position);
+      receipt.positions.add(position);
     }
   }
 
@@ -1026,7 +1010,7 @@ final class ReceiptOptimizer implements Optimizer {
 
         final ns = s.sum + price;
         final nm = s.mask | (1 << i);
-        final nw = math.min(s.worstC, conf);
+        final nw = min(s.worstC, conf);
         next.add(_State(ns, nm, nw));
       }
 
@@ -1118,7 +1102,7 @@ final class ReceiptOptimizer implements Optimizer {
     for (final s in _orderStats.values) {
       final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
       if (total > decayThreshold) {
-        s.aboveCounts.updateAll((_, v) => math.max(1, v ~/ 2));
+        s.aboveCounts.updateAll((_, v) => max(1, v ~/ 2));
       }
     }
 

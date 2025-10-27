@@ -37,14 +37,14 @@ final class ReceiptLogger {
     RecognizedReceipt receipt, {
     ReceiptValidationResult? validation,
   }) {
-    if (!receipt.isEmpty) {
+    if (receipt.isNotEmpty) {
       if (validation != null) {
         debugPrint('✅ Validation status: ${validation.status}');
         debugPrint('💬 Message: ${validation.message}');
       }
       debugPrint('🏪 Supermarket: ${receipt.store?.formattedValue ?? 'N/A'}');
       debugPrint(
-        '📅 Purchase datetime: ${receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A'}',
+        '📅 Purchase datetime: ${receipt.purchaseDate?.formattedValue ?? 'N/A'}',
       );
       const int padFullWidth = 30;
       final int padHalfWidth = padFullWidth ~/ 2;

@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.9] – 2025-10-27
+
+### ✨ Added
+
+- Unit tests covering additional normalization scenarios.
+
+### 🛠️ Changed
+
+- Adjusted `onScanTimeout` signature in `ReceiptRecognizer`.
+- Improved normalization and output: use normalized text consistently and refined purchase date output.
+- Tuned optimizer cache for better stability and responsiveness.
+
+### 🐛 Fixed
+
+- Corrected skew angle handling and bounds calculation for accurate receipt alignment.
+- Prevented misclassification of prices as product names.
+
 ## [0.1.8] - 2024-10-25
 
 ### 🐛 Fixed

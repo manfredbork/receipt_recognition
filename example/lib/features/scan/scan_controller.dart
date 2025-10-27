@@ -67,7 +67,7 @@ class ScanController extends ChangeNotifier {
 
   /// Accepts the current receipt and marks scanning as complete.
   Future<void> acceptCurrent() async {
-    _lastReceipt = _recognizer.acceptReceipt(_lastReceipt);
+    _recognizer.acceptReceipt(_lastReceipt);
     _bestPercent = 100;
     _manuallyAccepted = true;
     _busy = false;
@@ -98,7 +98,9 @@ class ScanController extends ChangeNotifier {
   }
 
   /// Callback: accepts the current snapshot on timeout.
-  void _onScanTimeout() {
+  void _onScanTimeout(RecognizedReceipt r) {
+    if (isAccepted) return;
+    _lastReceipt = r;
     acceptCurrent();
   }
 }

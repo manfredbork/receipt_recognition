@@ -1,7 +1,7 @@
 import 'dart:math';
 
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
-import 'package:receipt_recognition/src/utils/logging/index.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
 /// Utility for normalizing and standardizing recognized text from receipts.
@@ -17,7 +17,7 @@ final class ReceiptNormalizer {
   );
 
   /// Matches trailing price-like tails for grouping key stripping.
-  static final RegExp _stripPriceTail = RegExp(r'\s*\d+[.,]?\d{2,3}.*\$');
+  static final RegExp _stripPriceTail = RegExp(r'\s*\d+[.,]?\d{2,3}.*$');
 
   /// Finds number–unit splits to glue (e.g., '250 g' -> '250g').
   static final RegExp _numberUnitSplit = RegExp(r'(\d+)\s+([a-z])\b');
@@ -34,8 +34,8 @@ final class ReceiptNormalizer {
   /// Detects glued number–unit tokens (e.g., '250g').
   static final RegExp _gluedNumberUnit = RegExp(r'\d+[a-zA-Z]\b');
 
-  /// A single ASCII space matcher for counting spaces.
-  static final RegExp _singleSpace = RegExp(' ');
+  /// A single white space matcher for counting spaces.
+  static final RegExp _singleSpace = RegExp(r'\s');
 
   /// Captures leading text and trailing price-like tail.
   static final RegExp _priceTail = RegExp(r'(.*\S)(\s*\d+[.,]?\d{2,3}.*)');
@@ -54,6 +54,7 @@ final class ReceiptNormalizer {
   );
 
   /// Normalizes text by comparing multiple alternative recognitions.
+  /// Example: ['COKE  ZERO', 'COKE ZERO', 'COKEZ ERO'] -> 'COKE ZERO'
   static String? normalizeByAlternativeTexts(List<String> alternativeTexts) {
     ReceiptLogger.log('norm.in', {
       'n': alternativeTexts.length,
@@ -71,8 +72,18 @@ final class ReceiptNormalizer {
     final filteredTexts =
         alternativeTexts.where((f) => f.length > minKeep).toList();
 
+    final spaceNormalized = _removeErroneousSingleSpaces(filteredTexts);
+    final corrected = _applyOcrCorrection(spaceNormalized);
+    final nonTruncated = _filterTruncatedAlternatives(corrected);
+
+    ReceiptLogger.log('norm.after_truncation_filter', {
+      'before': corrected.length,
+      'after': nonTruncated.length,
+      'removed': corrected.where((t) => !nonTruncated.contains(t)).toList(),
+    });
+
     final Map<String, List<String>> buckets = {};
-    for (final t in filteredTexts) {
+    for (final t in nonTruncated) {
       final key = _canonicalGroupingKey(t);
       (buckets[key] ??= <String>[]).add(t);
     }
@@ -136,7 +147,221 @@ final class ReceiptNormalizer {
     return spaced;
   }
 
+  /// Removes erroneous single spaces by replacing texts that equal another text
+  /// when exactly one space is removed.
+  /// Example: ['Weide milch', 'Weidemilch'] -> ['Weidemilch', 'Weidemilch']
+  static List<String> _removeErroneousSingleSpaces(List<String> alternatives) {
+    if (alternatives.length < 2) return alternatives;
+
+    final corrected = <String>[];
+
+    for (final text in alternatives) {
+      String? matchedWithoutSpace;
+
+      for (final other in alternatives) {
+        if (other == text) continue;
+
+        final withoutSpace = _tryRemovingSingleSpace(text, other);
+        if (withoutSpace != null) {
+          matchedWithoutSpace = other;
+          ReceiptLogger.log('space.remove', {
+            'original': text,
+            'corrected': other,
+            'removed_space': true,
+          });
+          break;
+        }
+      }
+
+      corrected.add(matchedWithoutSpace ?? text);
+    }
+
+    return corrected;
+  }
+
+  /// Tries to find if removing exactly one space from [textWithSpace] equals [textWithoutSpace].
+  /// Returns the match if found, null otherwise.
+  /// Example: tryRemovingSingleSpace('Weide milch', 'Weidemilch') -> 'Weidemilch'
+  static String? _tryRemovingSingleSpace(
+    String textWithSpace,
+    String textWithoutSpace,
+  ) {
+    final spacesInFirst = ' '.allMatches(textWithSpace).length;
+    final spacesInSecond = ' '.allMatches(textWithoutSpace).length;
+
+    if (spacesInFirst != spacesInSecond + 1) return null;
+
+    for (int i = 0; i < textWithSpace.length; i++) {
+      if (textWithSpace[i] == ' ') {
+        final withoutThisSpace =
+            textWithSpace.substring(0, i) + textWithSpace.substring(i + 1);
+
+        if (withoutThisSpace == textWithoutSpace) {
+          return textWithoutSpace;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// Applies OCR error correction by comparing alternatives and replacing commonly
+  /// confused characters (digits/special chars) with normal letters when appropriate.
+  /// Only corrects alternatives with percentage occurrences below stabilityThreshold.
+  /// Example: ['8io Weidemilch', 'Bio Weidemilch'] -> ['Bio Weidemilch', 'Bio Weidemilch']
+  static List<String> _applyOcrCorrection(List<String> alternatives) {
+    if (alternatives.length < 2) return alternatives;
+
+    final total = alternatives.length;
+    final counts = <String, int>{};
+    for (final text in alternatives) {
+      counts[text] = (counts[text] ?? 0) + 1;
+    }
+    final percentages = <String, int>{};
+    counts.forEach((k, v) => percentages[k] = ((v / total) * 100).round());
+
+    final confidenceThreshold =
+        ReceiptRuntime.options.tuning.optimizerConfidenceThreshold;
+    final stabilityThreshold =
+        ReceiptRuntime.options.tuning.optimizerStabilityThreshold;
+
+    final corrected = <String>[];
+
+    for (final text in alternatives) {
+      final percentage = percentages[text] ?? 0;
+      final percConfThreshold =
+          alternatives.length <= 2 && percentage >= confidenceThreshold;
+      final percStabThreshold =
+          alternatives.length > 2 && percentage >= stabilityThreshold;
+
+      if (percConfThreshold || percStabThreshold) {
+        corrected.add(text);
+        continue;
+      }
+
+      final chars = text.split('');
+      final ocrAlternatives = alternatives.where((t) => t != text).toList();
+
+      for (int i = 0; i < chars.length; i++) {
+        final char = chars[i];
+
+        if (_isNormalLetter(char) || _isWhitespace(char)) continue;
+
+        for (final other in ocrAlternatives) {
+          if (other.length > i) {
+            final otherChar = other[i];
+
+            if (_isNormalLetter(otherChar) &&
+                _isSimilarExceptPosition(text, other, i)) {
+              if (i + 1 < chars.length &&
+                  chars[i + 1].toLowerCase() == otherChar.toLowerCase()) {
+                continue;
+              }
+              chars[i] = otherChar;
+              ReceiptLogger.log('ocr.correct', {
+                'original': text,
+                'pos': i,
+                'from': char,
+                'to': otherChar,
+                'reference': other,
+                'percentage': percentage,
+                'threshold': stabilityThreshold,
+              });
+              break;
+            }
+          }
+        }
+      }
+
+      corrected.add(chars.join());
+    }
+
+    return corrected;
+  }
+
+  /// Checks if a character is a "normal" letter (Latin alphabet + common diacritics).
+  /// Returns true for: A-Z, a-z, and letters with diacritics (ä, ö, ü, é, à, etc.)
+  /// Returns false for: digits, special chars, punctuation
+  /// Example: isNormalLetter('O') -> true, isNormalLetter('0') -> false
+  static bool _isNormalLetter(String char) {
+    if (char.isEmpty) return false;
+    final code = char.codeUnitAt(0);
+
+    if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+      return true;
+    }
+
+    if ((code >= 192 && code <= 214) ||
+        (code >= 216 && code <= 246) ||
+        (code >= 248 && code <= 255)) {
+      return true;
+    }
+
+    if (code >= 256 && code <= 383) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Returns true if [ch] is a whitespace character (specifically a single ASCII space).
+  static bool _isWhitespace(String ch) =>
+      ch.isNotEmpty && _singleSpace.hasMatch(ch);
+
+  /// Checks if two strings are similar except at a specific position.
+  /// Example: isSimilarExceptPosition('0blaten', 'Oblaten', 0) -> true
+  static bool _isSimilarExceptPosition(String a, String b, int pos) {
+    if ((a.length - b.length).abs() > 1) return false;
+
+    final minLen = a.length < b.length ? a.length : b.length;
+    int diffs = 0;
+
+    for (int i = 0; i < minLen; i++) {
+      if (a[i].toLowerCase() != b[i].toLowerCase()) {
+        if (i != pos) diffs++;
+        if (diffs > 1) return false;
+      }
+    }
+
+    return true;
+  }
+
+  /// Filters out alternatives that are just leading tokens of longer variants.
+  /// Example: ['GOETTERSP.', 'GOETTERSP. WALD'] -> ['GOETTERSP. WALD']
+  static List<String> _filterTruncatedAlternatives(List<String> alternatives) {
+    if (alternatives.length <= 1) return alternatives;
+
+    final filtered = <String>[];
+    for (final candidate in alternatives) {
+      bool isTruncated = false;
+      for (final other in alternatives) {
+        if (other.length > candidate.length) {
+          final candidateTrimmed = candidate.trim();
+          final otherTrimmed = other.trim();
+          if (otherTrimmed.startsWith(candidateTrimmed) &&
+              otherTrimmed.length > candidateTrimmed.length) {
+            final nextChar = otherTrimmed[candidateTrimmed.length];
+            if (nextChar == ' ' || nextChar == '\t') {
+              isTruncated = true;
+              ReceiptLogger.log('norm.truncated_detected', {
+                'truncated': candidate,
+                'complete': other,
+              });
+              break;
+            }
+          }
+        }
+      }
+      if (!isTruncated) {
+        filtered.add(candidate);
+      }
+    }
+
+    return filtered.isEmpty ? alternatives : filtered;
+  }
+
   /// Returns a canonical, diacritic-free key for comparing OCR variants.
+  /// Example: 'Café Latté' -> 'cafe latte'
   static String canonicalKey(String input) {
     final nfd = unorm.nfd(input);
     final noMarks = nfd.replaceAll(_combiningMark, '');
@@ -147,22 +372,38 @@ final class ReceiptNormalizer {
   static String _canonicalGroupingKey(String input) {
     final base = canonicalKey(input);
     final noTail = base.replaceFirst(_stripPriceTail, '');
-    final glued = noTail.replaceAll(_numberUnitSplit, r'$1$2');
+    final glued = noTail.replaceAllMapped(
+      _numberUnitSplit,
+      (m) => '${m[1]}${m[2]}',
+    );
     final noPunct = glued.replaceAll(_punctDotsCommas, '');
     return noPunct.replaceAll(_spacesRun, ' ').trim();
   }
 
-  /// Removes trailing price-like numeric patterns while leaving normal text intact.
+  /// Add this near the other regexes:
+  static final RegExp _trailingStandaloneInt = RegExp(r'(.*\S)\s+(\d+)\s*$');
+
+  /// Removes trailing price-like numeric patterns *or* a standalone integer at the end,
+  /// while leaving normal text intact. Examples:
+  /// 'PRODUCT NAME 1,99'   -> 'PRODUCT NAME'
+  /// 'PRODUCT NAME 123'    -> 'PRODUCT NAME'
+  /// 'PRODUCT NAME 1,99 EURO' stays unchanged (explicit currency keyword).
   static String normalizeTail(String value) {
-    final hadPriceTail =
-        _priceTail.hasMatch(value) && !_euroAmount.hasMatch(value);
-    if (!hadPriceTail) return value;
-    final stripped =
-        value.replaceAllMapped(_priceTail, (m) => '${m[1]}').trim();
-    return stripped;
+    final v = value.trim();
+
+    if (_euroAmount.hasMatch(v)) return v;
+
+    final price = _priceTail.firstMatch(v);
+    if (price != null) return price.group(1)!.trim();
+
+    final bareInt = _trailingStandaloneInt.firstMatch(v);
+    if (bareInt != null) return bareInt.group(1)!.trim();
+
+    return v;
   }
 
   /// Normalizes spaces by comparing the most frequent text with its peers.
+  /// Example: ['Co ke Zero', 'Coke Zero', 'CokeZero'] -> 'Coke Zero'
   static String normalizeSpecialSpaces(
     String mostFrequent,
     List<String> allAlternatives,
@@ -222,6 +463,7 @@ final class ReceiptNormalizer {
   }
 
   /// Sorts a list of strings by frequency of occurrence in ascending order.
+  /// Example: ['A', 'B', 'A', 'C', 'B', 'A'] -> ['C', 'B', 'A']
   static List<String> sortByFrequency(List<String> values) {
     final Map<String, int> freq = {};
     for (final v in values) {

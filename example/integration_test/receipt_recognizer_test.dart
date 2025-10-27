@@ -62,9 +62,9 @@ void main() {
         expect(items[5].price.formattedValue, equals('3.58'));
         expect(items[6].product.formattedValue, equals('VANILLE-SOSSE'));
         expect(items[6].price.formattedValue, equals('2.58'));
-        expect(items[7].product.formattedValue, equals('GOETTERSP.WALD'));
+        expect(items[7].product.formattedValue, equals('GOETTERSP. WALD'));
         expect(items[7].price.formattedValue, equals('1.29'));
-        expect(items[8].product.formattedValue, equals('GOETTERSP.HIMB.'));
+        expect(items[8].product.formattedValue, equals('GOETTERSP. HIMB.'));
         expect(items[8].price.formattedValue, equals('1.29'));
         expect(items[9].product.formattedValue, equals('CLASSIC 2IN1'));
         expect(items[9].price.formattedValue, equals('2.79'));
@@ -74,11 +74,11 @@ void main() {
         expect(items[11].price.formattedValue, equals('1.59'));
         expect(items[12].product.formattedValue, equals('OBLATENLEBKUCHEN'));
         expect(items[12].price.formattedValue, equals('2.49'));
-        expect(items[13].product.formattedValue, equals('LEERG.EW E.SI'));
+        expect(items[13].product.formattedValue, equals('LEERG. EW E. SI'));
         expect(items[13].price.formattedValue, equals('-0.25'));
-        expect(items[14].product.formattedValue, equals('LEERG.MM V.ST'));
+        expect(items[14].product.formattedValue, equals('LEERG. MM V. ST'));
         expect(items[14].price.formattedValue, equals('-1.95'));
-        expect(items[15].product.formattedValue, equals('LEERG.MW V.ST'));
+        expect(items[15].product.formattedValue, equals('LEERG. MW V. ST'));
         expect(items[15].price.formattedValue, equals('-1.50'));
         expect(items[16].product.formattedValue, equals('LEERGUT EINWEG'));
         expect(items[16].price.formattedValue, equals('-1.50'));
