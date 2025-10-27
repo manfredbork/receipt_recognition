@@ -16,12 +16,9 @@ for building expense tracking apps, loyalty programs, or any system needing rece
 - 🧾 Detect and extract text from printed receipts
 - 🛒 Optimized for typical supermarket layouts
 - 🔍 Identifies line items, totals, and store names
-    - Total label normalization (e.g., “Summe”, “Gesamt”, “Total”)
-    - Purchase date detection
 - ⚡ Fast and efficient ML Kit text recognition
 - 📱 Works on Android and iOS
 - 🔧 Easy API with callback support
-    - Progress and completion callbacks driven by validation
 - 📐 Provides receipt bounds and estimated skew angle
 - 🧠 Layered options (extend/override/tuning) to customize stores, labels, keywords, and optimizer thresholds
 - 🧳 Stability-based merging and grouping to increase confidence over multiple scans
@@ -48,7 +45,8 @@ flutter pub get
 
 ### Platform Setup
 
-Note: Camera-only scanning requires the camera permission. If your app also lets users pick images from the gallery, add
+✏️ Note: Camera-only scanning requires the camera permission. If your app also lets users pick images from the gallery,
+add
 the appropriate media/storage permission for your target SDK (Android) or Photo Library usage description (iOS).
 
 #### Android
@@ -369,7 +367,7 @@ The package supports two primary scanning approaches:
 Ideal for scanning from gallery images or single camera captures:
 
 ```
-User selects image → OCR → Structure extraction → Data callback
+User selects image → OCR → Structure extraction → Data delivery
 ```
 
 #### 2. Continuous Recognition (Video Feed)
@@ -383,7 +381,7 @@ Better for real-time scanning with a live preview:
 └────────────┘     └───────────┘     └────────────┘     └──────┬─────┘
                                                                │
 ┌────────────┐     ┌───────────┐     ┌────────────┐     ┌──────▼─────┐
-│ Final      │◀────│ User      │◀────│ Preview    │◀────│ Feedback   │
+│ Final      │◀────│ Automatic │◀────│ Preview    │◀────│ Feedback   │
 │ Result     │     │ Confirm   │     │ Display    │     │ Loop       │
 └────────────┘     └───────────┘     └────────────┘     └────────────┘
 ```
@@ -393,13 +391,13 @@ Better for real-time scanning with a live preview:
 - **Processing Time**: Typically 0.5–2 seconds per frame depending on a device
 - **Memory Usage**: Peak usage of ~50–100MB during recognition
 - **Battery Impact**: Moderate when using continuous scanning
-- **Accuracy**: ~85–95% depending on receipt quality and lighting conditions
+- **Accuracy**: ~85–100% depending on receipt quality and lighting conditions
 
 ### Best Practices
 
 1. **Lighting**: Ensure good, even lighting for the best OCR results
 2. **Alignment**: Keep receipts as flat and aligned as possible
-3. **Stability**: For continuous scanning, allow 1–2 seconds of stable framing
+3. **Stability**: For continuous scanning, allow 1–3 seconds of stable framing
 4. **Multiple Scans**: Use the optimizer's merging capabilities for improved accuracy
 5. **Language Handling**: For mixed-language environments, consider setting the appropriate TextRecognitionScript when
    initializing the recognizer
@@ -429,7 +427,8 @@ calculated total (from line items) and the detected total. Four validation state
 +-------------------------+------------------------+-------------------------+
 ```
 
-Note: You receive ongoing snapshots. A snapshot is final when it isValid && isConfirmed; onScanComplete is then fired.
+✏️ Note: You receive ongoing snapshots. A snapshot is final when it isValid && isConfirmed; onScanComplete is then
+fired.
 
 You can track the validation state through the `onScanUpdate` callback:
 
