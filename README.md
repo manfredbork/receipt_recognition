@@ -465,7 +465,7 @@ void acceptCurrentReceipt() {
 }
 ```
 
-Tip: You can also accept immediately from the current snapshot if it already meets both conditions:
+💡 Tip: You can also accept immediately from the current snapshot if it already meets both conditions:
 
 - `progress.mergedReceipt.isValid == true`
 - `progress.mergedReceipt.isConfirmed == true`
