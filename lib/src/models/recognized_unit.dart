@@ -11,10 +11,10 @@ final class RecognizedUnitPrice extends RecognizedEntity<num> {
 }
 
 /// Unit quantity recognized from the receipt.
-final class RecognizedUnitQuantity extends RecognizedEntity<num> {
+final class RecognizedUnitQuantity extends RecognizedEntity<int> {
   /// Creates an unit quantity entity from [value] and [line].
   const RecognizedUnitQuantity({required super.value, required super.line});
 
   @override
-  String format(num value) => ReceiptFormatter.format(value, decimalDigits: 0);
+  String format(int value) => value.toString();
 }

@@ -74,7 +74,7 @@ final class ReceiptFormatter {
         );
       });
 
-  /// Formats [value] using the current locale with two decimal places (via `NumberFormat`).
+  /// Formats [value] using the current locale with two or three decimal places (via `NumberFormat`).
   static String format(num value, {int decimalDigits = 2}) =>
       _formatter(decimalDigits: decimalDigits).format(value);
 

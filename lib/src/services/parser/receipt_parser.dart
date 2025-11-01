@@ -620,11 +620,20 @@ final class ReceiptParser {
           if (centsPrice % centsUnitPrice == 0) {
             position.unitPrice = unitPrice;
             position.unitQuantity = RecognizedUnitQuantity(
-              value: centsPrice / centsUnitPrice,
+              value: centsPrice ~/ centsUnitPrice,
               line: unitPrice.line,
             );
             yUnitPrices.removeWhere((e) => identical(e, unitPrice));
           }
+        } else {
+          position.unitPrice = RecognizedUnitPrice(
+            value: position.price.value,
+            line: position.price.line,
+          );
+          position.unitQuantity = RecognizedUnitQuantity(
+            value: 1,
+            line: position.price.line,
+          );
         }
 
         receipt.positions.add(position);

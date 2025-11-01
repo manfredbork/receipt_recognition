@@ -782,13 +782,17 @@ final class ReceiptOptimizer implements Optimizer {
       if (best == null || latest == null) continue;
 
       final pos = group.members.firstWhereOrNull(
-        (p) => p.unitPrice != null && p.unitQuantity != null,
+        (p) => p.unitQuantity != null && p.unitQuantity!.value > 1,
       );
       final patched = best.copyWith(
         product: best.product.copyWith(line: latest.product.line),
         price: best.price.copyWith(line: latest.price.line),
-        unitPrice: pos?.unitPrice,
-        unitQuantity: pos?.unitQuantity,
+        unitPrice:
+            pos?.unitPrice ??
+            RecognizedUnitPrice(value: best.price.value, line: best.price.line),
+        unitQuantity:
+            pos?.unitQuantity ??
+            RecognizedUnitQuantity(value: 1, line: best.price.line),
       )..operation = latest.operation;
 
       ReceiptLogger.log('merge.keep', {

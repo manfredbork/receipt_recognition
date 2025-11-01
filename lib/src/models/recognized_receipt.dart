@@ -179,8 +179,15 @@ class RecognizedReceipt {
     final t = ReceiptRuntime.tuning;
     final half = t.optimizerMaxCacheSize ~/ 2;
     final minSize = half < 4 ? 4 : (half > 8 ? 8 : half);
-    final confThr = (t.optimizerConfidenceThreshold - 5).clamp(0, 100);
+    final confThr = t.optimizerConfidenceThreshold;
     final stabThr = t.optimizerStabilityThreshold;
+    final minPassing =
+        positions.where((p) {
+          final enoughMembers = (p.group?.members.length ?? 0) >= minSize ~/ 2;
+          final enoughStability = p.stability >= stabThr ~/ 2;
+          final enoughConfidence = p.confidence >= confThr ~/ 2;
+          return enoughMembers && enoughStability && enoughConfidence;
+        }).length;
     final passing =
         positions.where((p) {
           final enoughMembers = (p.group?.members.length ?? 0) >= minSize;
@@ -189,12 +196,10 @@ class RecognizedReceipt {
           return enoughMembers && enoughStability && enoughConfidence;
         }).length;
 
-    final need =
-        positions.length <= 3
-            ? positions.length
-            : (positions.length * 0.8).ceil();
+    final minNeed = positions.length;
+    final need = minNeed - positions.length ~/ 4;
 
-    return passing >= need;
+    return minPassing >= minNeed && passing >= need;
   }
 }
 
