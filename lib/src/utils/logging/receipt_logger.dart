@@ -59,6 +59,7 @@ final class ReceiptLogger {
                 .toList();
         debugPrint(
           '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padHalfWidth)}'
+          '${'🏷️  ${position.unitPrice?.formattedValue ?? 'N/A'}'.padRight(padHalfWidth)}'
           '${'📈  $confidence % Confidence'.padRight(padFullWidth)}'
           '${'⚖️  $stability % Stability'.padRight(padFullWidth)}'
           '${'📊  Distribution: $distribution '.padRight(padFullWidth)}',

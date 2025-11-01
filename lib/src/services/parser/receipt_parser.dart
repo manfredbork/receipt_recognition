@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:collection/collection.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
@@ -59,7 +60,7 @@ final class ReceiptParser {
   static double _cxR(Rect r) => r.center.dx;
 
   /// Absolute vertical distance between two TextLines’ centers.
-  static double _dy(TextLine a, TextLine b) => (_cyL(a) - _cyL(b)).abs();
+  static double _dy(TextLine a, TextLine b) => _cyL(a) - _cyL(b);
 
   static double _cxMedian(List<RecognizedEntity> parsed) {
     final bounds = parsed.whereType<RecognizedBounds>();
@@ -203,73 +204,24 @@ final class ReceiptParser {
 
     final parsed = <RecognizedEntity>[];
 
-    RecognizedStore? detectedStore;
-    RecognizedTotalLabel? detectedTotalLabel;
-    RecognizedTotal? detectedTotal;
-    RecognizedAmount? detectedAmount;
-
     _applyPurchaseDate(lines, parsed);
     _applyBounds(lines, parsed);
 
     final median = _cxMedian(parsed);
 
     for (final line in lines) {
-      if (_shouldStopIfTotalConfirmed(line, parsed, detectedTotal)) break;
+      if (_shouldStopIfTotalConfirmed(line, parsed)) break;
       if (_shouldStopIfStopWord(line)) break;
       if (_shouldIgnoreLine(line)) continue;
-      if (_shouldSkipLine(line, detectedTotalLabel)) continue;
-
-      if (_tryParseStore(
-        line,
-        parsed,
-        detectedStore,
-        detectedAmount,
-        _opts.storeNames,
-      )) {
-        detectedStore = parsed.last as RecognizedStore;
-        continue;
-      }
-
-      if (_tryParseTotalLabel(line, parsed, detectedTotalLabel)) {
-        detectedTotalLabel = parsed.last as RecognizedTotalLabel;
-        continue;
-      }
-
-      if (_tryParseTotal(line, parsed, median, detectedTotalLabel)) {
-        detectedTotal = parsed.last as RecognizedTotal;
-        continue;
-      }
-
-      if (_tryParseAmount(line, parsed, median)) {
-        detectedAmount = parsed.last as RecognizedAmount;
-        continue;
-      }
-
+      if (_tryParseStore(line, parsed)) continue;
+      if (_tryParseTotalLabel(line, parsed)) continue;
+      if (_tryParseTotal(line, parsed, median)) continue;
+      if (_tryParseAmount(line, parsed, median)) continue;
+      if (_tryParseUnit(line, parsed, median)) continue;
       if (_tryParseUnknown(line, parsed, median)) continue;
     }
 
     return parsed;
-  }
-
-  /// Skips lines that are clearly below the detected total label.
-  static bool _shouldSkipLine(
-    TextLine line,
-    RecognizedTotalLabel? detectedTotalLabel,
-  ) {
-    if (detectedTotalLabel == null) return false;
-
-    final skip =
-        _cyL(line) >
-        _cyL(detectedTotalLabel.line) + _heightL(detectedTotalLabel.line) * pi;
-
-    ReceiptLogger.log('guard.skip_line', {
-      'skip': skip,
-      'line.cy': _cyL(line),
-      'label.cy': _cyL(detectedTotalLabel.line),
-      'label.h': _heightL(detectedTotalLabel.line),
-    });
-
-    return skip;
   }
 
   /// Returns true if the line matches ignore keywords.
@@ -285,8 +237,8 @@ final class ReceiptParser {
   static bool _shouldStopIfTotalConfirmed(
     TextLine line,
     List<RecognizedEntity> parsed,
-    RecognizedTotal? total,
   ) {
+    final total = _findTotal(parsed);
     if (total == null) return false;
     final amounts = parsed.whereType<RecognizedAmount>().toList();
     if (amounts.isEmpty) return false;
@@ -315,12 +267,18 @@ final class ReceiptParser {
   static bool _tryParseTotalLabel(
     TextLine line,
     List<RecognizedEntity> parsed,
-    RecognizedTotalLabel? totalLabel,
   ) {
-    if (totalLabel != null || _opts.totalLabels.mapping.isEmpty) return false;
+    if (_opts.totalLabels.mapping.isEmpty) return false;
+    final totalLabel = _findTotalLabel(parsed);
+    final total = _findTotalLabel(parsed);
     final label = _findTotalLabelLike(line.text);
     final canonical = _opts.totalLabels.mapping[label] ?? label;
     if (canonical != null) {
+      if (totalLabel != null && total != null) {
+        parsed.removeWhere(
+          (e) => identical(e, totalLabel) || identical(e, total),
+        );
+      }
       parsed.add(RecognizedTotalLabel(line: line, value: canonical));
     }
     return canonical != null;
@@ -347,15 +305,16 @@ final class ReceiptParser {
     return bestLabel;
   }
 
-  /// Finds the amount nearest to [totalLabel] and marks it as [RecognizedTotal].
+  /// Finds the amount nearest to total label and marks it as [RecognizedTotal].
   /// Adds it to [parsed] and returns `true` if successful.
   static bool _tryParseTotal(
     TextLine line,
     List<RecognizedEntity> parsed,
     double median,
-    RecognizedTotalLabel? totalLabel,
   ) {
+    final totalLabel = _findTotalLabel(parsed);
     if (totalLabel == null) return false;
+    final total = _findTotal(parsed);
     if (_tryParseAmount(line, parsed, median)) {
       final amounts = parsed.whereType<RecognizedAmount>().toList();
       final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
@@ -363,7 +322,7 @@ final class ReceiptParser {
         parsed.removeLast();
         return false;
       } else {
-        final i = parsed.indexWhere((e) => e is RecognizedTotal);
+        final i = parsed.indexWhere((e) => identical(e, total));
         if (i >= 0) {
           parsed[i] = _toAmount(parsed[i] as RecognizedTotal);
         }
@@ -378,14 +337,12 @@ final class ReceiptParser {
   }
 
   /// Detects store name via custom map; early-bails if we already saw a store or an amount.
-  static bool _tryParseStore(
-    TextLine line,
-    List<RecognizedEntity> parsed,
-    RecognizedStore? detectedStore,
-    RecognizedAmount? detectedAmount,
-    DetectionMap customDetection,
-  ) {
-    if (detectedStore != null || detectedAmount != null) return false;
+  static bool _tryParseStore(TextLine line, List<RecognizedEntity> parsed) {
+    final store = _findStore(parsed);
+    if (store != null) return false;
+    final amount = _findAmount(parsed);
+    if (amount != null) return false;
+    final customDetection = _opts.storeNames;
     final text = ReceiptFormatter.trim(line.text);
     final customStore = customDetection.detect(text);
     if (customStore == null) return false;
@@ -401,9 +358,33 @@ final class ReceiptParser {
   ) {
     final amount = _amount.stringMatch(line.text);
     if (amount == null || _cxL(line) <= median) return false;
-    final value = double.parse(ReceiptFormatter.normalizeAmount(amount));
+    final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
+    if (value == null) return false;
     parsed.add(RecognizedAmount(line: line, value: value));
     return true;
+  }
+
+  /// Recognizes left-side and centered numeric lines as unit price and parses values.
+  static bool _tryParseUnit(
+    TextLine line,
+    List<RecognizedEntity> parsed,
+    double median,
+  ) {
+    if (_cxL(line) >= median) return false;
+    final price = _amount.stringMatch(line.text);
+    if (price != null) {
+      final value = double.tryParse(ReceiptFormatter.normalizeAmount(price));
+      if (value != null) {
+        parsed.add(RecognizedUnitPrice(line: line, value: value));
+      }
+    }
+    final unknown = _unknown.stringMatch(
+      ReceiptNormalizer.normalizeTail(line.text),
+    );
+    if (unknown != null) {
+      parsed.add(RecognizedUnknown(line: line, value: unknown));
+    }
+    return price != null || unknown != null;
   }
 
   /// Classifies left-side text as unknown (potential product) lines.
@@ -412,15 +393,14 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    if (_tryParseAmount(line, parsed, 0)) {
-      parsed.removeLast();
-      return false;
+    if (_cxL(line) >= median) return false;
+    final unknown = _unknown.stringMatch(
+      ReceiptNormalizer.normalizeTail(line.text),
+    );
+    if (unknown != null) {
+      parsed.add(RecognizedUnknown(line: line, value: unknown));
     }
-
-    final unknown = _unknown.stringMatch(line.text);
-    if (unknown == null || _cxL(line) >= median) return false;
-    parsed.add(RecognizedUnknown(line: line, value: line.text));
-    return true;
+    return unknown != null;
   }
 
   /// Appends an aggregate (axis-aligned) receipt bounding box entity derived from all lines.
@@ -507,46 +487,36 @@ final class ReceiptParser {
 
   /// Returns the first detected store entity if any.
   static RecognizedStore? _findStore(List<RecognizedEntity> entities) {
-    for (final entity in entities) {
-      if (entity is RecognizedStore) return entity;
-    }
-    return null;
-  }
-
-  /// Returns the first detected total label if any.
-  static RecognizedTotalLabel? _findTotalLabel(
-    List<RecognizedEntity> entities,
-  ) {
-    for (final entity in entities) {
-      if (entity is RecognizedTotalLabel) return entity;
-    }
-    return null;
-  }
-
-  /// Returns the first detected total if any.
-  static RecognizedTotal? _findTotal(List<RecognizedEntity> entities) {
-    for (final entity in entities) {
-      if (entity is RecognizedTotal) return entity;
-    }
-    return null;
+    return entities.whereType<RecognizedStore>().firstOrNull;
   }
 
   /// Returns the first detected purchase date entity if any.
   static RecognizedPurchaseDate? _findPurchaseDate(
     List<RecognizedEntity> entities,
   ) {
-    for (final entity in entities) {
-      if (entity is RecognizedPurchaseDate) return entity;
-    }
-    return null;
+    return entities.whereType<RecognizedPurchaseDate>().firstOrNull;
   }
 
   /// Returns the first detected bounds entity if any.
   static RecognizedBounds? _findBounds(List<RecognizedEntity> entities) {
-    for (final entity in entities) {
-      if (entity is RecognizedBounds) return entity;
-    }
-    return null;
+    return entities.whereType<RecognizedBounds>().firstOrNull;
+  }
+
+  /// Returns the last detected total label if any.
+  static RecognizedTotalLabel? _findTotalLabel(
+    List<RecognizedEntity> entities,
+  ) {
+    return entities.whereType<RecognizedTotalLabel>().lastOrNull;
+  }
+
+  /// Returns the last detected total if any.
+  static RecognizedTotal? _findTotal(List<RecognizedEntity> entities) {
+    return entities.whereType<RecognizedTotal>().lastOrNull;
+  }
+
+  /// Returns the last detected amount if any.
+  static RecognizedAmount? _findAmount(List<RecognizedEntity> entities) {
+    return entities.whereType<RecognizedAmount>().lastOrNull;
   }
 
   /// Applies the parsed total label to the receipt.
@@ -583,17 +553,24 @@ final class ReceiptParser {
     receipt.store = store;
   }
 
-  /// Pairs amounts with nearest left-side unknowns to create positions.
+  /// Pairs amounts with nearest left-side unknowns and units to create positions.
   static void _processAmounts(
     List<RecognizedEntity> entities,
     List<RecognizedUnknown> yUnknowns,
+    List<RecognizedUnitPrice> yUnitPrices,
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
   ) {
     for (final entity in entities) {
       if (entity is! RecognizedAmount) continue;
       if (receipt.total?.line == entity.line) continue;
-      _createPositionForAmount(entity, yUnknowns, receipt, forbidden);
+      _createPositionForAmount(
+        entity,
+        yUnknowns,
+        yUnitPrices,
+        receipt,
+        forbidden,
+      );
     }
   }
 
@@ -615,19 +592,41 @@ final class ReceiptParser {
     }
   }
 
-  /// Creates a position for an amount by pairing a compatible unknown line.
+  /// Creates a position for an amount by pairing a compatible unknown and unit lines.
   static void _createPositionForAmount(
     RecognizedAmount entity,
     List<RecognizedUnknown> yUnknowns,
+    List<RecognizedUnitPrice> yUnitPrices,
     RecognizedReceipt receipt,
     List<RecognizedUnknown> forbidden,
   ) {
     if (entity == receipt.total) return;
+
     _sortByDistance(entity.line.boundingBox, yUnknowns);
 
     for (final yUnknown in yUnknowns) {
       if (_isMatchingUnknown(entity, yUnknown, forbidden)) {
         final position = _createPosition(yUnknown, entity, receipt.timestamp);
+        final yUnitPrice = _findClosestEntity(
+          yUnknown,
+          yUnitPrices,
+          onlyBelow: true,
+        );
+
+        if (yUnitPrice != null) {
+          final unitPrice = yUnitPrice as RecognizedUnitPrice;
+          final centsUnitPrice = (unitPrice.value * 100).round();
+          final centsPrice = (position.price.value * 100).round();
+          if (centsPrice % centsUnitPrice == 0) {
+            position.unitPrice = unitPrice;
+            position.unitQuantity = RecognizedUnitQuantity(
+              value: centsPrice / centsUnitPrice,
+              line: unitPrice.line,
+            );
+            yUnitPrices.removeWhere((e) => identical(e, unitPrice));
+          }
+        }
+
         receipt.positions.add(position);
         forbidden.add(yUnknown);
         break;
@@ -647,7 +646,7 @@ final class ReceiptParser {
 
     final isLeftOfAmount = _right(unknown) <= _left(amount);
     final alignedVertically =
-        _dy(amount.line, unknown.line) <= _heightL(amount.line);
+        _dy(amount.line, unknown.line).abs() <= _heightL(amount.line);
 
     return isLeftOfAmount && alignedVertically;
   }
@@ -675,23 +674,33 @@ final class ReceiptParser {
     return position;
   }
 
+  /// Finds the closest entity to another entity using a geometric score (single pass).
+  static RecognizedEntity? _findClosestEntity(
+    RecognizedEntity entity,
+    List<RecognizedEntity> entities, {
+    onlyBelow = false,
+  }) {
+    RecognizedEntity? best;
+    double bestScore = double.infinity;
+    final labelLine = entity.line;
+    for (final e in entities) {
+      final s = _distanceScore(labelLine, e.line, onlyBelow: onlyBelow);
+      if (s < bestScore) {
+        bestScore = s;
+        best = e;
+      }
+    }
+    if (bestScore == double.infinity) return null;
+    return best;
+  }
+
   /// Finds the closest amount to a total label using a geometric score (single pass).
   static RecognizedAmount? _findClosestTotalAmount(
     RecognizedTotalLabel totalLabel,
     List<RecognizedAmount> amounts,
   ) {
-    RecognizedAmount? best;
-    double bestScore = double.infinity;
-    final labelLine = totalLabel.line;
-    for (final a in amounts) {
-      final s = _distanceScore(labelLine, a.line);
-      if (s < bestScore) {
-        bestScore = s;
-        best = a;
-      }
-    }
-    if (bestScore == double.infinity) return null;
-    return best;
+    final entity = _findClosestEntity(totalLabel, amounts);
+    return entity != null ? entity as RecognizedAmount : null;
   }
 
   /// Computes an adaptive fuzzy threshold based on label length and
@@ -725,9 +734,17 @@ final class ReceiptParser {
   }
 
   /// Returns absolute ΔY if within vertical tolerance, otherwise `double.infinity` (lower is better).
-  static double _distanceScore(TextLine totalLabel, TextLine amount) {
+  static double _distanceScore(
+    TextLine totalLabel,
+    TextLine amount, {
+    onlyBelow = false,
+  }) {
     final dy = _dy(totalLabel, amount);
-    return dy < _heightL(totalLabel) * pi ? dy : double.infinity;
+    final absDy =
+        onlyBelow && dy < -_heightL(totalLabel) * 0.5
+            ? double.infinity
+            : dy.abs();
+    return absDy < _heightL(totalLabel) * pi ? absDy : double.infinity;
   }
 
   /// Filters left-alignment outliers among unknown product lines.
@@ -1041,6 +1058,7 @@ final class ReceiptParser {
   /// Builds a complete receipt from entities and post-filters.
   static RecognizedReceipt _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
+    final yUnitPrices = entities.whereType<RecognizedUnitPrice>().toList();
     final receipt = RecognizedReceipt.empty();
     final forbidden = <RecognizedUnknown>[];
     final store = _findStore(entities);
@@ -1049,7 +1067,7 @@ final class ReceiptParser {
     final purchaseDate = _findPurchaseDate(entities);
     final bounds = _findBounds(entities);
 
-    _processAmounts(entities, yUnknowns, receipt, forbidden);
+    _processAmounts(entities, yUnknowns, yUnitPrices, receipt, forbidden);
     _processStore(store, receipt);
     _processTotalLabel(totalLabel, receipt);
     _processTotal(total, receipt);

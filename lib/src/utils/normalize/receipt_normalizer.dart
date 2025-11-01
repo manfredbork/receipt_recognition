@@ -37,12 +37,6 @@ final class ReceiptNormalizer {
   /// A single white space matcher for counting spaces.
   static final RegExp _singleSpace = RegExp(r'\s');
 
-  /// Captures leading text and trailing price-like tail.
-  static final RegExp _priceTail = RegExp(r'(.*\S)(\s*\d+[.,]?\d{2,3}.*)');
-
-  /// Matches explicit euro amounts like '1,99 EURO'.
-  static final RegExp _euroAmount = RegExp(r'(\s*\d+[.,]?\d{2}\sEURO?)');
-
   /// Unicode combining mark ranges (NFD) to strip diacritics.
   static final RegExp _combiningMark = RegExp(
     r'[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\uFE20-\uFE2F]',
@@ -52,6 +46,52 @@ final class ReceiptNormalizer {
   static final RegExp _allSpaces = RegExp(
     r'[\u0009-\u000D\u0020\u0085\u00A0\u1680\u180E\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+',
   );
+
+  /// Price-like tail (handles 1,99 / 12.345,67 / unicode seps / €|eur|euro|e / optional x quantity)
+  static final RegExp _priceTail = RegExp(
+    '(.*\\S)\\s*\\d{1,3}(?:[ .’\\\']\\d{3})*\\s*[.,‚،٫·]\\s*\\d{2,3}(?:\\s*(?:€|eur|euro|e))?(?:\\s*[x×]\\s*\\d*)?[\\s\\S]*',
+    caseSensitive: false,
+  );
+
+  /// Standalone trailing int (e.g., "... 9")
+  static final RegExp _trailingStandaloneInt = RegExp(
+    '(.*\\S)\\s+(\\d+)\\s*\\\$',
+  );
+
+  /// Dangling "x"/"×"
+  static final RegExp _danglingTimes = RegExp(
+    '(.*\\S)\\s+[x×]\\s*\\\$',
+    caseSensitive: false,
+  );
+
+  /// Dangling currency
+  static final RegExp _danglingCurrency = RegExp(
+    '(.*\\S)\\s+(?:€|eur|euro|e)\\s*\\\$',
+    caseSensitive: false,
+  );
+
+  /// Collapse all Unicode spaces to a normal space first.
+  static String _normalizeSpaces(String s) =>
+      s.replaceAll(_allSpaces, ' ').trim();
+
+  /// Removes trailing price-like numeric patterns, while leaving normal text intact.
+  static String normalizeTail(String value) {
+    final v = _normalizeSpaces(value);
+
+    final m1 = _priceTail.firstMatch(v);
+    if (m1 != null) return m1.group(1)!.trim();
+
+    final m2 = _trailingStandaloneInt.firstMatch(v);
+    if (m2 != null) return m2.group(1)!.trim();
+
+    final m3 = _danglingTimes.firstMatch(v);
+    if (m3 != null) return m3.group(1)!.trim();
+
+    final m4 = _danglingCurrency.firstMatch(v);
+    if (m4 != null) return m4.group(1)!.trim();
+
+    return v;
+  }
 
   /// Normalizes text by comparing multiple alternative recognitions.
   /// Example: ['COKE  ZERO', 'COKE ZERO', 'COKEZ ERO'] -> 'COKE ZERO'
@@ -378,28 +418,6 @@ final class ReceiptNormalizer {
     );
     final noPunct = glued.replaceAll(_punctDotsCommas, '');
     return noPunct.replaceAll(_spacesRun, ' ').trim();
-  }
-
-  /// Add this near the other regexes:
-  static final RegExp _trailingStandaloneInt = RegExp(r'(.*\S)\s+(\d+)\s*$');
-
-  /// Removes trailing price-like numeric patterns *or* a standalone integer at the end,
-  /// while leaving normal text intact. Examples:
-  /// 'PRODUCT NAME 1,99'   -> 'PRODUCT NAME'
-  /// 'PRODUCT NAME 123'    -> 'PRODUCT NAME'
-  /// 'PRODUCT NAME 1,99 EURO' stays unchanged (explicit currency keyword).
-  static String normalizeTail(String value) {
-    final v = value.trim();
-
-    if (_euroAmount.hasMatch(v)) return v;
-
-    final price = _priceTail.firstMatch(v);
-    if (price != null) return price.group(1)!.trim();
-
-    final bareInt = _trailingStandaloneInt.firstMatch(v);
-    if (bareInt != null) return bareInt.group(1)!.trim();
-
-    return v;
   }
 
   /// Normalizes spaces by comparing the most frequent text with its peers.

@@ -236,19 +236,8 @@ void main() {
       },
     );
 
-    group('normalizeTail – euro exception & tricky tails', () {
-      test('does not strip explicit EURO amounts', () {
-        expect(
-          ReceiptNormalizer.normalizeTail('Butter 1,99 EURO'),
-          equals('Butter 1,99 EURO'),
-        );
-        expect(
-          ReceiptNormalizer.normalizeTail('Butter 2.49 EURO'),
-          equals('Butter 2.49 EURO'),
-        );
-      });
-
-      test('strips price-like tails without EURO keyword', () {
+    group('normalizeTail – tricky tails', () {
+      test('strips price-like tails', () {
         expect(
           ReceiptNormalizer.normalizeTail('Butter 1,99'),
           equals('Butter'),
@@ -257,7 +246,18 @@ void main() {
           ReceiptNormalizer.normalizeTail('Cola 0,89 xyz'),
           equals('Cola'),
         );
-        expect(ReceiptNormalizer.normalizeTail('Tea 3.50 @'), equals('Tea'));
+        expect(
+          ReceiptNormalizer.normalizeTail('Green Tea 3.50 @'),
+          equals('Green Tea'),
+        );
+        expect(
+          ReceiptNormalizer.normalizeTail('Chocolate 2,99 ex'),
+          equals('Chocolate'),
+        );
+        expect(
+          ReceiptNormalizer.normalizeTail('Cream 0,69 € x'),
+          equals('Cream'),
+        );
       });
     });
 

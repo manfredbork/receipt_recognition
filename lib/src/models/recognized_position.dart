@@ -18,6 +18,12 @@ final class RecognizedPosition {
   /// Operation performed (added, updated, etc.).
   Operation operation;
 
+  /// Optional unit price.
+  RecognizedUnitPrice? unitPrice;
+
+  /// Optional unit quantity.
+  RecognizedUnitQuantity? unitQuantity;
+
   /// Optional optimizer grouping.
   RecognizedGroup? group;
 
@@ -27,6 +33,8 @@ final class RecognizedPosition {
     required this.price,
     required this.timestamp,
     required this.operation,
+    this.unitPrice,
+    this.unitQuantity,
     this.group,
   });
 
@@ -46,6 +54,8 @@ final class RecognizedPosition {
     RecognizedPrice? price,
     DateTime? timestamp,
     Operation? operation,
+    RecognizedUnitPrice? unitPrice,
+    RecognizedUnitQuantity? unitQuantity,
     RecognizedGroup? group,
   }) {
     return RecognizedPosition(
@@ -53,6 +63,8 @@ final class RecognizedPosition {
       price: price ?? this.price,
       timestamp: timestamp ?? this.timestamp,
       operation: operation ?? this.operation,
+      unitPrice: unitPrice ?? this.unitPrice,
+      unitQuantity: unitQuantity ?? this.unitQuantity,
       group: group ?? this.group,
     );
   }
@@ -153,9 +165,7 @@ final class RecognizedGroup {
 
   /// All product texts for normalization.
   List<String> get alternativeTexts =>
-      _members
-          .map((p) => ReceiptNormalizer.normalizeTail(p.product.text))
-          .toList();
+      _members.map((p) => p.product.text).toList();
 
   /// All product postfix texts (amount prefix removed) for categorization.
   List<String> get alternativePostfixTexts =>

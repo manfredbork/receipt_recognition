@@ -65,20 +65,22 @@ final class ReceiptFormatter {
     'dezember': 12,
   };
 
-  /// Returns a cached `NumberFormat` for `Intl.defaultLocale` with exactly two fraction digits.
-  static NumberFormat _formatter() =>
+  /// Returns a cached `NumberFormat` for `Intl.defaultLocale` with two or three fraction digits.
+  static NumberFormat _formatter({int decimalDigits = 2}) =>
       _fmtCache.putIfAbsent(Intl.defaultLocale, () {
         return NumberFormat.decimalPatternDigits(
           locale: Intl.defaultLocale,
-          decimalDigits: 2,
+          decimalDigits: decimalDigits,
         );
       });
 
   /// Formats [value] using the current locale with two decimal places (via `NumberFormat`).
-  static String format(num value) => _formatter().format(value);
+  static String format(num value, {int decimalDigits = 2}) =>
+      _formatter(decimalDigits: decimalDigits).format(value);
 
   /// Parses a localized decimal string using the current locale; throws on invalid input.
-  static num parse(String value) => _formatter().parse(value);
+  static num parse(String value, {int decimalDigits = 2}) =>
+      _formatter(decimalDigits: decimalDigits).parse(value);
 
   /// Trims [value] and collapses spaces around commas/dots (e.g. `12 , 34` → `12,34`).
   static String trim(String value) {
