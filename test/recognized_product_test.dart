@@ -88,7 +88,7 @@ void main() {
     });
 
     group('isDiscount', () {
-      test('true only when cashback AND discount keyword matches', () {
+      test('true when discount keyword matches, regardless of price sign', () {
         final opts = makeOptionsFromLists(discount: ['SAVE']);
         final p = makeProduct(
           price: -0.40,
@@ -100,7 +100,7 @@ void main() {
         expect(p.isDiscount, isTrue);
       });
 
-      test('false when keyword matches but not cashback', () {
+      test('true when keyword matches even if not cashback', () {
         final opts = makeOptionsFromLists(discount: ['SAVE']);
         final p = makeProduct(
           price: 0.40,
@@ -109,10 +109,10 @@ void main() {
           options: opts,
         );
         expect(p.isCashback, isFalse);
-        expect(p.isDiscount, isFalse);
+        expect(p.isDiscount, isTrue);
       });
 
-      test('false when cashback but keyword does not match', () {
+      test('false when keyword does not match', () {
         final opts = makeOptionsFromLists(discount: ['SAVE']);
         final p = makeProduct(
           price: -0.40,
@@ -148,80 +148,6 @@ void main() {
         expect(p.isDeposit, isFalse);
       });
     });
-  });
-
-  group('RecognizedProduct.isFood / isNonFood', () {
-    test(
-      'isFood=true when postfix matches a food keyword; isNonFood=false',
-      () {
-        final opts = makeOptionsFromLists(food: ['FOODX']);
-        final p = makeProduct(
-          price: 3.49,
-          productText: 'ANY',
-          priceLineText: '3.49 FOODX',
-          options: opts,
-        );
-        expect(p.isFood, isTrue);
-        expect(p.isNonFood, isFalse);
-      },
-    );
-
-    test(
-      'isNonFood=true when postfix matches a non-food keyword; isFood=false',
-      () {
-        final opts = makeOptionsFromLists(nonFood: ['NF_TAG']);
-        final p = makeProduct(
-          price: 2.99,
-          productText: 'ANY',
-          priceLineText: '2.99 NF_TAG',
-          options: opts,
-        );
-        expect(p.isNonFood, isTrue);
-        expect(p.isFood, isFalse);
-      },
-    );
-
-    test('both false when no postfix keyword matches', () {
-      final opts = makeOptionsFromLists(food: ['FOODX'], nonFood: ['NF_TAG']);
-      final p = makeProduct(
-        price: 1.00,
-        productText: 'ANY',
-        priceLineText: '1.00 NEUTRALTAG',
-        options: opts,
-      );
-      expect(p.isFood, isFalse);
-      expect(p.isNonFood, isFalse);
-    });
-
-    test(
-      'with both lists provided: matches FOOD when postfix contains food token',
-      () {
-        final opts = makeOptionsFromLists(food: ['FOODX'], nonFood: ['NF_TAG']);
-        final p = makeProduct(
-          price: 0.79,
-          productText: 'ANY',
-          priceLineText: '0.79 FOODX',
-          options: opts,
-        );
-        expect(p.isFood, isTrue);
-        expect(p.isNonFood, isFalse);
-      },
-    );
-
-    test(
-      'with both lists provided: matches NON-FOOD when postfix contains non-food token',
-      () {
-        final opts = makeOptionsFromLists(food: ['FOODX'], nonFood: ['NF_TAG']);
-        final p = makeProduct(
-          price: 5.49,
-          productText: 'ANY',
-          priceLineText: '5.49 NF_TAG',
-          options: opts,
-        );
-        expect(p.isFood, isFalse);
-        expect(p.isNonFood, isTrue);
-      },
-    );
   });
 
   group('RecognizedReceipt.isEmpty', () {

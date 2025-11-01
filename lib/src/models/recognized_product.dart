@@ -75,11 +75,10 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       position?.group?.convertToPostfixText(position?.price.line.text ?? '') ??
       '';
 
-  /// Normalized postfix text using keyword matching.
+  /// Normalized postfix text containing only A-Z and 0-9 characters.
   String get normalizedPostfixText => alternativePostfixTexts.firstWhere(
     (postfixText) =>
-        options.foodKeywords.hasMatch(postfixText) ||
-        options.nonFoodKeywords.hasMatch(postfixText),
+        postfixText.replaceAll(RegExp(r'[^A-Z0-9]'), '').isNotEmpty,
     orElse: () => '',
   );
 
@@ -122,15 +121,8 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   /// Whether this product is a cashback (negative price).
   bool get isCashback => (position?.price.value ?? 0.0) < 0;
 
-  /// Whether this product is classified as food.
-  bool get isFood => options.foodKeywords.hasMatch(normalizedPostfixText);
-
-  /// Whether this product is classified as non-food.
-  bool get isNonFood => options.nonFoodKeywords.hasMatch(normalizedPostfixText);
-
   /// Whether this product represents a discount.
-  bool get isDiscount =>
-      isCashback && options.discountKeywords.hasMatch(normalizedText);
+  bool get isDiscount => options.discountKeywords.hasMatch(normalizedText);
 
   /// Whether this product represents a deposit.
   bool get isDeposit => options.depositKeywords.hasMatch(normalizedText);

@@ -26,12 +26,6 @@ final class ReceiptOptions {
   /// Keywords that indicate parsing should stop.
   final KeywordSet stopKeywords;
 
-  /// Keywords that classify an item as food.
-  final KeywordSet foodKeywords;
-
-  /// Keywords that classify an item as non-food.
-  final KeywordSet nonFoodKeywords;
-
   /// Keywords that indicate discounts.
   final KeywordSet discountKeywords;
 
@@ -47,8 +41,6 @@ final class ReceiptOptions {
     required this.totalLabels,
     required this.ignoreKeywords,
     required this.stopKeywords,
-    required this.foodKeywords,
-    required this.nonFoodKeywords,
     required this.discountKeywords,
     required this.depositKeywords,
     required this.tuning,
@@ -126,14 +118,6 @@ final class ReceiptOptions {
       defaults: def.stopKeywords,
       key: 'stopKeywords',
     );
-    final foodKeywords = resolveList(
-      defaults: def.foodKeywords,
-      key: 'foodKeywords',
-    );
-    final nonFoodKeywords = resolveList(
-      defaults: def.nonFoodKeywords,
-      key: 'nonFoodKeywords',
-    );
     final discountKeywords = resolveList(
       defaults: def.discountKeywords,
       key: 'discountKeywords',
@@ -151,8 +135,6 @@ final class ReceiptOptions {
       totalLabels: totalLabels,
       ignoreKeywords: ignoreKeywords,
       stopKeywords: stopKeywords,
-      foodKeywords: foodKeywords,
-      nonFoodKeywords: nonFoodKeywords,
       discountKeywords: discountKeywords,
       depositKeywords: depositKeywords,
       tuning: tuningResolved,
@@ -173,8 +155,6 @@ final class ReceiptOptions {
     totalLabels: DetectionMap.fromMap(const {}),
     ignoreKeywords: KeywordSet.fromList(const []),
     stopKeywords: KeywordSet.fromList(const []),
-    foodKeywords: KeywordSet.fromList(const []),
-    nonFoodKeywords: KeywordSet.fromList(const []),
     discountKeywords: KeywordSet.fromList(const []),
     depositKeywords: KeywordSet.fromList(const []),
     tuning: ReceiptTuning.fromJsonLike(const {}),
@@ -203,10 +183,6 @@ final class ReceiptOptions {
       totalLabels: DetectionMap.fromMap(pickStrMap(json['totalLabels'])),
       ignoreKeywords: KeywordSet.fromList(pickStrList(json['ignoreKeywords'])),
       stopKeywords: KeywordSet.fromList(pickStrList(json['stopKeywords'])),
-      foodKeywords: KeywordSet.fromList(pickStrList(json['foodKeywords'])),
-      nonFoodKeywords: KeywordSet.fromList(
-        pickStrList(json['nonFoodKeywords']),
-      ),
       discountKeywords: KeywordSet.fromList(
         pickStrList(json['discountKeywords']),
       ),
@@ -225,8 +201,6 @@ final class ReceiptOptions {
     'totalLabels': totalLabels.mapping,
     'ignoreKeywords': ignoreKeywords.keywords,
     'stopKeywords': stopKeywords.keywords,
-    'foodKeywords': foodKeywords.keywords,
-    'nonFoodKeywords': nonFoodKeywords.keywords,
     'discountKeywords': discountKeywords.keywords,
     'depositKeywords': depositKeywords.keywords,
     'tuning': tuning.toJsonLike(),

@@ -27,8 +27,6 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
     'kg x',
   ],
   'stopKeywords': ['Geg.', 'Rückgeld', 'Bar', 'Change'],
-  'foodKeywords': ['B', '2', 'BW'],
-  'nonFoodKeywords': ['A', '1', 'AW'],
   'discountKeywords': ['Rabatt', 'Coupon', 'Discount'],
   'depositKeywords': ['Leerg.', 'Leergut', 'Einweg', 'Pfand', 'Deposit'],
   'tuning': {
