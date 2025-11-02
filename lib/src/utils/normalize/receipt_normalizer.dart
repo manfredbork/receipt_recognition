@@ -181,7 +181,7 @@ final class ReceiptNormalizer {
       'ranked': candidates,
     });
 
-    final spaced = normalizeSpecialSpaces(mostFrequent, filteredTexts);
+    final spaced = normalizeSpecialSpaces(mostFrequent, candidates);
 
     ReceiptLogger.log('norm.out', {'result': spaced});
     return spaced;
@@ -252,33 +252,9 @@ final class ReceiptNormalizer {
   static List<String> _applyOcrCorrection(List<String> alternatives) {
     if (alternatives.length < 2) return alternatives;
 
-    final total = alternatives.length;
-    final counts = <String, int>{};
-    for (final text in alternatives) {
-      counts[text] = (counts[text] ?? 0) + 1;
-    }
-    final percentages = <String, int>{};
-    counts.forEach((k, v) => percentages[k] = ((v / total) * 100).round());
-
-    final confidenceThreshold =
-        ReceiptRuntime.options.tuning.optimizerConfidenceThreshold;
-    final stabilityThreshold =
-        ReceiptRuntime.options.tuning.optimizerStabilityThreshold;
-
     final corrected = <String>[];
 
     for (final text in alternatives) {
-      final percentage = percentages[text] ?? 0;
-      final percConfThreshold =
-          alternatives.length <= 2 && percentage >= confidenceThreshold;
-      final percStabThreshold =
-          alternatives.length > 2 && percentage >= stabilityThreshold;
-
-      if (percConfThreshold || percStabThreshold) {
-        corrected.add(text);
-        continue;
-      }
-
       final chars = text.split('');
       final ocrAlternatives = alternatives.where((t) => t != text).toList();
 
@@ -291,7 +267,8 @@ final class ReceiptNormalizer {
           if (other.length > i) {
             final otherChar = other[i];
 
-            if (_isNormalLetter(otherChar) &&
+            if (!_isNormalLetter(char) &&
+                _isNormalLetter(otherChar) &&
                 _isSimilarExceptPosition(text, other, i)) {
               if (i + 1 < chars.length &&
                   chars[i + 1].toLowerCase() == otherChar.toLowerCase()) {
@@ -304,8 +281,6 @@ final class ReceiptNormalizer {
                 'from': char,
                 'to': otherChar,
                 'reference': other,
-                'percentage': percentage,
-                'threshold': stabilityThreshold,
               });
               break;
             }
@@ -313,7 +288,54 @@ final class ReceiptNormalizer {
         }
       }
 
-      corrected.add(chars.join());
+      // After the existing per-char replacement loop
+      String afterCharFix = chars.join();
+
+      // --- Token-wise correction (minimal) ---
+      final tokens = afterCharFix.split(RegExp(r'\s+'));
+      for (final other in ocrAlternatives) {
+        final otherTokens = other.split(RegExp(r'\s+'));
+        if (otherTokens.length != tokens.length) continue;
+
+        for (int ti = 0; ti < tokens.length; ti++) {
+          final t = tokens[ti];
+          if (t.length < 4) continue;
+
+          final oTok = otherTokens[ti];
+          if (oTok.isEmpty || t == oTok) continue;
+
+          if (_editDistanceLe1(t, oTok)) {
+            final tIsAlpha = _isAlpha(t);
+            final oIsAlpha = _isAlpha(oTok);
+
+            if (!tIsAlpha && oIsAlpha) {
+              // prefer letters over digits/specials (M1lka -> Milka)
+              ReceiptLogger.log('ocr.token.correct', {
+                'from': t,
+                'to': oTok,
+                'reason': 'prefer-alpha',
+                'pos': ti,
+              });
+              tokens[ti] = oTok;
+            } else if (tIsAlpha && !oIsAlpha) {
+              // keep t
+            } else {
+              // both alpha -> prefer the shorter one (Garnze -> Ganze)
+              if (oTok.length < t.length) {
+                ReceiptLogger.log('ocr.token.correct', {
+                  'from': t,
+                  'to': oTok,
+                  'reason': 'shorter-alpha',
+                  'pos': ti,
+                });
+                tokens[ti] = oTok;
+              }
+            }
+          }
+        }
+      }
+      afterCharFix = tokens.join(' ');
+      corrected.add(afterCharFix);
     }
 
     return corrected;
@@ -327,7 +349,9 @@ final class ReceiptNormalizer {
     if (char.isEmpty) return false;
     final code = char.codeUnitAt(0);
 
-    if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+    if ((code >= 32 && code <= 38) ||
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122)) {
       return true;
     }
 
@@ -363,6 +387,49 @@ final class ReceiptNormalizer {
       }
     }
 
+    return true;
+  }
+
+  /// True if [s] has letters and all of them are uppercase (diacritics supported).
+  static bool _isAllCaps(String s) {
+    final lettersOnly = s.replaceAll(RegExp(r'[^A-Za-zÀ-ÖØ-Þà-öø-ÿ]'), '');
+    if (lettersOnly.isEmpty) return false;
+    return lettersOnly.toUpperCase() == lettersOnly;
+  }
+
+  /// Returns true if all characters in [s] are normal letters (A–Z, a–z, incl. diacritics).
+  static bool _isAlpha(String s) {
+    for (final ch in s.split('')) {
+      if (!_isNormalLetter(ch)) return false;
+    }
+    return true;
+  }
+
+  /// Fast check: Levenshtein distance <= 1
+  static bool _editDistanceLe1(String a, String b) {
+    if (a == b) return true;
+    final la = a.length, lb = b.length;
+    if ((la - lb).abs() > 1) return false;
+
+    if (la == lb) {
+      int diffs = 0;
+      for (int i = 0; i < la; i++) {
+        if (a[i] != b[i] && ++diffs > 1) return false;
+      }
+      return true;
+    }
+
+    if (la > lb) return _editDistanceLe1(b, a);
+    int i = 0, j = 0, skips = 0;
+    while (i < la && j < lb) {
+      if (a[i] == b[j]) {
+        i++;
+        j++;
+      } else {
+        if (++skips > 1) return false;
+        j++;
+      }
+    }
     return true;
   }
 
@@ -466,8 +533,11 @@ final class ReceiptNormalizer {
       final bSpaces = _singleSpace.allMatches(b).length;
       if (aSpaces != bSpaces) return aSpaces - bSpaces;
 
-      if (a.length != b.length) return a.length - b.length;
+      final aAll = _isAllCaps(a) ? 1 : 0;
+      final bAll = _isAllCaps(b) ? 1 : 0;
+      if (aAll != bAll) return aAll - bAll;
 
+      if (a.length != b.length) return a.length - b.length;
       return a.compareTo(b);
     });
 

@@ -73,6 +73,26 @@ void main() {
         expect(result, 'ItemA123');
       });
 
+      test('should return normalized text without number', () {
+        final alternativeTexts = ['M1lka', 'Milka'];
+
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
+          alternativeTexts,
+        );
+
+        expect(result, 'Milka');
+      });
+
+      test('should return normalized text without space', () {
+        final alternativeTexts = ['Kal e', 'Kal e', 'Kale'];
+
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
+          alternativeTexts,
+        );
+
+        expect(result, 'Kale');
+      });
+
       test('should return null when no alternative texts are provided', () {
         final noAlternativeTexts = <String>[];
 
