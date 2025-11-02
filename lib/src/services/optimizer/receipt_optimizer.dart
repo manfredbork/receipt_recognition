@@ -520,10 +520,11 @@ final class ReceiptOptimizer implements Optimizer {
 
     final pts = <Point<double>>[];
     for (final p in pos) {
-      final b = p.product.line.boundingBox;
-      final yCenter = b.center.dy.toDouble();
-      final xLeft = b.left.toDouble();
-      pts.add(Point<double>(yCenter, xLeft));
+      final a = p.product.line.boundingBox;
+      final b = p.price.line.boundingBox;
+      final yCenter = (a.center.dy + b.center.dy) / 2;
+      final xCenter = (a.left + b.left) / 2;
+      pts.add(Point<double>(yCenter, xCenter));
     }
     if (pts.length < 2) return;
 

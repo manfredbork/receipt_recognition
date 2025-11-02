@@ -75,11 +75,12 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       position?.group?.convertToPostfixText(position?.price.line.text ?? '') ??
       '';
 
-  /// Product group from postfix text containing only A-Z and numbers 1 and 2.
-  String get productGroup => alternativePostfixTexts.firstWhere(
-    (postfixText) => postfixText.replaceAll(RegExp(r'[^A-Z12]'), '').isNotEmpty,
-    orElse: () => '',
-  );
+  /// Normalized product group using group alternatives.
+  String get productGroup =>
+      ReceiptNormalizer.normalizeByAlternativePostfixTexts(
+        alternativePostfixTexts,
+      ) ??
+      postfixText;
 
   /// Alternative product texts from the group.
   List<String> get alternativeTexts => position?.group?.alternativeTexts ?? [];

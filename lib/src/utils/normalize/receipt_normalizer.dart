@@ -47,6 +47,12 @@ final class ReceiptNormalizer {
     r'[\u0009-\u000D\u0020\u0085\u00A0\u1680\u180E\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+',
   );
 
+  /// Product group disallowed chars
+  static final RegExp _disallowedGroupChars = RegExp(
+    r'[^A-Z12]',
+    caseSensitive: false,
+  );
+
   /// Price-like tail (handles 1,99 / 12.345,67 / unicode seps / €|eur|euro|e / optional x quantity)
   static final RegExp _priceTail = RegExp(
     '(.*?\\S)(?=\\s+\\d{1,3}(?:[ .’\\\']\\d{3})*\\s*[.,‚،٫·]\\s*\\d{2,3}(?:\\s*(?:€|eur|euro|e))?(?:\\s*[x×]\\s*\\d*)?[\\s\\S]*)[\\s\\S]*',
@@ -91,6 +97,32 @@ final class ReceiptNormalizer {
     if (m4 != null) return m4.group(1)!.trim();
 
     return v;
+  }
+
+  /// Normalizes postfix text by comparing multiple alternative recognitions.
+  static String? normalizeByAlternativePostfixTexts(
+    List<String> alternativePostfixTexts,
+  ) {
+    ReceiptLogger.log('norm.in', {
+      'n': alternativePostfixTexts.length,
+      'alts': alternativePostfixTexts,
+    });
+
+    if (alternativePostfixTexts.isEmpty) {
+      ReceiptLogger.log('norm.out', {'result': null, 'why': 'empty'});
+      return null;
+    }
+
+    final charNormalized =
+        alternativePostfixTexts
+            .map((s) => s.replaceAll(_disallowedGroupChars, ''))
+            .toList();
+
+    final mostFrequent = sortByFrequency(charNormalized);
+
+    ReceiptLogger.log('norm.out', {'result': mostFrequent.last});
+
+    return mostFrequent.last;
   }
 
   /// Normalizes text by comparing multiple alternative recognitions.
