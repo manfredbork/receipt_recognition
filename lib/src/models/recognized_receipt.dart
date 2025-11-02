@@ -195,10 +195,8 @@ class RecognizedReceipt {
           final enoughConfidence = p.confidence >= confThr;
           return enoughMembers && enoughStability && enoughConfidence;
         }).length;
-
     final minNeed = positions.length;
-    final need = minNeed - positions.length ~/ 4;
-
+    final need = minNeed - positions.length ~/ 5;
     return minPassing >= minNeed && passing >= need;
   }
 }
