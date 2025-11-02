@@ -347,11 +347,11 @@ final class ReceiptNormalizer {
   /// Example: isNormalLetter('O') -> true, isNormalLetter('0') -> false
   static bool _isNormalLetter(String char) {
     if (char.isEmpty) return false;
+    if (char == '!' || char == '%' || char == '&') return true;
+
     final code = char.codeUnitAt(0);
 
-    if ((code >= 32 && code <= 38) ||
-        (code >= 65 && code <= 90) ||
-        (code >= 97 && code <= 122)) {
+    if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
       return true;
     }
 
