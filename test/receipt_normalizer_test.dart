@@ -239,6 +239,10 @@ void main() {
     group('normalizeTail – tricky tails', () {
       test('strips price-like tails', () {
         expect(
+          ReceiptNormalizer.normalizeTail('Shorts 10,99'),
+          equals('Shorts'),
+        );
+        expect(
           ReceiptNormalizer.normalizeTail('Butter 1,99'),
           equals('Butter'),
         );

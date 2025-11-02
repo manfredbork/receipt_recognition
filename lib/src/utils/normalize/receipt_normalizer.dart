@@ -49,7 +49,7 @@ final class ReceiptNormalizer {
 
   /// Price-like tail (handles 1,99 / 12.345,67 / unicode seps / €|eur|euro|e / optional x quantity)
   static final RegExp _priceTail = RegExp(
-    '(.*\\S)\\s*\\d{1,3}(?:[ .’\\\']\\d{3})*\\s*[.,‚،٫·]\\s*\\d{2,3}(?:\\s*(?:€|eur|euro|e))?(?:\\s*[x×]\\s*\\d*)?[\\s\\S]*',
+    '(.*?\\S)(?=\\s+\\d{1,3}(?:[ .’\\\']\\d{3})*\\s*[.,‚،٫·]\\s*\\d{2,3}(?:\\s*(?:€|eur|euro|e))?(?:\\s*[x×]\\s*\\d*)?[\\s\\S]*)[\\s\\S]*',
     caseSensitive: false,
   );
 
