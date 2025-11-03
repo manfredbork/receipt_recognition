@@ -48,20 +48,17 @@ final class ReceiptNormalizer {
   );
 
   /// Product group disallowed chars
-  static final RegExp _disallowedGroupChars = RegExp(
-    r'[^A-Z12]',
-    caseSensitive: false,
+  static final RegExp _disallowedGroupChars = RegExp(r'[^A-Z12]');
+
+  /// Standalone trailing int (e.g., "... 9")
+  static final RegExp _trailingStandaloneInt = RegExp(
+    '(.*\\S)\\s+(\\d+)\\s*\\\$',
   );
 
   /// Price-like tail (handles 1,99 / 12.345,67 / unicode seps / €|eur|euro|e / optional x quantity)
   static final RegExp _priceTail = RegExp(
     '(.*?\\S)(?=\\s+\\d{1,3}(?:[ .’\\\']\\d{3})*\\s*[.,‚،٫·]\\s*\\d{2,3}(?:\\s*(?:€|eur|euro|e))?(?:\\s*[x×]\\s*\\d*)?[\\s\\S]*)[\\s\\S]*',
     caseSensitive: false,
-  );
-
-  /// Standalone trailing int (e.g., "... 9")
-  static final RegExp _trailingStandaloneInt = RegExp(
-    '(.*\\S)\\s+(\\d+)\\s*\\\$',
   );
 
   /// Dangling "x"/"×"
@@ -84,10 +81,10 @@ final class ReceiptNormalizer {
   static String normalizeTail(String value) {
     final v = _normalizeSpaces(value);
 
-    final m1 = _priceTail.firstMatch(v);
+    final m1 = _trailingStandaloneInt.firstMatch(v);
     if (m1 != null) return m1.group(1)!.trim();
 
-    final m2 = _trailingStandaloneInt.firstMatch(v);
+    final m2 = _priceTail.firstMatch(v);
     if (m2 != null) return m2.group(1)!.trim();
 
     final m3 = _danglingTimes.firstMatch(v);
@@ -219,51 +216,33 @@ final class ReceiptNormalizer {
     return spaced;
   }
 
-  /// Removes a single erroneous space only if the no-space variant is
-  /// more frequent than the spaced one, using sortByFrequency().
+  /// Removes erroneous single spaces by replacing texts that equal another text
+  /// when exactly one space is removed.
+  /// Example: ['Weide milch', 'Weidemilch'] -> ['Weidemilch', 'Weidemilch']
   static List<String> _removeErroneousSingleSpaces(List<String> alternatives) {
     if (alternatives.length < 2) return alternatives;
 
-    final ordered = sortByFrequency(alternatives);
-    final rank = <String, int>{};
-    for (int i = 0; i < ordered.length; i++) {
-      rank[ordered[i]] = i;
-    }
+    final corrected = <String>[];
 
-    String? bestReplacementFor(String text) {
-      final currentRank = rank[text] ?? -1;
-      String? best;
-      int bestRank = currentRank;
+    for (final text in alternatives) {
+      String? matchedWithoutSpace;
 
       for (final other in alternatives) {
-        if (identical(other, text)) continue;
+        if (other == text) continue;
 
-        if (_tryRemovingSingleSpace(text, other) == null) continue;
-
-        final r = rank[other] ?? -1;
-        if (r > bestRank) {
-          bestRank = r;
-          best = other;
+        final withoutSpace = _tryRemovingSingleSpace(text, other);
+        if (withoutSpace != null) {
+          matchedWithoutSpace = other;
+          ReceiptLogger.log('space.remove', {
+            'original': text,
+            'corrected': other,
+            'removed_space': true,
+          });
+          break;
         }
       }
-      return best;
-    }
 
-    final corrected = <String>[];
-    for (final text in alternatives) {
-      final repl = bestReplacementFor(text);
-      if (repl != null) {
-        ReceiptLogger.log('space.remove', {
-          'original': text,
-          'corrected': repl,
-          'reason': 'no-space-more-frequent (by rank)',
-          'rank.original': rank[text],
-          'rank.corrected': rank[repl],
-        });
-        corrected.add(repl);
-      } else {
-        corrected.add(text);
-      }
+      corrected.add(matchedWithoutSpace ?? text);
     }
 
     return corrected;

@@ -66,6 +66,19 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   /// Formatted product text.
   String get text => formattedValue;
 
+  /// Normalized unit price using group alternatives.
+  String get normalizedUnitPrice =>
+      ReceiptNormalizer.sortByFrequency(alternativeUnitPrices).lastOrNull ??
+      position?.unitPrice?.formattedValue ??
+      position?.price.formattedValue ??
+      '';
+
+  /// Normalized unit quantity using group alternatives.
+  String get normalizedUnitQuantity =>
+      ReceiptNormalizer.sortByFrequency(alternativeUnitQuantities).lastOrNull ??
+      position?.unitQuantity?.formattedValue ??
+      '';
+
   /// Normalized product text using group alternatives.
   String get normalizedText =>
       ReceiptNormalizer.normalizeByAlternativeTexts(alternativeTexts) ?? text;
@@ -83,6 +96,14 @@ final class RecognizedProduct extends RecognizedEntity<String> {
 
   /// Alternative product texts from the group.
   List<String> get alternativeTexts => position?.group?.alternativeTexts ?? [];
+
+  /// Alternative unit prices from the group.
+  List<String> get alternativeUnitPrices =>
+      position?.group?.alternativeUnitPrices ?? [];
+
+  /// Alternative unit quantities from the group.
+  List<String> get alternativeUnitQuantities =>
+      position?.group?.alternativeUnitQuantities ?? [];
 
   /// Alternative postfix texts from the group.
   List<String> get alternativePostfixTexts =>

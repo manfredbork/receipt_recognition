@@ -64,7 +64,7 @@ final class ReceiptParser {
 
   static double _cxMedian(List<RecognizedEntity> parsed) {
     final bounds = parsed.whereType<RecognizedBounds>();
-    return bounds.isNotEmpty ? _cxR(bounds.last.boundingBox) : 0;
+    return bounds.isNotEmpty ? _cxR(bounds.last.boundingBox) * 1.5 : 0;
   }
 
   /// Comparator by center-Y, then center-X (ascending).
@@ -160,6 +160,7 @@ final class ReceiptParser {
         'entities': parsed.length,
         'unknowns': parsed.whereType<RecognizedUnknown>().length,
         'amounts': parsed.whereType<RecognizedAmount>().length,
+        'unitPrices': parsed.whereType<RecognizedUnitPrice>().length,
       });
 
       final prunedUnknowns = _filterUnknownOutliers(parsed);
@@ -356,8 +357,9 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
+    if (_cxL(line) <= median) return false;
     final amount = _amount.stringMatch(line.text);
-    if (amount == null || _cxL(line) <= median) return false;
+    if (amount == null) return false;
     final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
     if (value == null) return false;
     parsed.add(RecognizedAmount(line: line, value: value));
@@ -370,21 +372,14 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    if (_cxL(line) >= median) return false;
-    final price = _amount.stringMatch(line.text);
-    if (price != null) {
-      final value = double.tryParse(ReceiptFormatter.normalizeAmount(price));
-      if (value != null) {
-        parsed.add(RecognizedUnitPrice(line: line, value: value));
-      }
-    }
-    final unknown = _unknown.stringMatch(
-      ReceiptNormalizer.normalizeTail(line.text),
-    );
-    if (unknown != null) {
-      parsed.add(RecognizedUnknown(line: line, value: unknown));
-    }
-    return price != null || unknown != null;
+    if (_cxL(line) > median) return false;
+    final amount = _amount.stringMatch(line.text);
+    if (amount == null) return false;
+    final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
+    if (value == null) return false;
+    parsed.add(RecognizedUnitPrice(line: line, value: value));
+    _tryParseUnknown(line, parsed, median);
+    return true;
   }
 
   /// Classifies left-side text as unknown (potential product) lines.
@@ -393,14 +388,16 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    if (_cxL(line) >= median) return false;
+    if (_cxL(line) > median) return false;
     final unknown = _unknown.stringMatch(
       ReceiptNormalizer.normalizeTail(line.text),
     );
-    if (unknown != null) {
+    if (unknown == null) return false;
+    final passed = ReceiptFormatter.lettersOnly(unknown).length > 2;
+    if (passed) {
       parsed.add(RecognizedUnknown(line: line, value: unknown));
     }
-    return unknown != null;
+    return true;
   }
 
   /// Appends an aggregate (axis-aligned) receipt bounding box entity derived from all lines.
@@ -1012,6 +1009,7 @@ final class ReceiptParser {
       if (entity is RecognizedStore ||
           entity is RecognizedBounds ||
           entity is RecognizedPurchaseDate ||
+          entity is RecognizedUnitPrice ||
           entity is RecognizedTotalLabel ||
           entity is RecognizedTotal) {
         filtered.add(entity);

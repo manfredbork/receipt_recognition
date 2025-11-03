@@ -164,6 +164,22 @@ final class RecognizedGroup {
           .map((p) => ReceiptFormatter.toPostfixText(p.price.line.text))
           .toList();
 
+  /// All product unit prices for normalization.
+  List<String> get alternativeUnitPrices =>
+      _members
+          .where(
+            (p) => p.unitPrice != null && p.unitPrice!.value < p.price.value,
+          )
+          .map((p) => p.unitPrice!.formattedValue)
+          .toList();
+
+  /// All product unit prices for normalization.
+  List<String> get alternativeUnitQuantities =>
+      _members
+          .where((p) => p.unitQuantity != null && p.unitQuantity!.value > 1)
+          .map((p) => p.unitQuantity!.formattedValue)
+          .toList();
+
   /// Average confidence across members.
   int get confidence {
     if (_members.isEmpty) return 0;
