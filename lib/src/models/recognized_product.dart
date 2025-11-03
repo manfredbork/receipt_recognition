@@ -56,7 +56,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       line: line ?? this.line,
       confidence: confidence ?? this.confidence,
       position: position ?? this.position,
-      options: options ?? ReceiptOptions.defaults(),
+      options: options ?? this.options,
     );
   }
 

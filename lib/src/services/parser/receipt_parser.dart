@@ -642,11 +642,13 @@ final class ReceiptParser {
         }
 
         if (position.product.isDeposit || position.product.isDiscount) {
-          position = position.copyWith(
+          final newPosition = position.copyWith(
             product: position.product.copyWith(
               value: position.product.line.text,
             ),
           );
+          newPosition.product.position = newPosition;
+          position = newPosition;
         }
 
         receipt.positions.add(position);
