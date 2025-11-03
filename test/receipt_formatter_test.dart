@@ -37,6 +37,23 @@ void main() {
       });
     });
 
+    group('toPostfixText', () {
+      test('should convert to postfix text', () {
+        final strings = [
+          '0.00 A',
+          '1,00*A',
+          '42.99 AB',
+          '100.00A',
+          '-5.01 AB*#',
+        ];
+        final expected = ['A', '*A', 'AB', 'A', 'AB*#'];
+
+        for (int i = 0; i < strings.length; i++) {
+          expect(ReceiptFormatter.toPostfixText(strings[i]), expected[i]);
+        }
+      });
+    });
+
     group('parse', () {
       test('should parse decimal strings to numbers', () {
         final strings = ['0.00', '1.00', '42.99', '100.00', '-5.01'];

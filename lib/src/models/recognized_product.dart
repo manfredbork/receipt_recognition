@@ -72,8 +72,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
 
   /// Postfix text after the price, if any.
   String get postfixText =>
-      position?.group?.convertToPostfixText(position?.price.line.text ?? '') ??
-      '';
+      ReceiptFormatter.toPostfixText(position?.price.line.text ?? '');
 
   /// Normalized product group using group alternatives.
   String get productGroup =>

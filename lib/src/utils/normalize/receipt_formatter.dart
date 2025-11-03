@@ -23,6 +23,11 @@ final class ReceiptFormatter {
   /// Detects parentheses negatives like "(12,34)".
   static final RegExp _reParenNegative = RegExp(r'^\s*\(\s*(.+?)\s*\)\s*$');
 
+  /// Detects amount prefix to convert into postfix text.
+  static final RegExp _amountPostfixText = RegExp(
+    r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
+  );
+
   /// Cache of NumberFormat by locale for performance.
   static final Map<String?, NumberFormat> _fmtCache = {};
 
@@ -133,6 +138,14 @@ final class ReceiptFormatter {
     if (negative && !s.startsWith('-')) s = '-$s';
 
     return s;
+  }
+
+  /// Removes a leading amount pattern from [text], returning the remainder.
+  static String toPostfixText(String text) {
+    if (text.isEmpty) return '';
+    final m = _amountPostfixText.matchAsPrefix(text.trim());
+    if (m == null) return '';
+    return text.substring(m.end).trim();
   }
 
   /// Parses `YYYY-MM-DD` (or mixed separators) into a `DateTime.utc(y,m,d)`; returns null if invalid.

@@ -151,15 +151,6 @@ final class RecognizedGroup {
     );
   }
 
-  /// Removes a leading amount pattern from [postfixText], returning the remainder.
-  String convertToPostfixText(String postfixText) {
-    if (postfixText.isEmpty) return postfixText;
-    final amountPattern = RegExp(r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)');
-    final m = amountPattern.matchAsPrefix(postfixText.trim());
-    if (m == null) return '';
-    return postfixText.substring(m.end).trim();
-  }
-
   /// All position members.
   List<RecognizedPosition> get members => _members;
 
@@ -169,7 +160,9 @@ final class RecognizedGroup {
 
   /// All product postfix texts (amount prefix removed) for categorization.
   List<String> get alternativePostfixTexts =>
-      _members.map((p) => convertToPostfixText(p.price.line.text)).toList();
+      _members
+          .map((p) => ReceiptFormatter.toPostfixText(p.price.line.text))
+          .toList();
 
   /// Average confidence across members.
   int get confidence {
