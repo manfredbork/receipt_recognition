@@ -219,33 +219,51 @@ final class ReceiptNormalizer {
     return spaced;
   }
 
-  /// Removes erroneous single spaces by replacing texts that equal another text
-  /// when exactly one space is removed.
-  /// Example: ['Weide milch', 'Weidemilch'] -> ['Weidemilch', 'Weidemilch']
+  /// Removes a single erroneous space only if the no-space variant is
+  /// more frequent than the spaced one, using sortByFrequency().
   static List<String> _removeErroneousSingleSpaces(List<String> alternatives) {
     if (alternatives.length < 2) return alternatives;
 
-    final corrected = <String>[];
+    final ordered = sortByFrequency(alternatives);
+    final rank = <String, int>{};
+    for (int i = 0; i < ordered.length; i++) {
+      rank[ordered[i]] = i;
+    }
 
-    for (final text in alternatives) {
-      String? matchedWithoutSpace;
+    String? bestReplacementFor(String text) {
+      final currentRank = rank[text] ?? -1;
+      String? best;
+      int bestRank = currentRank;
 
       for (final other in alternatives) {
-        if (other == text) continue;
+        if (identical(other, text)) continue;
 
-        final withoutSpace = _tryRemovingSingleSpace(text, other);
-        if (withoutSpace != null) {
-          matchedWithoutSpace = other;
-          ReceiptLogger.log('space.remove', {
-            'original': text,
-            'corrected': other,
-            'removed_space': true,
-          });
-          break;
+        if (_tryRemovingSingleSpace(text, other) == null) continue;
+
+        final r = rank[other] ?? -1;
+        if (r > bestRank) {
+          bestRank = r;
+          best = other;
         }
       }
+      return best;
+    }
 
-      corrected.add(matchedWithoutSpace ?? text);
+    final corrected = <String>[];
+    for (final text in alternatives) {
+      final repl = bestReplacementFor(text);
+      if (repl != null) {
+        ReceiptLogger.log('space.remove', {
+          'original': text,
+          'corrected': repl,
+          'reason': 'no-space-more-frequent (by rank)',
+          'rank.original': rank[text],
+          'rank.corrected': rank[repl],
+        });
+        corrected.add(repl);
+      } else {
+        corrected.add(text);
+      }
     }
 
     return corrected;
@@ -349,10 +367,30 @@ final class ReceiptNormalizer {
                 'pos': ti,
               });
               tokens[ti] = oTok;
-            } else if (tIsAlpha && !oIsAlpha) {
-              // keep t
-            } else {
-              // both alpha -> prefer the shorter one (Garnze -> Ganze)
+              continue;
+            }
+
+            if (tIsAlpha && oIsAlpha) {
+              final a = t, b = oTok;
+              final aIsStrictPrefixOfB = b.startsWith(a) && b.length > a.length;
+              final bIsStrictPrefixOfA = a.startsWith(b) && a.length > b.length;
+
+              if (aIsStrictPrefixOfB || bIsStrictPrefixOfA) {
+                // If one is a strict prefix of the other, prefer the longer (avoid truncations)
+                final prefer = aIsStrictPrefixOfB ? b : a; // the longer one
+                if (prefer != t) {
+                  ReceiptLogger.log('ocr.token.correct', {
+                    'from': t,
+                    'to': prefer,
+                    'reason': 'prefer-longer-prefix',
+                    'pos': ti,
+                  });
+                  tokens[ti] = prefer;
+                }
+                continue; // don't let later rules override
+              }
+
+              // Non-prefix typo-ish case: prefer shorter
               if (oTok.length < t.length) {
                 ReceiptLogger.log('ocr.token.correct', {
                   'from': t,
@@ -361,12 +399,16 @@ final class ReceiptNormalizer {
                   'pos': ti,
                 });
                 tokens[ti] = oTok;
+                continue;
               }
             }
+
+            // (tIsAlpha && !oIsAlpha) -> keep t (do nothing)
           }
         }
       }
       afterCharFix = tokens.join(' ');
+
       corrected.add(afterCharFix);
     }
 

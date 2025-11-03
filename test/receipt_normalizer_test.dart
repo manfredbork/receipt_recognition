@@ -84,13 +84,23 @@ void main() {
       });
 
       test('should return normalized text without space', () {
-        final alternativeTexts = ['Kal e', 'Kal e', 'Kale'];
+        final alternativeTexts = ['Kale', 'Kal e', 'Kale'];
 
         final result = ReceiptNormalizer.normalizeByAlternativeTexts(
           alternativeTexts,
         );
 
         expect(result, 'Kale');
+      });
+
+      test('should return normalized text with longer length', () {
+        final alternativeTexts = ['Strawberry', 'Strawberr'];
+
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
+          alternativeTexts,
+        );
+
+        expect(result, 'Strawberry');
       });
 
       test('should return null when no alternative texts are provided', () {
