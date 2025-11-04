@@ -405,7 +405,7 @@ final class ReceiptNormalizer {
   /// Example: isNormalLetter('O') -> true, isNormalLetter('0') -> false
   static bool _isNormalLetter(String char) {
     if (char.isEmpty) return false;
-    if (char == '!' || char == '%' || char == '&') return true;
+    if (char == '!' || char == '%' || char == '&' || char == '+') return true;
 
     final code = char.codeUnitAt(0);
 
