@@ -419,10 +419,6 @@ final class ReceiptNormalizer {
       return true;
     }
 
-    if (code >= 256 && code <= 383) {
-      return true;
-    }
-
     return false;
   }
 

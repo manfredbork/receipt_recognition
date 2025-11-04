@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
@@ -68,6 +69,14 @@ final class RecognizedPosition {
       group: group ?? this.group,
     );
   }
+
+  /// Position bounding box.
+  Rect get boundingBox => Rect.fromLTRB(
+    product.line.boundingBox.left,
+    min(product.line.boundingBox.top, price.line.boundingBox.top),
+    price.line.boundingBox.right,
+    max(product.line.boundingBox.bottom, price.line.boundingBox.bottom),
+  );
 
   /// Overall confidence (weighted avg of product/price confidences).
   int get confidence {

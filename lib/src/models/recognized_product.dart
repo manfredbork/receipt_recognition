@@ -77,7 +77,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   String get normalizedUnitQuantity =>
       ReceiptNormalizer.sortByFrequency(alternativeUnitQuantities).lastOrNull ??
       position?.unitQuantity?.formattedValue ??
-      '';
+      '1';
 
   /// Normalized product text using group alternatives.
   String get normalizedText =>

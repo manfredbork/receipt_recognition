@@ -756,16 +756,14 @@ final class ReceiptParser {
 
   /// Returns absolute ΔY if within vertical tolerance, otherwise `double.infinity` (lower is better).
   static double _distanceScore(
-    TextLine totalLabel,
-    TextLine amount, {
+    TextLine sourceLine,
+    TextLine targetLine, {
     onlyBelow = false,
   }) {
-    final dy = _dy(totalLabel, amount);
+    final dy = _dy(sourceLine, targetLine);
     final absDy =
-        onlyBelow && dy < -_heightL(totalLabel) * 0.5
-            ? double.infinity
-            : dy.abs();
-    return absDy < _heightL(totalLabel) * pi ? absDy : double.infinity;
+        onlyBelow && dy < -_heightL(sourceLine) ? double.infinity : dy.abs();
+    return absDy < _heightL(sourceLine) * pi ? absDy : double.infinity;
   }
 
   /// Filters left-alignment outliers among unknown product lines.
