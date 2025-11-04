@@ -522,9 +522,9 @@ See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version 
 - [x] Layered options (extend/override/tuning)
 - [x] Stability-based grouping/merging
 - [x] Extended OCR correction (single-character replacement/removal for common OCR errors)
+- [x] Unit recognition with price-per-unit parsing and quantity extraction
 - [ ] Enhanced Android platform integration
 - [ ] Broader international receipt layout support
-- [ ] Unit recognition (e.g., kg, pcs) with price-per-unit parsing and quantity/weight extraction
 
 ---
 
