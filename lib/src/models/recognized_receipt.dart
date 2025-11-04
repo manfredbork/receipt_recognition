@@ -196,7 +196,7 @@ class RecognizedReceipt {
           return enoughMembers && enoughStability && enoughConfidence;
         }).length;
     final minNeed = positions.length;
-    final need = minNeed - positions.length ~/ 5;
+    final need = minNeed - positions.length ~/ 4;
     return minPassing >= minNeed && passing >= need;
   }
 }

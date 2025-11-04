@@ -617,12 +617,17 @@ final class ReceiptParser {
 
         if (yUnitPrice != null) {
           final unitPrice = yUnitPrice as RecognizedUnitPrice;
+          final unitSign =
+              position.price.value < 0 && unitPrice.value > 0 ? -1 : 1;
           final centsUnitPrice = (unitPrice.value * 100).round();
           final centsPrice = (position.price.value * 100).round();
           if (centsPrice % centsUnitPrice == 0) {
-            position.unitPrice = unitPrice;
+            position.unitPrice = RecognizedUnitPrice(
+              value: unitPrice.value * unitSign,
+              line: unitPrice.line,
+            );
             position.unitQuantity = RecognizedUnitQuantity(
-              value: centsPrice ~/ centsUnitPrice,
+              value: (centsPrice ~/ centsUnitPrice) * unitSign,
               line: unitPrice.line,
             );
             yUnitPrices.removeWhere((e) => identical(e, unitPrice));
