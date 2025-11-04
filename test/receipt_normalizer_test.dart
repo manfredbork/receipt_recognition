@@ -218,6 +218,15 @@ void main() {
         });
 
         test(
+          'keep text when exact one-space difference matches but token starts with capital letter',
+          () {
+            final alts = ['Bio Weidemilch', 'BioWeidemilch'];
+            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+            expect(result, equals('Bio Weidemilch'));
+          },
+        );
+
+        test(
           'glues single erroneous space when exact one-space difference matches',
           () {
             final alts = ['Weide milch', 'Weidemilch', 'WEIDE MILCH'];

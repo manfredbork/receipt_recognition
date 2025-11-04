@@ -248,9 +248,9 @@ final class ReceiptNormalizer {
     return corrected;
   }
 
-  /// Tries to find if removing exactly one space from [textWithSpace] equals [textWithoutSpace].
-  /// Returns the match if found, null otherwise.
-  /// Example: tryRemovingSingleSpace('Weide milch', 'Weidemilch') -> 'Weidemilch'
+  /// Returns the match if removing exactly one space from [textWithSpace]
+  /// equals [textWithoutSpace], but ONLY when the space precedes a lowercase
+  /// letter (so we don't glue "Bio Weidemilch").
   static String? _tryRemovingSingleSpace(
     String textWithSpace,
     String textWithoutSpace,
@@ -262,6 +262,14 @@ final class ReceiptNormalizer {
 
     for (int i = 0; i < textWithSpace.length; i++) {
       if (textWithSpace[i] == ' ') {
+        // guard: only allow glue if the next char is a lowercase letter
+        final next = (i + 1 < textWithSpace.length) ? textWithSpace[i + 1] : '';
+        if (!_isLowerLetter(next)) continue;
+
+        // optional extra guard (keeps intent very tight): previous is a letter
+        final prev = (i - 1 >= 0) ? textWithSpace[i - 1] : '';
+        if (!_isNormalLetter(prev)) continue;
+
         final withoutThisSpace =
             textWithSpace.substring(0, i) + textWithSpace.substring(i + 1);
 
@@ -272,6 +280,15 @@ final class ReceiptNormalizer {
     }
 
     return null;
+  }
+
+  /// Unicode-aware lowercase check (works for umlauts etc.)
+  static bool _isLowerLetter(String ch) {
+    if (ch.isEmpty) return false;
+    final lower = ch.toLowerCase();
+    final upper = ch.toUpperCase();
+    if (lower == upper) return false;
+    return ch == lower;
   }
 
   /// Applies OCR error correction by comparing alternatives and replacing commonly
@@ -367,18 +384,6 @@ final class ReceiptNormalizer {
                   tokens[ti] = prefer;
                 }
                 continue; // don't let later rules override
-              }
-
-              // Non-prefix typo-ish case: prefer shorter
-              if (oTok.length < t.length) {
-                ReceiptLogger.log('ocr.token.correct', {
-                  'from': t,
-                  'to': oTok,
-                  'reason': 'shorter-alpha',
-                  'pos': ti,
-                });
-                tokens[ti] = oTok;
-                continue;
               }
             }
 
