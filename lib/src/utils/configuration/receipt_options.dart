@@ -26,12 +26,6 @@ final class ReceiptOptions {
   /// Keywords that indicate parsing should stop.
   final KeywordSet stopKeywords;
 
-  /// Keywords that indicate discounts.
-  final KeywordSet discountKeywords;
-
-  /// Keywords that indicate deposits/returns.
-  final KeywordSet depositKeywords;
-
   /// Numeric/string tuning applied across the parser/optimizer.
   final ReceiptTuning tuning;
 
@@ -41,8 +35,6 @@ final class ReceiptOptions {
     required this.totalLabels,
     required this.ignoreKeywords,
     required this.stopKeywords,
-    required this.discountKeywords,
-    required this.depositKeywords,
     required this.tuning,
   });
 
@@ -118,14 +110,6 @@ final class ReceiptOptions {
       defaults: def.stopKeywords,
       key: 'stopKeywords',
     );
-    final discountKeywords = resolveList(
-      defaults: def.discountKeywords,
-      key: 'discountKeywords',
-    );
-    final depositKeywords = resolveList(
-      defaults: def.depositKeywords,
-      key: 'depositKeywords',
-    );
 
     final tuningResolved =
         tun.isNotEmpty ? ReceiptTuning.fromJsonLike(tun) : def.tuning;
@@ -135,8 +119,6 @@ final class ReceiptOptions {
       totalLabels: totalLabels,
       ignoreKeywords: ignoreKeywords,
       stopKeywords: stopKeywords,
-      discountKeywords: discountKeywords,
-      depositKeywords: depositKeywords,
       tuning: tuningResolved,
     );
   }
@@ -155,8 +137,6 @@ final class ReceiptOptions {
     totalLabels: DetectionMap.fromMap(const {}),
     ignoreKeywords: KeywordSet.fromList(const []),
     stopKeywords: KeywordSet.fromList(const []),
-    discountKeywords: KeywordSet.fromList(const []),
-    depositKeywords: KeywordSet.fromList(const []),
     tuning: ReceiptTuning.fromJsonLike(const {}),
   );
 
@@ -183,12 +163,6 @@ final class ReceiptOptions {
       totalLabels: DetectionMap.fromMap(pickStrMap(json['totalLabels'])),
       ignoreKeywords: KeywordSet.fromList(pickStrList(json['ignoreKeywords'])),
       stopKeywords: KeywordSet.fromList(pickStrList(json['stopKeywords'])),
-      discountKeywords: KeywordSet.fromList(
-        pickStrList(json['discountKeywords']),
-      ),
-      depositKeywords: KeywordSet.fromList(
-        pickStrList(json['depositKeywords']),
-      ),
       tuning: ReceiptTuning.fromJsonLike(
         json['tuning'] as Map<String, dynamic>?,
       ),
@@ -201,8 +175,6 @@ final class ReceiptOptions {
     'totalLabels': totalLabels.mapping,
     'ignoreKeywords': ignoreKeywords.keywords,
     'stopKeywords': stopKeywords.keywords,
-    'discountKeywords': discountKeywords.keywords,
-    'depositKeywords': depositKeywords.keywords,
     'tuning': tuning.toJsonLike(),
   };
 

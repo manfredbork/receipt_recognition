@@ -137,13 +137,4 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     counts.forEach((k, v) => result[k] = ((v / total) * 100).round());
     return result;
   }
-
-  /// Whether this product is a cashback (negative price).
-  bool get isCashback => (position?.price.value ?? 0.0) < 0;
-
-  /// Whether this product represents a discount.
-  bool get isDiscount => options.discountKeywords.hasMatch(normalizedText);
-
-  /// Whether this product represents a deposit.
-  bool get isDeposit => options.depositKeywords.hasMatch(normalizedText);
 }

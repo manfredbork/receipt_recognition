@@ -83,8 +83,7 @@ final options = ReceiptOptions.fromLayeredJson({
   "extend": {
     "storeNames": {
       "REWE CITY": "Rewe"
-    },
-    "discountKeywords": ["Rabatt", "Discount", "Promo"]
+    }
   },
   "override": {
     "stopKeywords": ["Rückgeld", "Change"]
@@ -149,10 +148,6 @@ Parameters (keys inside extend/override, or top-level in flat form)
     - Lines containing any of these are ignored.
 - stopKeywords: List<String>
     - Parsing stops after encountering these.
-- discountKeywords: List<String>
-    - Indicates discounts/coupons.
-- depositKeywords: List<String>
-    - Indicates deposits/returns (e.g., “Pfand”, “Leergut”).
 - tuning: Map<String, dynamic> (override-only)
     - optimizerConfidenceThreshold (int): min combined confidence (0–100).
     - optimizerStabilityThreshold (int): min stability (0–100).
@@ -190,8 +185,7 @@ final layered = {
   "extend": {
     "storeNames": {
       "REWE CITY": "Rewe"
-    },
-    "discountKeywords": ["Rabatt", "Discount", "Promo"]
+    }
   },
   "override": {
     "stopKeywords": ["Rückgeld", "Change"]
