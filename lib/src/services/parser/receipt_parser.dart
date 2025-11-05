@@ -603,7 +603,11 @@ final class ReceiptParser {
 
     for (final yUnknown in yUnknowns) {
       if (_isMatchingUnknown(entity, yUnknown, forbidden)) {
-        final position = _createPosition(yUnknown, entity, receipt.timestamp);
+        RecognizedPosition position = _createPosition(
+          yUnknown,
+          entity,
+          receipt.timestamp,
+        );
 
         final yUnitPrice = _findClosestEntity(
           yUnknown,
@@ -613,8 +617,8 @@ final class ReceiptParser {
 
         if (yUnitPrice != null) {
           final unitPrice = yUnitPrice as RecognizedUnitPrice;
-          final unitSign =
-              position.price.value < 0 && unitPrice.value > 0 ? -1 : 1;
+          final isDeposit = position.price.value < 0 && unitPrice.value > 0;
+          final unitSign = isDeposit ? -1 : 1;
           final centsUnitPrice = (unitPrice.value * 100).round();
           final centsPrice = (position.price.value * 100).round();
           if (centsPrice % centsUnitPrice == 0) {
@@ -627,6 +631,15 @@ final class ReceiptParser {
               line: unitPrice.line,
             );
             yUnitPrices.removeWhere((e) => identical(e, unitPrice));
+          }
+          if (isDeposit) {
+            final newPosition = position.copyWith(
+              product: position.product.copyWith(
+                value: position.product.line.text,
+              ),
+            );
+            newPosition.product.position = newPosition;
+            position = newPosition;
           }
         } else {
           position.unitPrice = RecognizedUnitPrice(

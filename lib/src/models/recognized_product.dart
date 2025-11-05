@@ -67,25 +67,33 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   String get text => formattedValue;
 
   /// Normalized unit price using group alternatives.
-  double? get unitPrice {
-    if (position == null) return null;
-    String? price =
+  double get unitPrice {
+    if (position == null) return 0;
+    final price =
         ReceiptNormalizer.sortByFrequency(alternativeUnitPrices).lastOrNull ??
         position!.unitPrice?.formattedValue;
-    if (price == null) return null;
-    return double.tryParse(price);
+    if (price == null) return 0;
+    return double.tryParse(price) ?? position!.price.value.toDouble();
   }
 
   /// Normalized unit quantity using group alternatives.
-  int? get unitQuantity {
-    if (position == null) return null;
-    String? quantity =
+  int get unitQuantity {
+    if (position == null) return 1;
+    final quantity =
         ReceiptNormalizer.sortByFrequency(
           alternativeUnitQuantities,
         ).lastOrNull ??
         position!.unitQuantity?.formattedValue;
-    if (quantity == null) return null;
-    return int.tryParse(quantity);
+    if (quantity == null) return 1;
+    final checkQuantity = int.tryParse(quantity) ?? 1;
+    final checkUnitPrice = ReceiptFormatter.format(
+      position!.price.value / checkQuantity,
+    );
+    final realUnitPrice = ReceiptFormatter.format(unitPrice);
+    if (checkUnitPrice != realUnitPrice) {
+      return position!.price.value ~/ unitPrice;
+    }
+    return checkQuantity;
   }
 
   /// Normalized product text using group alternatives.
