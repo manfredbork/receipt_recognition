@@ -393,8 +393,9 @@ final class ReceiptParser {
       ReceiptNormalizer.normalizeTail(line.text),
     );
     if (unknown == null) return false;
-    final passed = ReceiptFormatter.lettersOnly(unknown).length > 2;
-    if (passed) {
+    final leadingDigits = ReceiptFormatter.leadingDigits(unknown);
+    final lettersOnly = ReceiptFormatter.lettersOnly(unknown);
+    if (leadingDigits.isEmpty && lettersOnly.length >= 4) {
       parsed.add(RecognizedUnknown(line: line, value: unknown));
     }
     return true;
@@ -556,19 +557,13 @@ final class ReceiptParser {
     List<RecognizedUnknown> yUnknowns,
     List<RecognizedUnitPrice> yUnitPrices,
     RecognizedReceipt receipt,
-    List<RecognizedUnknown> forbidden,
   ) {
     for (final entity in entities) {
       if (entity is! RecognizedAmount) continue;
       if (receipt.total?.line == entity.line) continue;
-      _createPositionForAmount(
-        entity,
-        yUnknowns,
-        yUnitPrices,
-        receipt,
-        forbidden,
-      );
+      _createPositionForAmount(entity, yUnknowns, yUnitPrices, receipt);
     }
+    _assignUnitToPositions(yUnitPrices, receipt);
   }
 
   /// Removes obviously suspicious product-name positions.
@@ -589,71 +584,73 @@ final class ReceiptParser {
     }
   }
 
+  /// Assigns each unit to the closest position.
+  static void _assignUnitToPositions(
+    List<RecognizedUnitPrice> yUnitPrices,
+    RecognizedReceipt receipt,
+  ) {
+    final positions = receipt.positions;
+    for (final position in positions) {
+      final yUnitPrice = _findClosestEntity(
+        position.price,
+        yUnitPrices,
+        lineBelow: true,
+      );
+
+      if (yUnitPrice != null) {
+        final unitPrice = yUnitPrice as RecognizedUnitPrice;
+        final isDeposit = position.price.value < 0 && unitPrice.value > 0;
+        final unitSign = isDeposit ? -1 : 1;
+        final centsUnitPrice = (unitPrice.value * 100).round();
+        final centsPrice = (position.price.value * 100).round();
+        if (centsPrice % centsUnitPrice == 0) {
+          position.unit = RecognizedUnit.fromNumbers(
+            (centsPrice ~/ centsUnitPrice) * unitSign,
+            (unitPrice.value * unitSign),
+            yUnitPrice.line,
+          );
+          yUnitPrices.removeWhere((e) => identical(e, yUnitPrice));
+        } else {
+          position.unit = RecognizedUnit.fromNumbers(
+            1,
+            position.price.value,
+            yUnitPrice.line,
+          );
+        }
+        if (isDeposit) {
+          final newPosition = position.copyWith(
+            product: position.product.copyWith(
+              value: position.product.line.text,
+            ),
+          );
+          position.product.position = newPosition;
+        }
+      } else {
+        position.unit = RecognizedUnit.fromNumbers(
+          1,
+          position.price.value,
+          position.price.line,
+        );
+      }
+    }
+  }
+
   /// Creates a position for an amount by pairing a compatible unknown and unit lines.
   static void _createPositionForAmount(
     RecognizedAmount entity,
     List<RecognizedUnknown> yUnknowns,
     List<RecognizedUnitPrice> yUnitPrices,
     RecognizedReceipt receipt,
-    List<RecognizedUnknown> forbidden,
   ) {
     if (entity == receipt.total) return;
 
     _sortByDistance(entity.line.boundingBox, yUnknowns);
 
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(entity, yUnknown, forbidden)) {
-        RecognizedPosition position = _createPosition(
-          yUnknown,
-          entity,
-          receipt.timestamp,
-        );
-
-        final yUnitPrice = _findClosestEntity(
-          yUnknown,
-          yUnitPrices,
-          onlyBelow: true,
-        );
-
-        if (yUnitPrice != null) {
-          final unitPrice = yUnitPrice as RecognizedUnitPrice;
-          final isDeposit = position.price.value < 0 && unitPrice.value > 0;
-          final unitSign = isDeposit ? -1 : 1;
-          final centsUnitPrice = (unitPrice.value * 100).round();
-          final centsPrice = (position.price.value * 100).round();
-          if (centsPrice % centsUnitPrice == 0) {
-            position.unitPrice = RecognizedUnitPrice(
-              value: unitPrice.value * unitSign,
-              line: unitPrice.line,
-            );
-            position.unitQuantity = RecognizedUnitQuantity(
-              value: (centsPrice ~/ centsUnitPrice) * unitSign,
-              line: unitPrice.line,
-            );
-            yUnitPrices.removeWhere((e) => identical(e, unitPrice));
-          }
-          if (isDeposit) {
-            final newPosition = position.copyWith(
-              product: position.product.copyWith(
-                value: position.product.line.text,
-              ),
-            );
-            newPosition.product.position = newPosition;
-            position = newPosition;
-          }
-        } else {
-          position.unitPrice = RecognizedUnitPrice(
-            value: position.price.value,
-            line: position.price.line,
-          );
-          position.unitQuantity = RecognizedUnitQuantity(
-            value: 1,
-            line: position.price.line,
-          );
-        }
-
+      if (_isMatchingUnknown(entity, yUnknown)) {
+        final position = _createPosition(yUnknown, entity, receipt.timestamp);
         receipt.positions.add(position);
-        forbidden.add(yUnknown);
+        yUnknowns.removeWhere((e) => identical(e, yUnknown));
         break;
       }
     }
@@ -663,11 +660,10 @@ final class ReceiptParser {
   static bool _isMatchingUnknown(
     RecognizedAmount amount,
     RecognizedUnknown unknown,
-    List<RecognizedUnknown> forbidden,
   ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
     final isLikelyLabel = _isTotalLabelLike(unknownText);
-    if (forbidden.contains(unknown) || isLikelyLabel) return false;
+    if (isLikelyLabel) return false;
 
     final isLeftOfAmount = _right(unknown) <= _left(amount);
     final alignedVertically =
@@ -699,23 +695,29 @@ final class ReceiptParser {
     return position;
   }
 
-  /// Finds the closest entity to another entity using a geometric score (single pass).
+  /// Finds the closest entity to another entity using a geometric score.
   static RecognizedEntity? _findClosestEntity(
     RecognizedEntity entity,
     List<RecognizedEntity> entities, {
-    onlyBelow = false,
+    lineAbove = false,
+    lineBelow = false,
   }) {
     RecognizedEntity? best;
     double bestScore = double.infinity;
-    final labelLine = entity.line;
+    final line = entity.line;
     for (final e in entities) {
-      final s = _distanceScore(labelLine, e.line, onlyBelow: onlyBelow);
+      final s = _distanceScore(
+        line,
+        e.line,
+        lineAbove: lineAbove,
+        lineBelow: lineBelow,
+      );
       if (s < bestScore) {
         bestScore = s;
         best = e;
       }
     }
-    if (bestScore == double.infinity) return null;
+    if (best == null || bestScore == double.infinity) return null;
     return best;
   }
 
@@ -762,12 +764,17 @@ final class ReceiptParser {
   static double _distanceScore(
     TextLine sourceLine,
     TextLine targetLine, {
-    onlyBelow = false,
+    bool lineAbove = false,
+    bool lineBelow = false,
   }) {
-    final dy = _dy(sourceLine, targetLine);
-    final absDy =
-        onlyBelow && dy < -_heightL(sourceLine) ? double.infinity : dy.abs();
-    return absDy < _heightL(sourceLine) * pi ? absDy : double.infinity;
+    final tol = max(_heightL(sourceLine), _heightL(targetLine));
+    final srcTop = _topL(sourceLine) - (lineAbove ? tol * pi : 0);
+    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol * pi : 0);
+
+    final targetCy = _cyL(targetLine);
+    final isSameLine = targetCy >= srcTop && targetCy <= srcBottom;
+
+    return isSameLine ? _dy(sourceLine, targetLine).abs() : double.infinity;
   }
 
   /// Filters left-alignment outliers among unknown product lines.
@@ -1084,14 +1091,13 @@ final class ReceiptParser {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final yUnitPrices = entities.whereType<RecognizedUnitPrice>().toList();
     final receipt = RecognizedReceipt.empty();
-    final forbidden = <RecognizedUnknown>[];
     final store = _findStore(entities);
     final totalLabel = _findTotalLabel(entities);
     final total = _findTotal(entities);
     final purchaseDate = _findPurchaseDate(entities);
     final bounds = _findBounds(entities);
 
-    _processAmounts(entities, yUnknowns, yUnitPrices, receipt, forbidden);
+    _processAmounts(entities, yUnknowns, yUnitPrices, receipt);
     _processStore(store, receipt);
     _processTotalLabel(totalLabel, receipt);
     _processTotal(total, receipt);

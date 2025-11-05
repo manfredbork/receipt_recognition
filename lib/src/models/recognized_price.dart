@@ -4,7 +4,7 @@ import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Price recognized from a receipt, with numeric value and confidence score.
-final class RecognizedPrice extends RecognizedEntity<num> {
+final class RecognizedPrice extends RecognizedEntity<double> {
   /// Confidence assessment for this price recognition.
   Confidence? confidence;
 
@@ -23,9 +23,9 @@ final class RecognizedPrice extends RecognizedEntity<num> {
   factory RecognizedPrice.fromJson(Map<String, dynamic> json) {
     final rawValue = json['value'];
     final parsedValue =
-        rawValue is num
+        rawValue is double
             ? rawValue
-            : num.tryParse(rawValue?.toString() ?? '0') ?? 0;
+            : double.tryParse(rawValue?.toString() ?? '0') ?? 0;
     final confValue =
         json['confidence'] is int
             ? json['confidence'] as int
@@ -40,7 +40,7 @@ final class RecognizedPrice extends RecognizedEntity<num> {
 
   /// Returns a copy with updated fields.
   RecognizedPrice copyWith({
-    num? value,
+    double? value,
     TextLine? line,
     Confidence? confidence,
     RecognizedPosition? position,
@@ -55,29 +55,29 @@ final class RecognizedPrice extends RecognizedEntity<num> {
 
   /// Formats the price value as a localized string.
   @override
-  String format(num value) => ReceiptFormatter.format(value);
+  String format(double value) => ReceiptFormatter.format(value);
 }
 
 /// Monetary amount recognized from the receipt.
-final class RecognizedAmount extends RecognizedEntity<num> {
+final class RecognizedAmount extends RecognizedEntity<double> {
   /// Creates an amount entity from [value] and [line].
   const RecognizedAmount({required super.value, required super.line});
 
   @override
-  String format(num value) => ReceiptFormatter.format(value);
+  String format(double value) => ReceiptFormatter.format(value);
 }
 
 /// Total recognized from the receipt.
-final class RecognizedTotal extends RecognizedEntity<num> {
+final class RecognizedTotal extends RecognizedEntity<double> {
   /// Creates a total entity from [value] and [line].
   const RecognizedTotal({required super.value, required super.line});
 
   /// Returns a copy with updated fields.
-  RecognizedTotal copyWith({num? value, TextLine? line}) =>
+  RecognizedTotal copyWith({double? value, TextLine? line}) =>
       RecognizedTotal(value: value ?? this.value, line: line ?? this.line);
 
   @override
-  String format(num value) => ReceiptFormatter.format(value);
+  String format(double value) => ReceiptFormatter.format(value);
 }
 
 /// Sum recognized from a receipt.
@@ -87,12 +87,12 @@ final class RecognizedSum extends RecognizedTotal {
 }
 
 /// Total calculated from receipt positions rather than directly recognized.
-final class CalculatedTotal extends Valuable<num> {
+final class CalculatedTotal extends Valuable<double> {
   /// Creates a calculated total from aggregated position values.
   const CalculatedTotal({required super.value});
 
   @override
-  String format(num value) => ReceiptFormatter.format(value);
+  String format(double value) => ReceiptFormatter.format(value);
 }
 
 /// Sum calculated from receipt positions rather than directly recognized.

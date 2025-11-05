@@ -60,8 +60,9 @@ class RecognizedReceipt {
     RecognizedTotal? total;
     if (rawTotal is Map<String, dynamic>) {
       final v = rawTotal['value'];
-      final numValue = v is num ? v : num.tryParse(v?.toString() ?? '') ?? 0;
-      total = RecognizedTotal(value: numValue, line: ReceiptTextLine());
+      final doubleValue =
+          v is double ? v : double.tryParse(v?.toString() ?? '') ?? 0;
+      total = RecognizedTotal(value: doubleValue, line: ReceiptTextLine());
     }
 
     final rawPd = json['purchase_date'];
@@ -147,7 +148,7 @@ class RecognizedReceipt {
 
   /// Total of all position prices.
   CalculatedTotal get calculatedTotal => CalculatedTotal(
-    value: positions.fold<num>(0, (a, b) => a + b.price.value),
+    value: positions.fold<double>(0, (a, b) => a + b.price.value),
   );
 
   /// Legacy accessor for [calculatedSum] maintained for backward compatibility.

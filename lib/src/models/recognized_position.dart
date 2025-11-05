@@ -19,11 +19,8 @@ final class RecognizedPosition {
   /// Operation performed (added, updated, etc.).
   Operation operation;
 
-  /// Optional unit price.
-  RecognizedUnitPrice? unitPrice;
-
-  /// Optional unit quantity.
-  RecognizedUnitQuantity? unitQuantity;
+  /// Optional unit information.
+  RecognizedUnit? unit;
 
   /// Optional optimizer grouping.
   RecognizedGroup? group;
@@ -34,8 +31,7 @@ final class RecognizedPosition {
     required this.price,
     required this.timestamp,
     required this.operation,
-    this.unitPrice,
-    this.unitQuantity,
+    this.unit,
     this.group,
   });
 
@@ -55,8 +51,7 @@ final class RecognizedPosition {
     RecognizedPrice? price,
     DateTime? timestamp,
     Operation? operation,
-    RecognizedUnitPrice? unitPrice,
-    RecognizedUnitQuantity? unitQuantity,
+    RecognizedUnit? unit,
     RecognizedGroup? group,
   }) {
     return RecognizedPosition(
@@ -64,8 +59,7 @@ final class RecognizedPosition {
       price: price ?? this.price,
       timestamp: timestamp ?? this.timestamp,
       operation: operation ?? this.operation,
-      unitPrice: unitPrice ?? this.unitPrice,
-      unitQuantity: unitQuantity ?? this.unitQuantity,
+      unit: unit ?? this.unit,
       group: group ?? this.group,
     );
   }
@@ -173,20 +167,16 @@ final class RecognizedGroup {
           .map((p) => ReceiptFormatter.toPostfixText(p.price.line.text))
           .toList();
 
-  /// All product unit prices for normalization.
-  List<String> get alternativeUnitPrices =>
+  /// All unit prices for normalization.
+  List<RecognizedUnit> get alternativeUnits =>
       _members
           .where(
-            (p) => p.unitPrice != null && p.unitPrice!.value < p.price.value,
+            (p) =>
+                p.unit != null &&
+                p.unit!.quantity.value != 1 &&
+                p.unit!.price.formattedValue != p.price.formattedValue,
           )
-          .map((p) => p.unitPrice!.formattedValue)
-          .toList();
-
-  /// All product unit prices for normalization.
-  List<String> get alternativeUnitQuantities =>
-      _members
-          .where((p) => p.unitQuantity != null && p.unitQuantity!.value > 1)
-          .map((p) => p.unitQuantity!.formattedValue)
+          .map((p) => p.unit!)
           .toList();
 
   /// Average confidence across members.

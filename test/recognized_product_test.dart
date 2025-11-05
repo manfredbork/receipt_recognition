@@ -24,7 +24,7 @@ ReceiptOptions makeOptionsFromLists({
 }
 
 RecognizedProduct makeProduct({
-  required num price,
+  required double price,
   required String productText,
   required String priceLineText,
   ReceiptOptions? options,

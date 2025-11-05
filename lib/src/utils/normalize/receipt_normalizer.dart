@@ -116,10 +116,14 @@ final class ReceiptNormalizer {
             .toList();
 
     final mostFrequent = sortByFrequency(charNormalized);
+    final bestResult = mostFrequent.lastWhere(
+      (s) => s.isNotEmpty,
+      orElse: () => '',
+    );
 
-    ReceiptLogger.log('norm.out', {'result': mostFrequent.last});
+    ReceiptLogger.log('norm.out', {'result': bestResult});
 
-    return mostFrequent.last;
+    return bestResult;
   }
 
   /// Normalizes text by comparing multiple alternative recognitions.

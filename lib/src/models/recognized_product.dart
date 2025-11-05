@@ -66,34 +66,25 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   /// Formatted product text.
   String get text => formattedValue;
 
-  /// Normalized unit price using group alternatives.
-  double get unitPrice {
-    if (position == null) return 0;
-    final price =
-        ReceiptNormalizer.sortByFrequency(alternativeUnitPrices).lastOrNull ??
-        position!.unitPrice?.formattedValue;
-    if (price == null) return 0;
-    return double.tryParse(price) ?? position!.price.value.toDouble();
-  }
-
-  /// Normalized unit quantity using group alternatives.
-  int get unitQuantity {
-    if (position == null) return 1;
-    final quantity =
-        ReceiptNormalizer.sortByFrequency(
-          alternativeUnitQuantities,
-        ).lastOrNull ??
-        position!.unitQuantity?.formattedValue;
-    if (quantity == null) return 1;
-    final checkQuantity = int.tryParse(quantity) ?? 1;
-    final checkUnitPrice = ReceiptFormatter.format(
-      position!.price.value / checkQuantity,
-    );
-    final realUnitPrice = ReceiptFormatter.format(unitPrice);
-    if (checkUnitPrice != realUnitPrice) {
-      return position!.price.value ~/ unitPrice;
+  /// Normalized unit using group alternatives.
+  RecognizedUnit get unit {
+    if (position == null) {
+      return RecognizedUnit.fromNumbers(0, 0, ReceiptTextLine());
     }
-    return checkQuantity;
+    final fallback = RecognizedUnit.fromNumbers(
+      1,
+      position!.price.value,
+      position!.price.line,
+    );
+    final prices = alternativeUnits.map((p) => p.price.formattedValue).toList();
+    final price = ReceiptNormalizer.sortByFrequency(prices).lastOrNull;
+    if (price == null) return fallback;
+    final unit =
+        alternativeUnits
+            .where((p) => p.price.formattedValue == price)
+            .lastOrNull;
+    if (unit == null) return fallback;
+    return unit;
   }
 
   /// Normalized product text using group alternatives.
@@ -114,13 +105,9 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   /// Alternative product texts from the group.
   List<String> get alternativeTexts => position?.group?.alternativeTexts ?? [];
 
-  /// Alternative unit prices from the group.
-  List<String> get alternativeUnitPrices =>
-      position?.group?.alternativeUnitPrices ?? [];
-
-  /// Alternative unit quantities from the group.
-  List<String> get alternativeUnitQuantities =>
-      position?.group?.alternativeUnitQuantities ?? [];
+  /// Alternative units from the group.
+  List<RecognizedUnit> get alternativeUnits =>
+      position?.group?.alternativeUnits ?? [];
 
   /// Alternative postfix texts from the group.
   List<String> get alternativePostfixTexts =>
