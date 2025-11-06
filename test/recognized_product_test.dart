@@ -8,6 +8,7 @@ ReceiptOptions makeOptionsFromLists({
   List<String> nonFood = const [],
   List<String> discount = const [],
   List<String> deposit = const [],
+  List<String> groups = const [],
 }) {
   return ReceiptOptions(
     override: <String, dynamic>{
@@ -19,6 +20,7 @@ ReceiptOptions makeOptionsFromLists({
       'nonFoodKeywords': nonFood,
       'discountKeywords': discount,
       'depositKeywords': deposit,
+      'allowedProductGroups': groups,
     },
   );
 }

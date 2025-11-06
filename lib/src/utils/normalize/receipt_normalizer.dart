@@ -96,11 +96,22 @@ final class ReceiptNormalizer {
     return v;
   }
 
-  /// Normalizes postfix text to product group.
+  /// Normalizes postfix text to a product group. If `ReceiptRuntime.options`
+  /// defines `allowedProductGroups` and the normalized value is not contained
+  /// this returns ''.
   static String normalizeToProductGroup(String s) {
-    return s.replaceAll(_disallowedGroupChars, '');
-  }
+    final cleaned = s.toUpperCase().replaceAll(_disallowedGroupChars, '');
+    if (cleaned.isEmpty) return '';
 
+    final allowedRaw = ReceiptRuntime.options.allowedProductGroups.keywords;
+    if (allowedRaw.isNotEmpty) {
+      final allowed = allowedRaw.map((s) => s.toUpperCase()).toSet();
+      if (!allowed.contains(cleaned)) return '';
+    }
+
+    return cleaned;
+  }
+  
   /// Normalizes postfix text by comparing multiple alternative recognitions.
   static String? normalizeByAlternativePostfixTexts(
     List<String> alternativePostfixTexts,

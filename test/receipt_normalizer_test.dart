@@ -1,5 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
+
+ReceiptOptions makeOptionsFromLists({List<String> groups = const []}) {
+  return ReceiptOptions(
+    override: <String, dynamic>{'allowedProductGroups': groups},
+  );
+}
 
 void main() {
   group('ReceiptNormalizer', () {
@@ -372,5 +379,54 @@ void main() {
         expect(result.toSet(), equals(values.toSet()));
       });
     });
+
+    group(
+      'normalizeToProductGroup – allowlist enforcement (ReceiptRuntime.options)',
+      () {
+        test('returns empty string when group is not allowed', () {
+          ReceiptRuntime.setOptions(
+            makeOptionsFromLists(groups: ['bakery', 'dairy']),
+          );
+          final result = ReceiptNormalizer.normalizeToProductGroup(
+            'Electronics',
+          );
+          expect(result, equals(''));
+        });
+
+        test('accepts allowed group ignoring case and extra spaces', () {
+          ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['Milkman']));
+          final result = ReceiptNormalizer.normalizeToProductGroup(
+            '  Milk   Man  ',
+          );
+          expect(result, equals('MILKMAN'));
+        });
+
+        test(
+          'permissive when allowlist is empty – passes through normalized',
+          () {
+            ReceiptRuntime.setOptions(makeOptionsFromLists(groups: const []));
+            final result = ReceiptNormalizer.normalizeToProductGroup(' A * ');
+            expect(result, equals('A'));
+          },
+        );
+
+        test('returns empty string when input cleans down to nothing', () {
+          ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['anything']));
+          final result = ReceiptNormalizer.normalizeToProductGroup('---///***');
+          expect(result, equals(''));
+        });
+
+        test(
+          'exact match after canonicalization is required (no substring hit)',
+          () {
+            ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['FOOD']));
+            final r1 = ReceiptNormalizer.normalizeToProductGroup('foo');
+            final r2 = ReceiptNormalizer.normalizeToProductGroup(' Food * ');
+            expect(r1, equals(''));
+            expect(r2, equals('FOOD'));
+          },
+        );
+      },
+    );
   });
 }
