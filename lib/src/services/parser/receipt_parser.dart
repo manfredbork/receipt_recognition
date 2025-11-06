@@ -390,7 +390,9 @@ final class ReceiptParser {
   ) {
     if (_cxL(line) > median) return false;
     final unknown = _unknown.stringMatch(
-      ReceiptNormalizer.normalizeTail(line.text),
+      ReceiptNormalizer.shouldNormalizeTail(line.text)
+          ? ReceiptNormalizer.normalizeTail(line.text)
+          : line.text,
     );
     if (unknown == null) return false;
     final leadingDigits = ReceiptFormatter.leadingDigits(unknown);
@@ -590,11 +592,13 @@ final class ReceiptParser {
     RecognizedReceipt receipt,
   ) {
     final positions = receipt.positions;
+    final products = positions.map((p) => p.product).toList();
     for (final position in positions) {
       final yUnitPrice = _findClosestEntity(
-        position.price,
+        position.product,
         yUnitPrices,
         lineBelow: true,
+        crossCheckEntities: products,
       );
 
       if (yUnitPrice != null) {
@@ -603,6 +607,7 @@ final class ReceiptParser {
         final unitSign = isDeposit ? -1 : 1;
         final centsUnitPrice = (unitPrice.value * 100).round();
         final centsPrice = (position.price.value * 100).round();
+
         if (centsPrice % centsUnitPrice == 0) {
           position.unit = RecognizedUnit.fromNumbers(
             (centsPrice ~/ centsUnitPrice) * unitSign,
@@ -617,6 +622,7 @@ final class ReceiptParser {
             yUnitPrice.line,
           );
         }
+
         if (isDeposit) {
           final oldGroup = position.group;
 
@@ -711,6 +717,7 @@ final class ReceiptParser {
     List<RecognizedEntity> entities, {
     lineAbove = false,
     lineBelow = false,
+    List<RecognizedEntity> crossCheckEntities = const [],
   }) {
     RecognizedEntity? best;
     double bestScore = double.infinity;
@@ -728,6 +735,18 @@ final class ReceiptParser {
       }
     }
     if (best == null || bestScore == double.infinity) return null;
+    if (crossCheckEntities.isNotEmpty) {
+      final bothDirection = lineAbove && lineBelow;
+      final crossLineAbove = bothDirection ? true : !lineAbove;
+      final crossLineBelow = bothDirection ? true : !lineBelow;
+      final crossCheckEntity = _findClosestEntity(
+        best,
+        crossCheckEntities,
+        lineAbove: crossLineAbove,
+        lineBelow: crossLineBelow,
+      );
+      if (!identical(entity, crossCheckEntity)) return null;
+    }
     return best;
   }
 
@@ -777,6 +796,8 @@ final class ReceiptParser {
     bool lineAbove = false,
     bool lineBelow = false,
   }) {
+    if (identical(sourceLine, targetLine)) return double.infinity;
+
     final tol = max(_heightL(sourceLine), _heightL(targetLine));
     final srcTop = _topL(sourceLine) - (lineAbove ? tol * pi : 0);
     final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol * pi : 0);

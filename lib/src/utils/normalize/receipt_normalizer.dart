@@ -50,9 +50,16 @@ final class ReceiptNormalizer {
   /// Product group disallowed chars
   static final RegExp _disallowedGroupChars = RegExp(r'[^A-Z0-9]');
 
+  /// Tail that should not be stripped: ends with the word "EURO" (case-insensitive).
+  static final RegExp _trailingEuroWordAmount = RegExp(
+    '\\beuro\\s*\$',
+    caseSensitive: false,
+  );
+
   /// Standalone trailing int (e.g., "... 9")
   static final RegExp _trailingStandaloneInt = RegExp(
     '(.*\\S)\\s+(\\d+)\\s*\\\$',
+    caseSensitive: false,
   );
 
   /// Price-like tail (handles 1,99 / 12.345,67 / unicode seps / €|eur|euro|e / optional x quantity)
@@ -76,6 +83,12 @@ final class ReceiptNormalizer {
   /// Collapse all Unicode spaces to a normal space first.
   static String _normalizeSpaces(String s) =>
       s.replaceAll(_allSpaces, ' ').trim();
+
+  /// Tests if tail should be removed from text.
+  static bool shouldNormalizeTail(String value) {
+    final v = _normalizeSpaces(value);
+    return !_trailingEuroWordAmount.hasMatch(v);
+  }
 
   /// Removes trailing price-like numeric patterns, while leaving normal text intact.
   static String normalizeTail(String value) {
@@ -111,7 +124,7 @@ final class ReceiptNormalizer {
 
     return cleaned;
   }
-  
+
   /// Normalizes postfix text by comparing multiple alternative recognitions.
   static String? normalizeByAlternativePostfixTexts(
     List<String> alternativePostfixTexts,

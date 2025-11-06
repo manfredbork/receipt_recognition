@@ -23,6 +23,9 @@ abstract class Optimizer {
   /// Public entry to finalize and reconcile a manually accepted receipt.
   void accept(RecognizedReceipt receipt);
 
+  /// Resets all caches used by the optimizer.
+  void reset({RecognizedPurchaseDate? purchaseDate});
+
   /// Releases resources used by the optimizer.
   void close();
 }
@@ -124,12 +127,21 @@ final class ReceiptOptimizer implements Optimizer {
     _updateEntities(receipt);
   }
 
-  /// Releases all resources used by the optimizer.
+  /// Clears caches and only set purchase date.
   @override
-  void close() {
+  void reset({RecognizedPurchaseDate? purchaseDate}) {
     _shouldInitialize = true;
     _initializeIfNeeded();
     _resetFrameFreshness();
+    if (purchaseDate != null) {
+      _purchaseDates.add(purchaseDate);
+    }
+  }
+
+  /// Releases all resources used by the optimizer.
+  @override
+  void close() {
+    reset();
   }
 
   /// Clears caches and resets internal state if flagged.
