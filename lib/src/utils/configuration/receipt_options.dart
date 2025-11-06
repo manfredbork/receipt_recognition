@@ -26,6 +26,9 @@ final class ReceiptOptions {
   /// Keywords that indicate parsing should stop.
   final KeywordSet stopKeywords;
 
+  /// Whitelist of product group keywords allowed as item candidates.
+  final KeywordSet allowedProductGroups;
+
   /// Numeric/string tuning applied across the parser/optimizer.
   final ReceiptTuning tuning;
 
@@ -35,6 +38,7 @@ final class ReceiptOptions {
     required this.totalLabels,
     required this.ignoreKeywords,
     required this.stopKeywords,
+    required this.allowedProductGroups,
     required this.tuning,
   });
 
@@ -110,6 +114,10 @@ final class ReceiptOptions {
       defaults: def.stopKeywords,
       key: 'stopKeywords',
     );
+    final allowedProductGroups = resolveList(
+      defaults: def.allowedProductGroups,
+      key: 'allowedProductGroups',
+    );
 
     final tuningResolved =
         tun.isNotEmpty ? ReceiptTuning.fromJsonLike(tun) : def.tuning;
@@ -119,6 +127,7 @@ final class ReceiptOptions {
       totalLabels: totalLabels,
       ignoreKeywords: ignoreKeywords,
       stopKeywords: stopKeywords,
+      allowedProductGroups: allowedProductGroups,
       tuning: tuningResolved,
     );
   }
@@ -137,6 +146,7 @@ final class ReceiptOptions {
     totalLabels: DetectionMap.fromMap(const {}),
     ignoreKeywords: KeywordSet.fromList(const []),
     stopKeywords: KeywordSet.fromList(const []),
+    allowedProductGroups: KeywordSet.fromList(const []),
     tuning: ReceiptTuning.fromJsonLike(const {}),
   );
 
@@ -163,6 +173,9 @@ final class ReceiptOptions {
       totalLabels: DetectionMap.fromMap(pickStrMap(json['totalLabels'])),
       ignoreKeywords: KeywordSet.fromList(pickStrList(json['ignoreKeywords'])),
       stopKeywords: KeywordSet.fromList(pickStrList(json['stopKeywords'])),
+      allowedProductGroups: KeywordSet.fromList(
+        pickStrList(json['allowedProductGroups']),
+      ),
       tuning: ReceiptTuning.fromJsonLike(
         json['tuning'] as Map<String, dynamic>?,
       ),
@@ -175,6 +188,7 @@ final class ReceiptOptions {
     'totalLabels': totalLabels.mapping,
     'ignoreKeywords': ignoreKeywords.keywords,
     'stopKeywords': stopKeywords.keywords,
+    'allowedProductGroups': allowedProductGroups.keywords,
     'tuning': tuning.toJsonLike(),
   };
 

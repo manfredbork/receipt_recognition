@@ -148,6 +148,8 @@ Parameters (keys inside extend/override, or top-level in flat form)
     - Lines containing any of these are ignored.
 - stopKeywords: List<String>
     - Parsing stops after encountering these.
+- allowedProductGroups: List<String>
+    - Keywords that indicate allowed product categories during parsing.
 - tuning: Map<String, dynamic> (override-only)
     - optimizerConfidenceThreshold (int): min combined confidence (0–100).
     - optimizerStabilityThreshold (int): min stability (0–100).
