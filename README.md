@@ -387,7 +387,7 @@ Better for real-time scanning with a live preview:
 
 1. **Lighting**: Ensure good, even lighting for the best OCR results
 2. **Alignment**: Keep receipts as flat and aligned as possible
-3. **Stability**: For continuous scanning, allow 1–3 seconds of stable framing
+3. **Stability**: For continuous scanning, allow 1–2 seconds of stable framing
 4. **Multiple Scans**: Use the optimizer's merging capabilities for improved accuracy
 5. **Language Handling**: For mixed-language environments, consider setting the appropriate TextRecognitionScript when
    initializing the recognizer
