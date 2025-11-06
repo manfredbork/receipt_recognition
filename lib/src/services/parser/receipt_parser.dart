@@ -618,12 +618,22 @@ final class ReceiptParser {
           );
         }
         if (isDeposit) {
+          final oldGroup = position.group;
+
           final newPosition = position.copyWith(
             product: position.product.copyWith(
               value: position.product.line.text,
             ),
           );
-          position.product.position = newPosition;
+          newPosition.group = oldGroup;
+          newPosition.product.position = newPosition;
+          newPosition.price.position = newPosition;
+
+          final i = receipt.positions.indexOf(position);
+          if (i >= 0) receipt.positions[i] = newPosition;
+
+          final gi = oldGroup?.members.indexOf(position) ?? -1;
+          if (gi >= 0) oldGroup!.members[gi] = newPosition;
         }
       } else {
         position.unit = RecognizedUnit.fromNumbers(

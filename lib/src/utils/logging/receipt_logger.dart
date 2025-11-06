@@ -59,10 +59,10 @@ final class ReceiptLogger {
                 .toList();
         debugPrint(
           '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padHalfWidth)}'
+          '${'🗄  ${position.product.productGroup}'.padRight(padHalfWidth)}'
           '${'🏷️  ${position.product.unit.quantity.formattedValue} x ${position.product.unit.price.formattedValue}'.padRight(padHalfWidth)}'
           '${'📈  $confidence % Confidence'.padRight(padFullWidth)}'
           '${'⚖️  $stability % Stability'.padRight(padFullWidth)}'
-          '${'⚖️  ${position.product.alternativePostfixTexts}'.padRight(padFullWidth)}'
           '${'📊  Distribution: $distribution '.padRight(padFullWidth)}',
         );
       }

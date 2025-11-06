@@ -785,7 +785,11 @@ final class ReceiptOptimizer implements Optimizer {
       final patched = best.copyWith(
         product: best.product.copyWith(line: latest.product.line),
         price: best.price.copyWith(line: latest.price.line),
+        group: best.group,
       )..operation = latest.operation;
+
+      patched.product.position = patched;
+      patched.price.position = patched;
 
       ReceiptLogger.log('merge.keep', {
         'grp': ReceiptLogger.grpKey(group),

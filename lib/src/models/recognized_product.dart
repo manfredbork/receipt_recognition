@@ -96,11 +96,15 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       ReceiptFormatter.toPostfixText(position?.price.line.text ?? '');
 
   /// Normalized product group using group alternatives.
-  String get productGroup =>
-      ReceiptNormalizer.normalizeByAlternativePostfixTexts(
-        alternativePostfixTexts,
-      ) ??
-      postfixText;
+  String get productGroup {
+    final normText = ReceiptNormalizer.normalizeToProductGroup(postfixText);
+    final alts = alternativePostfixTexts;
+    if (alts.isEmpty) return normText;
+    final normalized = ReceiptNormalizer.normalizeByAlternativePostfixTexts(
+      alts,
+    );
+    return (normalized == null || normalized.isEmpty) ? normText : normalized;
+  }
 
   /// Alternative product texts from the group.
   List<String> get alternativeTexts => position?.group?.alternativeTexts ?? [];

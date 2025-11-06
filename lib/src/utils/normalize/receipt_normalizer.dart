@@ -48,7 +48,7 @@ final class ReceiptNormalizer {
   );
 
   /// Product group disallowed chars
-  static final RegExp _disallowedGroupChars = RegExp(r'[^A-Z12]');
+  static final RegExp _disallowedGroupChars = RegExp(r'[^A-Z0-9]');
 
   /// Standalone trailing int (e.g., "... 9")
   static final RegExp _trailingStandaloneInt = RegExp(
@@ -57,7 +57,7 @@ final class ReceiptNormalizer {
 
   /// Price-like tail (handles 1,99 / 12.345,67 / unicode seps / €|eur|euro|e / optional x quantity)
   static final RegExp _priceTail = RegExp(
-    '(.*?\\S)(?=\\s+\\d{1,3}(?:[ .’\\\']\\d{3})*\\s*[.,‚،٫·]\\s*\\d{1,3}(?:\\s*(?:€|eur|euro|e))?(?:\\s*[x×]\\s*\\d*)?[\\s\\S]*)[\\s\\S]*',
+    '(.*?\\S)(?=\\s+\\d{1,3}(?:[ .’\\\']\\d{3})*\\s*[.,‚،٫·]\\s*\\d{2,3}(?:\\s*(?:€|eur|euro|e))?(?:\\s*[x×]\\s*\\d*)?[\\s\\S]*)[\\s\\S]*',
     caseSensitive: false,
   );
 
@@ -96,6 +96,11 @@ final class ReceiptNormalizer {
     return v;
   }
 
+  /// Normalizes postfix text to product group.
+  static String normalizeToProductGroup(String s) {
+    return s.replaceAll(_disallowedGroupChars, '');
+  }
+
   /// Normalizes postfix text by comparing multiple alternative recognitions.
   static String? normalizeByAlternativePostfixTexts(
     List<String> alternativePostfixTexts,
@@ -111,9 +116,7 @@ final class ReceiptNormalizer {
     }
 
     final charNormalized =
-        alternativePostfixTexts
-            .map((s) => s.replaceAll(_disallowedGroupChars, ''))
-            .toList();
+        alternativePostfixTexts.map((s) => normalizeToProductGroup(s)).toList();
 
     final mostFrequent = sortByFrequency(charNormalized);
     final bestResult = mostFrequent.lastWhere(
