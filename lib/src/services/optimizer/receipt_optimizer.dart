@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:collection/collection.dart';
 import 'package:receipt_recognition/src/models/index.dart';
@@ -1009,43 +1008,8 @@ final class ReceiptOptimizer implements Optimizer {
 
       if (receipt.isValid) return;
 
-      final lastText =
-          receipt.positions.lastOrNull?.product.normalizedText ?? 'abc';
-      final upperCase = lastText == lastText.toUpperCase();
-      final productName = _opts.tuning.optimizerUnrecognizedProductName;
-      final proR =
-          receipt.positions.lastOrNull?.product.line.boundingBox ?? Rect.zero;
-      final priR =
-          receipt.positions.lastOrNull?.product.line.boundingBox ?? Rect.zero;
-      final product = RecognizedProduct(
-        line: ReceiptTextLine(
-          boundingBox: Rect.fromLTRB(
-            proR.left,
-            proR.top + proR.height,
-            proR.right,
-            proR.bottom,
-          ),
-        ),
-        value: upperCase ? productName.toUpperCase() : productName,
-      );
-      final price = RecognizedPrice(
-        line: ReceiptTextLine(
-          boundingBox: Rect.fromLTRB(
-            priR.left,
-            priR.top + priR.height,
-            priR.right,
-            priR.bottom,
-          ),
-        ),
-        value:
-            (total * 100 - receipt.calculatedTotal.value * 100).round() / 100,
-      );
-      final position = RecognizedPosition(
-        product: product,
-        price: price,
-        timestamp: receipt.timestamp,
-        operation: Operation.none,
-      );
+      final pseudoName = _opts.tuning.optimizerUnrecognizedProductName;
+      final position = RecognizedPosition.pseudo(receipt, pseudoName);
       _createNewGroup(position);
       receipt.positions.add(position);
     }
