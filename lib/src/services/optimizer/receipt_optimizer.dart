@@ -894,17 +894,20 @@ final class ReceiptOptimizer implements Optimizer {
   void _reconcileToTotal(RecognizedReceipt receipt, bool pseudoPosition) {
     final total = receipt.total?.value;
     if (total == null) return;
-    if (receipt.isValid || receipt.positions.isEmpty) return;
 
     final tol = _opts.tuning.optimizerTotalTolerance;
+    final beforeLen = receipt.positions.length;
+
+    receipt.positions.removeWhere(
+      (pos) => (pos.price.value - total).abs() <= tol,
+    );
+
+    if (receipt.isValid || receipt.positions.isEmpty) return;
+
     final tolC = (tol * 100).round();
     final targetC = _toCents(total);
     final beforeC = _sumCents(receipt.positions);
 
-    final beforeLen = receipt.positions.length;
-    receipt.positions.removeWhere(
-      (pos) => (pos.price.value - total).abs() <= tol,
-    );
     final removedAsTotal = beforeLen - receipt.positions.length;
 
     if (removedAsTotal > 0) {
@@ -912,6 +915,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     int currentC = _sumCents(receipt.positions);
+
     final deltaC = currentC - targetC;
     if (deltaC.abs() < tolC) {
       ReceiptLogger.log('recon.within_tol', {
@@ -924,11 +928,18 @@ final class ReceiptOptimizer implements Optimizer {
 
     if (deltaC > 0) {
       final int maxCandidates = beforeLen ~/ 2;
-      final candidates = List<RecognizedPosition>.from(receipt.positions)..sort(
-        (a, b) => (a.group?.members.length ?? 0).compareTo(
-          b.group?.members.length ?? 0,
-        ),
-      );
+
+      int memberCompare(RecognizedPosition a, RecognizedPosition b) =>
+          (a.group?.members.length ?? 0).compareTo(
+            b.group?.members.length ?? 0,
+          );
+
+      int priceCompare(RecognizedPosition a, RecognizedPosition b) =>
+          a.price.value.compareTo(b.price.value);
+
+      final candidates = List<RecognizedPosition>.from(receipt.positions)
+        ..sort(pseudoPosition ? priceCompare : memberCompare);
+
       final pool = candidates.take(maxCandidates).toList();
 
       if (pool.length <= 1) return;
