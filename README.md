@@ -23,6 +23,7 @@ for building expense tracking apps, loyalty programs, or any system needing rece
 - 🧠 Layered options (extend/override/tuning) to customize stores, labels, keywords, and optimizer thresholds
 - 🧳 Stability-based merging and grouping to increase confidence over multiple scans
 - 🗓️ Multi-format date parsing (numeric and EN/DE month-name formats)
+- ⚖️ Detects and parses unit quantities and price-per-unit values (e.g., “2 × 1.29 €”)
 
 ---
 
@@ -284,6 +285,7 @@ Analyzes the raw text to identify and categorize receipt elements:
 - Store name (e.g., Aldi, Rewe, Edeka, Penny, Lidl, Kaufland, Netto in German markets)
 - Total ("Summe", "Gesamt", "Total")
 - Line items (products and prices)
+- Unit quantities and price-per-unit details (e.g., “2 × 1.29”)
 - Total label normalization
 - Purchase date extraction
 - Receipt bounds and skew angle estimation
@@ -337,6 +339,7 @@ The optimizer:
 | Product Normalization   | ✅ Complete    | Standardizes product names     |
 | Purchase Date Detection | ✅ Complete    | Parsed from multiple formats   |
 | Bounds & Skew           | ✅ Complete    | Outer rect + skew estimation   |
+| Unit Quantity & Price   | ✅ Complete    | Quantity and price-per-unit    |
 +-------------------------+----------------+--------------------------------+
 ```
 
