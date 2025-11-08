@@ -83,6 +83,10 @@ void main() {
         expect(items[16].product.formattedValue, equals('LEERGUT EINWEG'));
         expect(items[16].price.formattedValue, equals('-1.50'));
 
+        expect(items[16].product.unit.quantity.value, equals(6));
+        expect(items[16].product.unit.price.value, equals(-0.25));
+        expect(items[16].product.productGroup, equals('A'));
+
         expect(receipt.totalLabel?.formattedValue, equals('SUMME'));
         expect(receipt.calculatedTotal.formattedValue, equals('30.82'));
         expect(receipt.total?.formattedValue, equals('30.82'));
