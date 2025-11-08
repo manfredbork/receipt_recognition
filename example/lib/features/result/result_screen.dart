@@ -21,7 +21,7 @@ class ResultScreen extends StatelessWidget {
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
-                const ZigzagEdgeWidget(isTop: true),
+                const ZigzagEdgeWidget(isTop: true, height: 25),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: const BoxDecoration(color: Colors.white),
@@ -106,7 +106,7 @@ class ResultScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const ZigzagEdgeWidget(isTop: false),
+                const ZigzagEdgeWidget(isTop: false, height: 25),
               ]),
             ),
           ),

@@ -56,7 +56,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
       line: line ?? this.line,
       confidence: confidence ?? this.confidence,
       position: position ?? this.position,
-      options: options ?? ReceiptOptions.defaults(),
+      options: options ?? this.options,
     );
   }
 
@@ -66,25 +66,52 @@ final class RecognizedProduct extends RecognizedEntity<String> {
   /// Formatted product text.
   String get text => formattedValue;
 
+  /// Normalized unit using group alternatives.
+  RecognizedUnit get unit {
+    if (position == null) {
+      return RecognizedUnit.fromNumbers(0, 0, ReceiptTextLine());
+    }
+    final fallback = RecognizedUnit.fromNumbers(
+      1,
+      position!.price.value,
+      position!.price.line,
+    );
+    final prices = alternativeUnits.map((p) => p.price.formattedValue).toList();
+    final price = ReceiptNormalizer.sortByFrequency(prices).lastOrNull;
+    if (price == null) return fallback;
+    final unit =
+        alternativeUnits
+            .where((p) => p.price.formattedValue == price)
+            .lastOrNull;
+    if (unit == null) return fallback;
+    return unit;
+  }
+
   /// Normalized product text using group alternatives.
   String get normalizedText =>
       ReceiptNormalizer.normalizeByAlternativeTexts(alternativeTexts) ?? text;
 
   /// Postfix text after the price, if any.
   String get postfixText =>
-      position?.group?.convertToPostfixText(position?.price.line.text ?? '') ??
-      '';
+      ReceiptFormatter.toPostfixText(position?.price.line.text ?? '');
 
-  /// Normalized postfix text using keyword matching.
-  String get normalizedPostfixText => alternativePostfixTexts.firstWhere(
-    (postfixText) =>
-        options.foodKeywords.hasMatch(postfixText) ||
-        options.nonFoodKeywords.hasMatch(postfixText),
-    orElse: () => '',
-  );
+  /// Normalized product group using group alternatives.
+  String get productGroup {
+    final normText = ReceiptNormalizer.normalizeToProductGroup(postfixText);
+    final alts = alternativePostfixTexts;
+    if (alts.isEmpty) return normText;
+    final normalized = ReceiptNormalizer.normalizeByAlternativePostfixTexts(
+      alts,
+    );
+    return (normalized == null || normalized.isEmpty) ? normText : normalized;
+  }
 
   /// Alternative product texts from the group.
   List<String> get alternativeTexts => position?.group?.alternativeTexts ?? [];
+
+  /// Alternative units from the group.
+  List<RecognizedUnit> get alternativeUnits =>
+      position?.group?.alternativeUnits ?? [];
 
   /// Alternative postfix texts from the group.
   List<String> get alternativePostfixTexts =>
@@ -118,20 +145,4 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     counts.forEach((k, v) => result[k] = ((v / total) * 100).round());
     return result;
   }
-
-  /// Whether this product is a cashback (negative price).
-  bool get isCashback => (position?.price.value ?? 0.0) < 0;
-
-  /// Whether this product is classified as food.
-  bool get isFood => options.foodKeywords.hasMatch(normalizedPostfixText);
-
-  /// Whether this product is classified as non-food.
-  bool get isNonFood => options.nonFoodKeywords.hasMatch(normalizedPostfixText);
-
-  /// Whether this product represents a discount.
-  bool get isDiscount =>
-      isCashback && options.discountKeywords.hasMatch(normalizedText);
-
-  /// Whether this product represents a deposit.
-  bool get isDeposit => options.depositKeywords.hasMatch(normalizedText);
 }

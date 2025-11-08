@@ -37,12 +37,6 @@ final class ReceiptNormalizer {
   /// A single white space matcher for counting spaces.
   static final RegExp _singleSpace = RegExp(r'\s');
 
-  /// Captures leading text and trailing price-like tail.
-  static final RegExp _priceTail = RegExp(r'(.*\S)(\s*\d+[.,]?\d{2,3}.*)');
-
-  /// Matches explicit euro amounts like '1,99 EURO'.
-  static final RegExp _euroAmount = RegExp(r'(\s*\d+[.,]?\d{2}\sEURO?)');
-
   /// Unicode combining mark ranges (NFD) to strip diacritics.
   static final RegExp _combiningMark = RegExp(
     r'[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\uFE20-\uFE2F]',
@@ -52,6 +46,112 @@ final class ReceiptNormalizer {
   static final RegExp _allSpaces = RegExp(
     r'[\u0009-\u000D\u0020\u0085\u00A0\u1680\u180E\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+',
   );
+
+  /// Product group disallowed chars
+  static final RegExp _disallowedGroupChars = RegExp(r'[^A-Z0-9]');
+
+  /// Tail that should not be stripped: ends with the word "EURO" (case-insensitive).
+  static final RegExp _trailingEuroWordAmount = RegExp(
+    '\\beuro\\s*\$',
+    caseSensitive: false,
+  );
+
+  /// Standalone trailing int (e.g., "... 9")
+  static final RegExp _trailingStandaloneInt = RegExp(
+    '(.*\\S)\\s+(\\d+)\\s*\\\$',
+    caseSensitive: false,
+  );
+
+  /// Price-like tail (handles 1,99 / 12.345,67 / unicode seps / €|eur|euro|e / optional x quantity)
+  static final RegExp _priceTail = RegExp(
+    '(.*?\\S)(?=\\s+\\d{1,3}(?:[ .’\\\']\\d{3})*\\s*[.,‚،٫·]\\s*\\d{2,3}(?:\\s*(?:€|eur|euro|e))?(?:\\s*[x×]\\s*\\d*)?[\\s\\S]*)[\\s\\S]*',
+    caseSensitive: false,
+  );
+
+  /// Dangling "x"/"×"
+  static final RegExp _danglingTimes = RegExp(
+    '(.*\\S)\\s+[x×]\\s*\\\$',
+    caseSensitive: false,
+  );
+
+  /// Dangling currency
+  static final RegExp _danglingCurrency = RegExp(
+    '(.*\\S)\\s+(?:€|eur|euro|e)\\s*\\\$',
+    caseSensitive: false,
+  );
+
+  /// Collapse all Unicode spaces to a normal space first.
+  static String _normalizeSpaces(String s) =>
+      s.replaceAll(_allSpaces, ' ').trim();
+
+  /// Tests if tail should be removed from text.
+  static bool shouldNormalizeTail(String value) {
+    final v = _normalizeSpaces(value);
+    return !_trailingEuroWordAmount.hasMatch(v);
+  }
+
+  /// Removes trailing price-like numeric patterns, while leaving normal text intact.
+  static String normalizeTail(String value) {
+    final v = _normalizeSpaces(value);
+
+    final m1 = _trailingStandaloneInt.firstMatch(v);
+    if (m1 != null) return m1.group(1)!.trim();
+
+    final m2 = _priceTail.firstMatch(v);
+    if (m2 != null) return m2.group(1)!.trim();
+
+    final m3 = _danglingTimes.firstMatch(v);
+    if (m3 != null) return m3.group(1)!.trim();
+
+    final m4 = _danglingCurrency.firstMatch(v);
+    if (m4 != null) return m4.group(1)!.trim();
+
+    return v;
+  }
+
+  /// Normalizes postfix text to a product group. If `ReceiptRuntime.options`
+  /// defines `allowedProductGroups` and the normalized value is not contained
+  /// this returns ''.
+  static String normalizeToProductGroup(String s) {
+    final cleaned = s.toUpperCase().replaceAll(_disallowedGroupChars, '');
+    if (cleaned.isEmpty) return '';
+
+    final allowedRaw = ReceiptRuntime.options.allowedProductGroups.keywords;
+    if (allowedRaw.isNotEmpty) {
+      final allowed = allowedRaw.map((s) => s.toUpperCase()).toSet();
+      if (!allowed.contains(cleaned)) return '';
+    }
+
+    return cleaned;
+  }
+
+  /// Normalizes postfix text by comparing multiple alternative recognitions.
+  static String? normalizeByAlternativePostfixTexts(
+    List<String> alternativePostfixTexts,
+  ) {
+    ReceiptLogger.log('norm.in', {
+      'n': alternativePostfixTexts.length,
+      'alts': alternativePostfixTexts,
+    });
+
+    if (alternativePostfixTexts.isEmpty) {
+      ReceiptLogger.log('norm.out', {'result': null, 'why': 'empty'});
+      return null;
+    }
+
+    final charNormalized =
+        alternativePostfixTexts.map((s) => normalizeToProductGroup(s)).toList();
+
+    final mostFrequent = sortByFrequency(charNormalized);
+    final bestResult = mostFrequent.lastWhere(
+      (s) => s.isNotEmpty,
+      orElse: () => '',
+    );
+
+    ReceiptLogger.log('norm.out', {'result': bestResult});
+
+    return bestResult;
+  }
 
   /// Normalizes text by comparing multiple alternative recognitions.
   /// Example: ['COKE  ZERO', 'COKE ZERO', 'COKEZ ERO'] -> 'COKE ZERO'
@@ -141,7 +241,7 @@ final class ReceiptNormalizer {
       'ranked': candidates,
     });
 
-    final spaced = normalizeSpecialSpaces(mostFrequent, filteredTexts);
+    final spaced = normalizeSpecialSpaces(mostFrequent, candidates);
 
     ReceiptLogger.log('norm.out', {'result': spaced});
     return spaced;
@@ -179,9 +279,9 @@ final class ReceiptNormalizer {
     return corrected;
   }
 
-  /// Tries to find if removing exactly one space from [textWithSpace] equals [textWithoutSpace].
-  /// Returns the match if found, null otherwise.
-  /// Example: tryRemovingSingleSpace('Weide milch', 'Weidemilch') -> 'Weidemilch'
+  /// Returns the match if removing exactly one space from [textWithSpace]
+  /// equals [textWithoutSpace], but ONLY when the space precedes a lowercase
+  /// letter (so we don't glue "Bio Weidemilch").
   static String? _tryRemovingSingleSpace(
     String textWithSpace,
     String textWithoutSpace,
@@ -193,6 +293,14 @@ final class ReceiptNormalizer {
 
     for (int i = 0; i < textWithSpace.length; i++) {
       if (textWithSpace[i] == ' ') {
+        // guard: only allow glue if the next char is a lowercase letter
+        final next = (i + 1 < textWithSpace.length) ? textWithSpace[i + 1] : '';
+        if (!_isLowerLetter(next)) continue;
+
+        // optional extra guard (keeps intent very tight): previous is a letter
+        final prev = (i - 1 >= 0) ? textWithSpace[i - 1] : '';
+        if (!_isNormalLetter(prev)) continue;
+
         final withoutThisSpace =
             textWithSpace.substring(0, i) + textWithSpace.substring(i + 1);
 
@@ -205,6 +313,15 @@ final class ReceiptNormalizer {
     return null;
   }
 
+  /// Unicode-aware lowercase check (works for umlauts etc.)
+  static bool _isLowerLetter(String ch) {
+    if (ch.isEmpty) return false;
+    final lower = ch.toLowerCase();
+    final upper = ch.toUpperCase();
+    if (lower == upper) return false;
+    return ch == lower;
+  }
+
   /// Applies OCR error correction by comparing alternatives and replacing commonly
   /// confused characters (digits/special chars) with normal letters when appropriate.
   /// Only corrects alternatives with percentage occurrences below stabilityThreshold.
@@ -212,33 +329,9 @@ final class ReceiptNormalizer {
   static List<String> _applyOcrCorrection(List<String> alternatives) {
     if (alternatives.length < 2) return alternatives;
 
-    final total = alternatives.length;
-    final counts = <String, int>{};
-    for (final text in alternatives) {
-      counts[text] = (counts[text] ?? 0) + 1;
-    }
-    final percentages = <String, int>{};
-    counts.forEach((k, v) => percentages[k] = ((v / total) * 100).round());
-
-    final confidenceThreshold =
-        ReceiptRuntime.options.tuning.optimizerConfidenceThreshold;
-    final stabilityThreshold =
-        ReceiptRuntime.options.tuning.optimizerStabilityThreshold;
-
     final corrected = <String>[];
 
     for (final text in alternatives) {
-      final percentage = percentages[text] ?? 0;
-      final percConfThreshold =
-          alternatives.length <= 2 && percentage >= confidenceThreshold;
-      final percStabThreshold =
-          alternatives.length > 2 && percentage >= stabilityThreshold;
-
-      if (percConfThreshold || percStabThreshold) {
-        corrected.add(text);
-        continue;
-      }
-
       final chars = text.split('');
       final ocrAlternatives = alternatives.where((t) => t != text).toList();
 
@@ -251,7 +344,8 @@ final class ReceiptNormalizer {
           if (other.length > i) {
             final otherChar = other[i];
 
-            if (_isNormalLetter(otherChar) &&
+            if (!_isNormalLetter(char) &&
+                _isNormalLetter(otherChar) &&
                 _isSimilarExceptPosition(text, other, i)) {
               if (i + 1 < chars.length &&
                   chars[i + 1].toLowerCase() == otherChar.toLowerCase()) {
@@ -264,8 +358,6 @@ final class ReceiptNormalizer {
                 'from': char,
                 'to': otherChar,
                 'reference': other,
-                'percentage': percentage,
-                'threshold': stabilityThreshold,
               });
               break;
             }
@@ -273,7 +365,66 @@ final class ReceiptNormalizer {
         }
       }
 
-      corrected.add(chars.join());
+      // After the existing per-char replacement loop
+      String afterCharFix = chars.join();
+
+      // --- Token-wise correction (minimal) ---
+      final tokens = afterCharFix.split(RegExp(r'\s+'));
+      for (final other in ocrAlternatives) {
+        final otherTokens = other.split(RegExp(r'\s+'));
+        if (otherTokens.length != tokens.length) continue;
+
+        for (int ti = 0; ti < tokens.length; ti++) {
+          final t = tokens[ti];
+          if (t.length < 4) continue;
+
+          final oTok = otherTokens[ti];
+          if (oTok.isEmpty || t == oTok) continue;
+
+          if (_editDistanceLe1(t, oTok)) {
+            final tIsAlpha = _isAlpha(t);
+            final oIsAlpha = _isAlpha(oTok);
+
+            if (!tIsAlpha && oIsAlpha) {
+              // prefer letters over digits/specials (M1lka -> Milka)
+              ReceiptLogger.log('ocr.token.correct', {
+                'from': t,
+                'to': oTok,
+                'reason': 'prefer-alpha',
+                'pos': ti,
+              });
+              tokens[ti] = oTok;
+              continue;
+            }
+
+            if (tIsAlpha && oIsAlpha) {
+              final a = t, b = oTok;
+              final aIsStrictPrefixOfB = b.startsWith(a) && b.length > a.length;
+              final bIsStrictPrefixOfA = a.startsWith(b) && a.length > b.length;
+
+              if (aIsStrictPrefixOfB || bIsStrictPrefixOfA) {
+                // If one is a strict prefix of the other, prefer the longer (avoid truncations)
+                final prefer = aIsStrictPrefixOfB ? b : a; // the longer one
+                if (prefer != t) {
+                  ReceiptLogger.log('ocr.token.correct', {
+                    'from': t,
+                    'to': prefer,
+                    'reason': 'prefer-longer-prefix',
+                    'pos': ti,
+                  });
+                  tokens[ti] = prefer;
+                }
+                continue; // don't let later rules override
+              }
+            }
+
+            // (tIsAlpha && !oIsAlpha) -> keep t (do nothing)
+          }
+        }
+      }
+      afterCharFix = tokens.join(' ');
+
+      corrected.add(afterCharFix);
     }
 
     return corrected;
@@ -285,6 +436,8 @@ final class ReceiptNormalizer {
   /// Example: isNormalLetter('O') -> true, isNormalLetter('0') -> false
   static bool _isNormalLetter(String char) {
     if (char.isEmpty) return false;
+    if (char == '!' || char == '%' || char == '&' || char == '+') return true;
+
     final code = char.codeUnitAt(0);
 
     if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
@@ -294,10 +447,6 @@ final class ReceiptNormalizer {
     if ((code >= 192 && code <= 214) ||
         (code >= 216 && code <= 246) ||
         (code >= 248 && code <= 255)) {
-      return true;
-    }
-
-    if (code >= 256 && code <= 383) {
       return true;
     }
 
@@ -323,6 +472,49 @@ final class ReceiptNormalizer {
       }
     }
 
+    return true;
+  }
+
+  /// True if [s] has letters and all of them are uppercase (diacritics supported).
+  static bool _isAllCaps(String s) {
+    final lettersOnly = s.replaceAll(RegExp(r'[^A-Za-zÀ-ÖØ-Þà-öø-ÿ]'), '');
+    if (lettersOnly.isEmpty) return false;
+    return lettersOnly.toUpperCase() == lettersOnly;
+  }
+
+  /// Returns true if all characters in [s] are normal letters (A–Z, a–z, incl. diacritics).
+  static bool _isAlpha(String s) {
+    for (final ch in s.split('')) {
+      if (!_isNormalLetter(ch)) return false;
+    }
+    return true;
+  }
+
+  /// Fast check: Levenshtein distance <= 1
+  static bool _editDistanceLe1(String a, String b) {
+    if (a == b) return true;
+    final la = a.length, lb = b.length;
+    if ((la - lb).abs() > 1) return false;
+
+    if (la == lb) {
+      int diffs = 0;
+      for (int i = 0; i < la; i++) {
+        if (a[i] != b[i] && ++diffs > 1) return false;
+      }
+      return true;
+    }
+
+    if (la > lb) return _editDistanceLe1(b, a);
+    int i = 0, j = 0, skips = 0;
+    while (i < la && j < lb) {
+      if (a[i] == b[j]) {
+        i++;
+        j++;
+      } else {
+        if (++skips > 1) return false;
+        j++;
+      }
+    }
     return true;
   }
 
@@ -380,28 +572,6 @@ final class ReceiptNormalizer {
     return noPunct.replaceAll(_spacesRun, ' ').trim();
   }
 
-  /// Add this near the other regexes:
-  static final RegExp _trailingStandaloneInt = RegExp(r'(.*\S)\s+(\d+)\s*$');
-
-  /// Removes trailing price-like numeric patterns *or* a standalone integer at the end,
-  /// while leaving normal text intact. Examples:
-  /// 'PRODUCT NAME 1,99'   -> 'PRODUCT NAME'
-  /// 'PRODUCT NAME 123'    -> 'PRODUCT NAME'
-  /// 'PRODUCT NAME 1,99 EURO' stays unchanged (explicit currency keyword).
-  static String normalizeTail(String value) {
-    final v = value.trim();
-
-    if (_euroAmount.hasMatch(v)) return v;
-
-    final price = _priceTail.firstMatch(v);
-    if (price != null) return price.group(1)!.trim();
-
-    final bareInt = _trailingStandaloneInt.firstMatch(v);
-    if (bareInt != null) return bareInt.group(1)!.trim();
-
-    return v;
-  }
-
   /// Normalizes spaces by comparing the most frequent text with its peers.
   /// Example: ['Co ke Zero', 'Coke Zero', 'CokeZero'] -> 'Coke Zero'
   static String normalizeSpecialSpaces(
@@ -448,8 +618,11 @@ final class ReceiptNormalizer {
       final bSpaces = _singleSpace.allMatches(b).length;
       if (aSpaces != bSpaces) return aSpaces - bSpaces;
 
-      if (a.length != b.length) return a.length - b.length;
+      final aAll = _isAllCaps(a) ? 1 : 0;
+      final bAll = _isAllCaps(b) ? 1 : 0;
+      if (aAll != bAll) return aAll - bAll;
 
+      if (a.length != b.length) return a.length - b.length;
       return a.compareTo(b);
     });
 

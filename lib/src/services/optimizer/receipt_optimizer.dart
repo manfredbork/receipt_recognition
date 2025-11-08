@@ -23,6 +23,9 @@ abstract class Optimizer {
   /// Public entry to finalize and reconcile a manually accepted receipt.
   void accept(RecognizedReceipt receipt);
 
+  /// Resets all caches used by the optimizer.
+  void reset({RecognizedPurchaseDate? purchaseDate});
+
   /// Releases resources used by the optimizer.
   void close();
 }
@@ -118,18 +121,29 @@ final class ReceiptOptimizer implements Optimizer {
   /// Accepts a receipt manually and finalizes reconciliation if needed.
   @override
   void accept(RecognizedReceipt receipt) {
-    _reconcileToTotal(receipt, true);
     _processPositions(receipt);
+    ReceiptLogger.kRecogVerbose = true;
+    _reconcileToTotal(receipt, true);
+    ReceiptLogger.kRecogVerbose = false;
     _applySkewAngle(receipt);
     _updateEntities(receipt);
+  }
+
+  /// Clears caches and only set purchase date.
+  @override
+  void reset({RecognizedPurchaseDate? purchaseDate}) {
+    _shouldInitialize = true;
+    _initializeIfNeeded();
+    _resetFrameFreshness();
+    if (purchaseDate != null) {
+      _purchaseDates.add(purchaseDate);
+    }
   }
 
   /// Releases all resources used by the optimizer.
   @override
   void close() {
-    _shouldInitialize = true;
-    _initializeIfNeeded();
-    _resetFrameFreshness();
+    reset();
   }
 
   /// Clears caches and resets internal state if flagged.
@@ -520,10 +534,11 @@ final class ReceiptOptimizer implements Optimizer {
 
     final pts = <Point<double>>[];
     for (final p in pos) {
-      final b = p.product.line.boundingBox;
-      final yCenter = b.center.dy.toDouble();
-      final xLeft = b.left.toDouble();
-      pts.add(Point<double>(yCenter, xLeft));
+      final a = p.product.line.boundingBox;
+      final b = p.price.line.boundingBox;
+      final yCenter = (a.center.dy + b.center.dy) / 2;
+      final xCenter = (a.left + b.left) / 2;
+      pts.add(Point<double>(yCenter, xCenter));
     }
     if (pts.length < 2) return;
 
@@ -784,7 +799,11 @@ final class ReceiptOptimizer implements Optimizer {
       final patched = best.copyWith(
         product: best.product.copyWith(line: latest.product.line),
         price: best.price.copyWith(line: latest.price.line),
+        group: best.group,
       )..operation = latest.operation;
+
+      patched.product.position = patched;
+      patched.price.position = patched;
 
       ReceiptLogger.log('merge.keep', {
         'grp': ReceiptLogger.grpKey(group),
@@ -877,17 +896,20 @@ final class ReceiptOptimizer implements Optimizer {
   void _reconcileToTotal(RecognizedReceipt receipt, bool pseudoPosition) {
     final total = receipt.total?.value;
     if (total == null) return;
-    if (receipt.isValid || receipt.positions.isEmpty) return;
 
     final tol = _opts.tuning.optimizerTotalTolerance;
+    final beforeLen = receipt.positions.length;
+
+    receipt.positions.removeWhere(
+      (pos) => (pos.price.value - total).abs() <= tol,
+    );
+
+    if (receipt.isValid || receipt.positions.isEmpty) return;
+
     final tolC = (tol * 100).round();
     final targetC = _toCents(total);
     final beforeC = _sumCents(receipt.positions);
 
-    final beforeLen = receipt.positions.length;
-    receipt.positions.removeWhere(
-      (pos) => (pos.price.value - total).abs() <= tol,
-    );
     final removedAsTotal = beforeLen - receipt.positions.length;
 
     if (removedAsTotal > 0) {
@@ -895,6 +917,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     int currentC = _sumCents(receipt.positions);
+
     final deltaC = currentC - targetC;
     if (deltaC.abs() < tolC) {
       ReceiptLogger.log('recon.within_tol', {
@@ -907,11 +930,15 @@ final class ReceiptOptimizer implements Optimizer {
 
     if (deltaC > 0) {
       final int maxCandidates = beforeLen ~/ 2;
-      final candidates = List<RecognizedPosition>.from(receipt.positions)..sort(
-        (a, b) => (a.group?.members.length ?? 0).compareTo(
-          b.group?.members.length ?? 0,
-        ),
-      );
+
+      int membersCompare(RecognizedPosition a, RecognizedPosition b) =>
+          (a.group?.members.length ?? 0).compareTo(
+            b.group?.members.length ?? 0,
+          );
+
+      final candidates = List<RecognizedPosition>.from(receipt.positions)
+        ..sort(membersCompare);
+
       final pool = candidates.take(maxCandidates).toList();
 
       if (pool.length <= 1) return;
@@ -919,7 +946,7 @@ final class ReceiptOptimizer implements Optimizer {
       final targetRemove = deltaC.abs();
       final toRemoveIdx = _pickSubsetToDrop(pool, targetRemove, beamWidth: 256);
 
-      if (toRemoveIdx.isEmpty) {
+      if (toRemoveIdx.length <= 1) {
         final beforeErr = (currentC - targetC).abs();
         for (final p in pool) {
           final after = currentC - _toCents(p.price.value);
@@ -957,25 +984,61 @@ final class ReceiptOptimizer implements Optimizer {
 
       final emptied = _groups.where((g) => g.members.isEmpty).toList();
       if (emptied.isNotEmpty) _purgeGroups(emptied.toSet());
-      return;
     }
 
-    if (deltaC < 0 && pseudoPosition) {
+    if (pseudoPosition) {
+      final currentTotal = receipt.calculatedTotal.value;
+
+      if (currentTotal - tol > total) {
+        int priceCompare(RecognizedPosition a, RecognizedPosition b) =>
+            a.price.value.compareTo(b.price.value);
+
+        final candidates = List<RecognizedPosition>.from(receipt.positions)
+          ..sort(priceCompare);
+
+        final toRemove =
+            candidates
+                .where((pos) => currentTotal - pos.price.value >= total - tol)
+                .firstOrNull;
+
+        if (toRemove != null) {
+          receipt.positions.remove(toRemove);
+          toRemove.group?.members.remove(toRemove);
+        }
+      }
+
+      if (receipt.isValid) return;
+
       final lastText =
           receipt.positions.lastOrNull?.product.normalizedText ?? 'abc';
       final upperCase = lastText == lastText.toUpperCase();
       final productName = _opts.tuning.optimizerUnrecognizedProductName;
+      final proR =
+          receipt.positions.lastOrNull?.product.line.boundingBox ?? Rect.zero;
+      final priR =
+          receipt.positions.lastOrNull?.product.line.boundingBox ?? Rect.zero;
       final product = RecognizedProduct(
         line: ReceiptTextLine(
-          boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
+          boundingBox: Rect.fromLTRB(
+            proR.left,
+            proR.top + proR.height,
+            proR.right,
+            proR.bottom,
+          ),
         ),
         value: upperCase ? productName.toUpperCase() : productName,
       );
       final price = RecognizedPrice(
         line: ReceiptTextLine(
-          boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
+          boundingBox: Rect.fromLTRB(
+            priR.left,
+            priR.top + priR.height,
+            priR.right,
+            priR.bottom,
+          ),
         ),
-        value: -deltaC / 100,
+        value:
+            (total * 100 - receipt.calculatedTotal.value * 100).round() / 100,
       );
       final position = RecognizedPosition(
         product: product,

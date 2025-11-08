@@ -23,6 +23,11 @@ final class ReceiptFormatter {
   /// Detects parentheses negatives like "(12,34)".
   static final RegExp _reParenNegative = RegExp(r'^\s*\(\s*(.+?)\s*\)\s*$');
 
+  /// Detects amount prefix to convert into postfix text.
+  static final RegExp _amountPostfixText = RegExp(
+    r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
+  );
+
   /// Cache of NumberFormat by locale for performance.
   static final Map<String?, NumberFormat> _fmtCache = {};
 
@@ -65,20 +70,18 @@ final class ReceiptFormatter {
     'dezember': 12,
   };
 
-  /// Returns a cached `NumberFormat` for `Intl.defaultLocale` with exactly two fraction digits.
-  static NumberFormat _formatter() =>
+  /// Returns a cached `NumberFormat` for `Intl.defaultLocale` with two or three fraction digits.
+  static NumberFormat _formatter({int decimalDigits = 2}) =>
       _fmtCache.putIfAbsent(Intl.defaultLocale, () {
         return NumberFormat.decimalPatternDigits(
           locale: Intl.defaultLocale,
-          decimalDigits: 2,
+          decimalDigits: decimalDigits,
         );
       });
 
-  /// Formats [value] using the current locale with two decimal places (via `NumberFormat`).
-  static String format(num value) => _formatter().format(value);
-
-  /// Parses a localized decimal string using the current locale; throws on invalid input.
-  static num parse(String value) => _formatter().parse(value);
+  /// Formats [value] using the current locale with two or three decimal places (via `NumberFormat`).
+  static String format(num value, {int decimalDigits = 2}) =>
+      _formatter(decimalDigits: decimalDigits).format(value);
 
   /// Trims [value] and collapses spaces around commas/dots (e.g. `12 , 34` → `12,34`).
   static String trim(String value) {
@@ -86,6 +89,17 @@ final class ReceiptFormatter {
       _reCommaDotSpaces,
       (m) => '${m[1]}${m[2]}${m[3]}',
     );
+  }
+
+  /// Returns [s] with all non-letter characters removed (A–Z, a–z).
+  static String lettersOnly(String s) {
+    return s.replaceAll(RegExp(r'[^A-Za-z]+'), '').trim();
+  }
+
+  /// Returns the leading integer part of [s], ignoring leading spaces.
+  static String leadingDigits(String s) {
+    final match = RegExp(r'^\s*(\d+)').firstMatch(s);
+    return match?.group(1) ?? '';
   }
 
   /// Normalizes a raw amount string to a plain ASCII decimal:
@@ -131,6 +145,14 @@ final class ReceiptFormatter {
     if (negative && !s.startsWith('-')) s = '-$s';
 
     return s;
+  }
+
+  /// Removes a leading amount pattern from [text], returning the remainder.
+  static String toPostfixText(String text) {
+    if (text.isEmpty) return '';
+    final m = _amountPostfixText.matchAsPrefix(text.trim());
+    if (m == null) return '';
+    return text.substring(m.end).trim();
   }
 
   /// Parses `YYYY-MM-DD` (or mixed separators) into a `DateTime.utc(y,m,d)`; returns null if invalid.

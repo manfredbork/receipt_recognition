@@ -37,30 +37,19 @@ void main() {
       });
     });
 
-    group('parse', () {
-      test('should parse decimal strings to numbers', () {
-        final strings = ['0.00', '1.00', '42.99', '100.00', '-5.01'];
-        final expected = [0.0, 1.0, 42.99, 100.0, -5.01];
+    group('toPostfixText', () {
+      test('should convert to postfix text', () {
+        final strings = [
+          '0.00 A',
+          '1,00*A',
+          '42.99 AB',
+          '100.00A',
+          '-5.01 AB*#',
+        ];
+        final expected = ['A', '*A', 'AB', 'A', 'AB*#'];
 
         for (int i = 0; i < strings.length; i++) {
-          expect(ReceiptFormatter.parse(strings[i]), expected[i]);
-        }
-      });
-
-      test('should parse formatted numbers with commas', () {
-        final strings = ['1,000.00', '1,234.56', '999,999.99'];
-        final expected = [1000.0, 1234.56, 999999.99];
-
-        for (int i = 0; i < strings.length; i++) {
-          expect(ReceiptFormatter.parse(strings[i]), expected[i]);
-        }
-      });
-
-      test('should throw FormatException for invalid format', () {
-        final invalidStrings = ['abc', '1.2.3', ''];
-
-        for (final string in invalidStrings) {
-          expect(() => ReceiptFormatter.parse(string), throwsFormatException);
+          expect(ReceiptFormatter.toPostfixText(strings[i]), expected[i]);
         }
       });
     });

@@ -23,6 +23,7 @@ for building expense tracking apps, loyalty programs, or any system needing rece
 - 🧠 Layered options (extend/override/tuning) to customize stores, labels, keywords, and optimizer thresholds
 - 🧳 Stability-based merging and grouping to increase confidence over multiple scans
 - 🗓️ Multi-format date parsing (numeric and EN/DE month-name formats)
+- ⚖️ Detects and parses unit quantities and price-per-unit values (e.g., “2 × 1.29 €”)
 
 ---
 
@@ -83,8 +84,7 @@ final options = ReceiptOptions.fromLayeredJson({
   "extend": {
     "storeNames": {
       "REWE CITY": "Rewe"
-    },
-    "discountKeywords": ["Rabatt", "Discount", "Promo"]
+    }
   },
   "override": {
     "stopKeywords": ["Rückgeld", "Change"]
@@ -149,14 +149,8 @@ Parameters (keys inside extend/override, or top-level in flat form)
     - Lines containing any of these are ignored.
 - stopKeywords: List<String>
     - Parsing stops after encountering these.
-- foodKeywords: List<String>
-    - Postfix markers that classify an item as food.
-- nonFoodKeywords: List<String>
-    - Postfix markers that classify an item as non-food.
-- discountKeywords: List<String>
-    - Indicates discounts/coupons.
-- depositKeywords: List<String>
-    - Indicates deposits/returns (e.g., “Pfand”, “Leergut”).
+- allowedProductGroups: List<String>
+    - Keywords that indicate allowed product categories during parsing.
 - tuning: Map<String, dynamic> (override-only)
     - optimizerConfidenceThreshold (int): min combined confidence (0–100).
     - optimizerStabilityThreshold (int): min stability (0–100).
@@ -194,8 +188,7 @@ final layered = {
   "extend": {
     "storeNames": {
       "REWE CITY": "Rewe"
-    },
-    "discountKeywords": ["Rabatt", "Discount", "Promo"]
+    }
   },
   "override": {
     "stopKeywords": ["Rückgeld", "Change"]
@@ -292,6 +285,7 @@ Analyzes the raw text to identify and categorize receipt elements:
 - Store name (e.g., Aldi, Rewe, Edeka, Penny, Lidl, Kaufland, Netto in German markets)
 - Total ("Summe", "Gesamt", "Total")
 - Line items (products and prices)
+- Unit quantities and price-per-unit details (e.g., “2 × 1.29”)
 - Total label normalization
 - Purchase date extraction
 - Receipt bounds and skew angle estimation
@@ -345,6 +339,7 @@ The optimizer:
 | Product Normalization   | ✅ Complete    | Standardizes product names     |
 | Purchase Date Detection | ✅ Complete    | Parsed from multiple formats   |
 | Bounds & Skew           | ✅ Complete    | Outer rect + skew estimation   |
+| Unit Quantity & Price   | ✅ Complete    | Quantity and price-per-unit    |
 +-------------------------+----------------+--------------------------------+
 ```
 
@@ -397,7 +392,7 @@ Better for real-time scanning with a live preview:
 
 1. **Lighting**: Ensure good, even lighting for the best OCR results
 2. **Alignment**: Keep receipts as flat and aligned as possible
-3. **Stability**: For continuous scanning, allow 1–3 seconds of stable framing
+3. **Stability**: For continuous scanning, allow 1–2 seconds of stable framing
 4. **Multiple Scans**: Use the optimizer's merging capabilities for improved accuracy
 5. **Language Handling**: For mixed-language environments, consider setting the appropriate TextRecognitionScript when
    initializing the recognizer
@@ -526,9 +521,9 @@ See the [CHANGELOG.md](CHANGELOG.md) for a complete list of updates and version 
 - [x] Layered options (extend/override/tuning)
 - [x] Stability-based grouping/merging
 - [x] Extended OCR correction (single-character replacement/removal for common OCR errors)
+- [x] Unit recognition with price-per-unit parsing and quantity extraction
 - [ ] Enhanced Android platform integration
 - [ ] Broader international receipt layout support
-- [ ] Unit recognition (e.g., kg, pcs) with price-per-unit parsing and quantity/weight extraction
 
 ---
 

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
@@ -18,6 +19,9 @@ final class RecognizedPosition {
   /// Operation performed (added, updated, etc.).
   Operation operation;
 
+  /// Optional unit information.
+  RecognizedUnit? unit;
+
   /// Optional optimizer grouping.
   RecognizedGroup? group;
 
@@ -27,6 +31,7 @@ final class RecognizedPosition {
     required this.price,
     required this.timestamp,
     required this.operation,
+    this.unit,
     this.group,
   });
 
@@ -46,6 +51,7 @@ final class RecognizedPosition {
     RecognizedPrice? price,
     DateTime? timestamp,
     Operation? operation,
+    RecognizedUnit? unit,
     RecognizedGroup? group,
   }) {
     return RecognizedPosition(
@@ -53,9 +59,18 @@ final class RecognizedPosition {
       price: price ?? this.price,
       timestamp: timestamp ?? this.timestamp,
       operation: operation ?? this.operation,
+      unit: unit ?? this.unit,
       group: group ?? this.group,
     );
   }
+
+  /// Position bounding box.
+  Rect get boundingBox => Rect.fromLTRB(
+    product.line.boundingBox.left,
+    min(product.line.boundingBox.top, price.line.boundingBox.top),
+    price.line.boundingBox.right,
+    max(product.line.boundingBox.bottom, price.line.boundingBox.bottom),
+  );
 
   /// Overall confidence (weighted avg of product/price confidences).
   int get confidence {
@@ -139,27 +154,30 @@ final class RecognizedGroup {
     );
   }
 
-  /// Removes a leading amount pattern from [postfixText], returning the remainder.
-  String convertToPostfixText(String postfixText) {
-    if (postfixText.isEmpty) return postfixText;
-    final amountPattern = RegExp(r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)');
-    final m = amountPattern.matchAsPrefix(postfixText.trim());
-    if (m == null) return '';
-    return postfixText.substring(m.end).trim();
-  }
-
   /// All position members.
   List<RecognizedPosition> get members => _members;
 
   /// All product texts for normalization.
   List<String> get alternativeTexts =>
-      _members
-          .map((p) => ReceiptNormalizer.normalizeTail(p.product.text))
-          .toList();
+      _members.map((p) => p.product.text).toList();
 
   /// All product postfix texts (amount prefix removed) for categorization.
   List<String> get alternativePostfixTexts =>
-      _members.map((p) => convertToPostfixText(p.price.line.text)).toList();
+      _members
+          .map((p) => ReceiptFormatter.toPostfixText(p.price.line.text))
+          .toList();
+
+  /// All unit prices for normalization.
+  List<RecognizedUnit> get alternativeUnits =>
+      _members
+          .where(
+            (p) =>
+                p.unit != null &&
+                p.unit!.quantity.value != 1 &&
+                p.unit!.price.formattedValue != p.price.formattedValue,
+          )
+          .map((p) => p.unit!)
+          .toList();
 
   /// Average confidence across members.
   int get confidence {

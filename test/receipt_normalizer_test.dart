@@ -1,5 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
+
+ReceiptOptions makeOptionsFromLists({List<String> groups = const []}) {
+  return ReceiptOptions(
+    override: <String, dynamic>{'allowedProductGroups': groups},
+  );
+}
 
 void main() {
   group('ReceiptNormalizer', () {
@@ -71,6 +78,36 @@ void main() {
         );
 
         expect(result, 'ItemA123');
+      });
+
+      test('should return normalized text without number', () {
+        final alternativeTexts = ['M1lka', 'Milka'];
+
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
+          alternativeTexts,
+        );
+
+        expect(result, 'Milka');
+      });
+
+      test('should return normalized text without space', () {
+        final alternativeTexts = ['Kale', 'Kal e', 'Kale'];
+
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
+          alternativeTexts,
+        );
+
+        expect(result, 'Kale');
+      });
+
+      test('should return normalized text with longer length', () {
+        final alternativeTexts = ['Strawberry', 'Strawberr'];
+
+        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
+          alternativeTexts,
+        );
+
+        expect(result, 'Strawberry');
       });
 
       test('should return null when no alternative texts are provided', () {
@@ -188,6 +225,15 @@ void main() {
         });
 
         test(
+          'keep text when exact one-space difference matches but token starts with capital letter',
+          () {
+            final alts = ['Bio Weidemilch', 'BioWeidemilch'];
+            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+            expect(result, equals('Bio Weidemilch'));
+          },
+        );
+
+        test(
           'glues single erroneous space when exact one-space difference matches',
           () {
             final alts = ['Weide milch', 'Weidemilch', 'WEIDE MILCH'];
@@ -236,19 +282,12 @@ void main() {
       },
     );
 
-    group('normalizeTail – euro exception & tricky tails', () {
-      test('does not strip explicit EURO amounts', () {
+    group('normalizeTail – tricky tails', () {
+      test('strips price-like tails', () {
         expect(
-          ReceiptNormalizer.normalizeTail('Butter 1,99 EURO'),
-          equals('Butter 1,99 EURO'),
+          ReceiptNormalizer.normalizeTail('Shorts 10,99'),
+          equals('Shorts'),
         );
-        expect(
-          ReceiptNormalizer.normalizeTail('Butter 2.49 EURO'),
-          equals('Butter 2.49 EURO'),
-        );
-      });
-
-      test('strips price-like tails without EURO keyword', () {
         expect(
           ReceiptNormalizer.normalizeTail('Butter 1,99'),
           equals('Butter'),
@@ -257,7 +296,18 @@ void main() {
           ReceiptNormalizer.normalizeTail('Cola 0,89 xyz'),
           equals('Cola'),
         );
-        expect(ReceiptNormalizer.normalizeTail('Tea 3.50 @'), equals('Tea'));
+        expect(
+          ReceiptNormalizer.normalizeTail('Green Tea 3.50 @'),
+          equals('Green Tea'),
+        );
+        expect(
+          ReceiptNormalizer.normalizeTail('Chocolate 2,99 ex'),
+          equals('Chocolate'),
+        );
+        expect(
+          ReceiptNormalizer.normalizeTail('Cream 0,69 € x'),
+          equals('Cream'),
+        );
       });
     });
 
@@ -329,5 +379,54 @@ void main() {
         expect(result.toSet(), equals(values.toSet()));
       });
     });
+
+    group(
+      'normalizeToProductGroup – allowlist enforcement (ReceiptRuntime.options)',
+      () {
+        test('returns empty string when group is not allowed', () {
+          ReceiptRuntime.setOptions(
+            makeOptionsFromLists(groups: ['bakery', 'dairy']),
+          );
+          final result = ReceiptNormalizer.normalizeToProductGroup(
+            'Electronics',
+          );
+          expect(result, equals(''));
+        });
+
+        test('accepts allowed group ignoring case and extra spaces', () {
+          ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['Milkman']));
+          final result = ReceiptNormalizer.normalizeToProductGroup(
+            '  Milk   Man  ',
+          );
+          expect(result, equals('MILKMAN'));
+        });
+
+        test(
+          'permissive when allowlist is empty – passes through normalized',
+          () {
+            ReceiptRuntime.setOptions(makeOptionsFromLists(groups: const []));
+            final result = ReceiptNormalizer.normalizeToProductGroup(' A * ');
+            expect(result, equals('A'));
+          },
+        );
+
+        test('returns empty string when input cleans down to nothing', () {
+          ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['anything']));
+          final result = ReceiptNormalizer.normalizeToProductGroup('---///***');
+          expect(result, equals(''));
+        });
+
+        test(
+          'exact match after canonicalization is required (no substring hit)',
+          () {
+            ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['FOOD']));
+            final r1 = ReceiptNormalizer.normalizeToProductGroup('foo');
+            final r2 = ReceiptNormalizer.normalizeToProductGroup(' Food * ');
+            expect(r1, equals(''));
+            expect(r2, equals('FOOD'));
+          },
+        );
+      },
+    );
   });
 }

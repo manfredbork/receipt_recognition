@@ -60,8 +60,9 @@ class RecognizedReceipt {
     RecognizedTotal? total;
     if (rawTotal is Map<String, dynamic>) {
       final v = rawTotal['value'];
-      final numValue = v is num ? v : num.tryParse(v?.toString() ?? '') ?? 0;
-      total = RecognizedTotal(value: numValue, line: ReceiptTextLine());
+      final doubleValue =
+          v is double ? v : double.tryParse(v?.toString() ?? '') ?? 0;
+      total = RecognizedTotal(value: doubleValue, line: ReceiptTextLine());
     }
 
     final rawPd = json['purchase_date'];
@@ -147,7 +148,9 @@ class RecognizedReceipt {
 
   /// Total of all position prices.
   CalculatedTotal get calculatedTotal => CalculatedTotal(
-    value: positions.fold<num>(0, (a, b) => a + b.price.value),
+    value:
+        positions.fold<int>(0, (a, b) => a + (b.price.value * 100).round()) /
+        100,
   );
 
   /// Legacy accessor for [calculatedSum] maintained for backward compatibility.
@@ -179,8 +182,15 @@ class RecognizedReceipt {
     final t = ReceiptRuntime.tuning;
     final half = t.optimizerMaxCacheSize ~/ 2;
     final minSize = half < 4 ? 4 : (half > 8 ? 8 : half);
-    final confThr = (t.optimizerConfidenceThreshold - 5).clamp(0, 100);
+    final confThr = t.optimizerConfidenceThreshold;
     final stabThr = t.optimizerStabilityThreshold;
+    final minPassing =
+        positions.where((p) {
+          final enoughMembers = (p.group?.members.length ?? 0) >= minSize ~/ 2;
+          final enoughStability = p.stability >= stabThr ~/ 2;
+          final enoughConfidence = p.confidence >= confThr ~/ 2;
+          return enoughMembers && enoughStability && enoughConfidence;
+        }).length;
     final passing =
         positions.where((p) {
           final enoughMembers = (p.group?.members.length ?? 0) >= minSize;
@@ -188,13 +198,9 @@ class RecognizedReceipt {
           final enoughConfidence = p.confidence >= confThr;
           return enoughMembers && enoughStability && enoughConfidence;
         }).length;
-
-    final need =
-        positions.length <= 3
-            ? positions.length
-            : (positions.length * 0.8).ceil();
-
-    return passing >= need;
+    final minNeed = positions.length;
+    final need = minNeed - positions.length ~/ 4;
+    return minPassing >= minNeed && passing >= need;
   }
 }
 

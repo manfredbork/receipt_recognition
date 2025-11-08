@@ -46,6 +46,9 @@ final class ReceiptRecognizer {
   /// Whether a full reinit is needed.
   bool _shouldInitialize = false;
 
+  /// Whether purchase data is scanned once.
+  bool _purchaseDateScannedOnce = false;
+
   /// Timestamp when the current scan session was initialized.
   DateTime? _initializedScan;
 
@@ -66,7 +69,7 @@ final class ReceiptRecognizer {
     int minValidScans = 3,
     int nearlyCompleteThreshold = 95,
     Duration scanInterval = const Duration(milliseconds: 50),
-    Duration scanTimeout = const Duration(seconds: 30),
+    Duration scanTimeout = const Duration(seconds: 20),
     Duration scanCompleteDelay = Duration.zero,
     Function(RecognizedScanProgress)? onScanUpdate,
     Function(RecognizedReceipt)? onScanComplete,
@@ -93,6 +96,15 @@ final class ReceiptRecognizer {
     _lastScan = now;
 
     final receipt = await _recognizeReceipt(inputImage, _options);
+
+    if (_isPurchaseDateScannedOnce()) {
+      _optimizer.reset(purchaseDate: receipt.purchaseDate);
+      _lastReceipt = RecognizedReceipt.empty().copyWith(
+        purchaseDate: receipt.purchaseDate,
+      );
+      _purchaseDateScannedOnce = true;
+      return _lastReceipt;
+    }
 
     final optimized = _optimizer.optimize(
       receipt,
@@ -128,6 +140,7 @@ final class ReceiptRecognizer {
     _lastReceipt = RecognizedReceipt.empty();
     _optimizer.init();
     _shouldInitialize = false;
+    _purchaseDateScannedOnce = false;
   }
 
   /// Marks the recognizer for reinitialization on next recognition.
@@ -210,6 +223,9 @@ final class ReceiptRecognizer {
   /// Returns whether a scan should be throttled due to [_scanInterval].
   bool _shouldThrottle(DateTime now) =>
       _lastScan != null && now.difference(_lastScan!) < _scanInterval;
+
+  /// Returns whether a purchase date is scanned once.
+  bool _isPurchaseDateScannedOnce() => _purchaseDateScannedOnce;
 
   /// Handles a valid receipt: emits updates, possibly completes the session.
   RecognizedReceipt _handleValidReceipt(

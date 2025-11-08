@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] – 2025-11-08
+
+### ✨ Added
+
+- **Unit price & quantity parsing**: extract quantity and price-per-unit for line items.
+- **`allowedProductGroups`** option to control which product groups are accepted during parsing.
+- **Position bounding box** exposure for recognized positions.
+- Minor improvements around pseudo positions for better preview/UX.
+
+### 🛠️ Changed
+
+- Tuned defaults for stability and performance (cache size, thresholds, timeouts).
+- Normalization tweaks: treat `+` as a normal character; refined space handling; extended patterns.
+- Removed legacy keyword groups (discount/deposit) in favor of `allowedProductGroups`.
+- Internal type/use cleanups (prefer `double`/`int` where appropriate).
+- Purchase date recognition is tuned for better robustness.
+
+### 🐛 Fixed
+
+- **Lost groups during merging**: fixed issues where groups could disappear or be dropped in long/unstable scans.
+- **Deposit handling**: corrected parsing so deposit lines don’t corrupt totals or item classification.
+- **Product group classification**: fixes to ensure correct group assignment and consistent downstream behavior.
+- General stability fixes across optimizer and parser components.
+
 ## [0.1.9] – 2025-10-27
 
 ### ✨ Added
