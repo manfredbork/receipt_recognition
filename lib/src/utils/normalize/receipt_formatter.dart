@@ -83,10 +83,6 @@ final class ReceiptFormatter {
   static String format(num value, {int decimalDigits = 2}) =>
       _formatter(decimalDigits: decimalDigits).format(value);
 
-  /// Parses a localized decimal string using the current locale; throws on invalid input.
-  static num parse(String value, {int decimalDigits = 2}) =>
-      _formatter(decimalDigits: decimalDigits).parse(value);
-
   /// Trims [value] and collapses spaces around commas/dots (e.g. `12 , 34` → `12,34`).
   static String trim(String value) {
     return value.trim().replaceAllMapped(

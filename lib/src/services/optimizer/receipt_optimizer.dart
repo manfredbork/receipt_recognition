@@ -121,8 +121,10 @@ final class ReceiptOptimizer implements Optimizer {
   /// Accepts a receipt manually and finalizes reconciliation if needed.
   @override
   void accept(RecognizedReceipt receipt) {
-    _reconcileToTotal(receipt, true);
     _processPositions(receipt);
+    ReceiptLogger.kRecogVerbose = true;
+    _reconcileToTotal(receipt, true);
+    ReceiptLogger.kRecogVerbose = false;
     _applySkewAngle(receipt);
     _updateEntities(receipt);
   }
@@ -929,16 +931,13 @@ final class ReceiptOptimizer implements Optimizer {
     if (deltaC > 0) {
       final int maxCandidates = beforeLen ~/ 2;
 
-      int memberCompare(RecognizedPosition a, RecognizedPosition b) =>
+      int membersCompare(RecognizedPosition a, RecognizedPosition b) =>
           (a.group?.members.length ?? 0).compareTo(
             b.group?.members.length ?? 0,
           );
 
-      int priceCompare(RecognizedPosition a, RecognizedPosition b) =>
-          a.price.value.compareTo(b.price.value);
-
       final candidates = List<RecognizedPosition>.from(receipt.positions)
-        ..sort(pseudoPosition ? priceCompare : memberCompare);
+        ..sort(membersCompare);
 
       final pool = candidates.take(maxCandidates).toList();
 
@@ -947,7 +946,7 @@ final class ReceiptOptimizer implements Optimizer {
       final targetRemove = deltaC.abs();
       final toRemoveIdx = _pickSubsetToDrop(pool, targetRemove, beamWidth: 256);
 
-      if (toRemoveIdx.isEmpty) {
+      if (toRemoveIdx.length <= 1) {
         final beforeErr = (currentC - targetC).abs();
         for (final p in pool) {
           final after = currentC - _toCents(p.price.value);
@@ -985,25 +984,61 @@ final class ReceiptOptimizer implements Optimizer {
 
       final emptied = _groups.where((g) => g.members.isEmpty).toList();
       if (emptied.isNotEmpty) _purgeGroups(emptied.toSet());
-      return;
     }
 
-    if (deltaC < 0 && pseudoPosition) {
+    if (pseudoPosition) {
+      final currentTotal = receipt.calculatedTotal.value;
+
+      if (currentTotal - tol > total) {
+        int priceCompare(RecognizedPosition a, RecognizedPosition b) =>
+            a.price.value.compareTo(b.price.value);
+
+        final candidates = List<RecognizedPosition>.from(receipt.positions)
+          ..sort(priceCompare);
+
+        final toRemove =
+            candidates
+                .where((pos) => currentTotal - pos.price.value >= total - tol)
+                .firstOrNull;
+
+        if (toRemove != null) {
+          receipt.positions.remove(toRemove);
+          toRemove.group?.members.remove(toRemove);
+        }
+      }
+
+      if (receipt.isValid) return;
+
       final lastText =
           receipt.positions.lastOrNull?.product.normalizedText ?? 'abc';
       final upperCase = lastText == lastText.toUpperCase();
       final productName = _opts.tuning.optimizerUnrecognizedProductName;
+      final proR =
+          receipt.positions.lastOrNull?.product.line.boundingBox ?? Rect.zero;
+      final priR =
+          receipt.positions.lastOrNull?.product.line.boundingBox ?? Rect.zero;
       final product = RecognizedProduct(
         line: ReceiptTextLine(
-          boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
+          boundingBox: Rect.fromLTRB(
+            proR.left,
+            proR.top + proR.height,
+            proR.right,
+            proR.bottom,
+          ),
         ),
         value: upperCase ? productName.toUpperCase() : productName,
       );
       final price = RecognizedPrice(
         line: ReceiptTextLine(
-          boundingBox: Rect.fromLTRB(0, double.infinity, 0, 0),
+          boundingBox: Rect.fromLTRB(
+            priR.left,
+            priR.top + priR.height,
+            priR.right,
+            priR.bottom,
+          ),
         ),
-        value: -deltaC / 100,
+        value:
+            (total * 100 - receipt.calculatedTotal.value * 100).round() / 100,
       );
       final position = RecognizedPosition(
         product: product,

@@ -54,34 +54,6 @@ void main() {
       });
     });
 
-    group('parse', () {
-      test('should parse decimal strings to numbers', () {
-        final strings = ['0.00', '1.00', '42.99', '100.00', '-5.01'];
-        final expected = [0.0, 1.0, 42.99, 100.0, -5.01];
-
-        for (int i = 0; i < strings.length; i++) {
-          expect(ReceiptFormatter.parse(strings[i]), expected[i]);
-        }
-      });
-
-      test('should parse formatted numbers with commas', () {
-        final strings = ['1,000.00', '1,234.56', '999,999.99'];
-        final expected = [1000.0, 1234.56, 999999.99];
-
-        for (int i = 0; i < strings.length; i++) {
-          expect(ReceiptFormatter.parse(strings[i]), expected[i]);
-        }
-      });
-
-      test('should throw FormatException for invalid format', () {
-        final invalidStrings = ['abc', '1.2.3', ''];
-
-        for (final string in invalidStrings) {
-          expect(() => ReceiptFormatter.parse(string), throwsFormatException);
-        }
-      });
-    });
-
     group('trim', () {
       test('should remove spaces around decimal separators', () {
         final inputs = ['12 . 34', '56 , 78', '9.10', '11,12'];

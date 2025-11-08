@@ -663,7 +663,8 @@ final class ReceiptParser {
     _sortByDistance(entity.line.boundingBox, yUnknowns);
 
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(entity, yUnknown)) {
+      if (_isMatchingUnknown(entity, yUnknown) &&
+          identical(_findClosestEntity(entity, yUnknowns), yUnknown)) {
         final position = _createPosition(yUnknown, entity, receipt.timestamp);
         receipt.positions.add(position);
         yUnknowns.removeWhere((e) => identical(e, yUnknown));

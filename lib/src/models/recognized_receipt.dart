@@ -148,7 +148,9 @@ class RecognizedReceipt {
 
   /// Total of all position prices.
   CalculatedTotal get calculatedTotal => CalculatedTotal(
-    value: positions.fold<double>(0, (a, b) => a + b.price.value),
+    value:
+        positions.fold<int>(0, (a, b) => a + (b.price.value * 100).round()) /
+        100,
   );
 
   /// Legacy accessor for [calculatedSum] maintained for backward compatibility.
