@@ -118,6 +118,15 @@ final class ReceiptRecognizer {
     return receipt;
   }
 
+  /// Marks the recognizer for reinitialization on next recognition.
+  void init() => _shouldInitialize = true;
+
+  /// Releases all resources used by the recognizer.
+  Future<void> close() async {
+    _textRecognizer.close();
+    _optimizer.close();
+  }
+
   /// Clears caches and resets internal state if flagged.
   void _initializeIfNeeded() {
     if (!_shouldInitialize) return;
@@ -126,15 +135,6 @@ final class ReceiptRecognizer {
     _lastReceipt = RecognizedReceipt.empty();
     _optimizer.init();
     _shouldInitialize = false;
-  }
-
-  /// Marks the recognizer for reinitialization on next recognition.
-  void init() => _shouldInitialize = true;
-
-  /// Releases all resources used by the recognizer.
-  Future<void> close() async {
-    _textRecognizer.close();
-    _optimizer.close();
   }
 
   /// Runs OCR + parse for [inputImage] using [options].
