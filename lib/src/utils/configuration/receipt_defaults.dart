@@ -9,7 +9,6 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
     'Lidl': 'Lidl',
     'Kaufland': 'Kaufland',
     'Netto': 'Netto',
-    'Akzenta': 'Akzenta',
   },
   'totalLabels': {
     'Zu zahlen': 'Zu zahlen',
