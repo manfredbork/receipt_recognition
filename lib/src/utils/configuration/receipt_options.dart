@@ -222,18 +222,19 @@ final class ReceiptOptions {
   }
 }
 
-/// A typed wrapper for "label → canonical" maps with a precompiled regex.
+/// The regex matches each configured label allowing optional single spaces between characters,
+/// and lookups are normalized by stripping whitespace and lowercasing.
 final class DetectionMap {
   /// Precompiled alternation regex matching any label (case-insensitive).
   final RegExp regexp;
 
-  /// Lowercased label→canonical mapping used for lookups.
+  /// Lowercased, space-stripped label→canonical mapping used for lookups.
   final Map<String, String> mapping;
 
   /// Private constructor with precompiled regex and mapping.
   DetectionMap._(this.regexp, this.mapping);
 
-  /// Builds a case-insensitive mapping and one regex; returns a never-match regex if empty.
+  /// Builds a case-insensitive mapping and one tolerant regex; returns a never-match regex if empty.
   factory DetectionMap.fromMap(Map<String, String> map) {
     if (map.isEmpty) {
       return DetectionMap._(RegExp(neverMatchLiteral), const {});
@@ -245,8 +246,10 @@ final class DetectionMap {
     for (final e in map.entries) {
       final k = e.key.trim();
       if (k.isEmpty) continue;
-      patterns.add(RegExp.escape(k));
-      normalized[k.toLowerCase()] = e.value;
+      final p = _optionalSpacesPattern(k);
+      if (p.isEmpty) continue;
+      patterns.add(p);
+      normalized[_normalizeKey(k)] = e.value;
     }
 
     final pattern = '(${patterns.join('|')})';
@@ -260,7 +263,7 @@ final class DetectionMap {
   String? detect(String text) {
     final m = regexp.stringMatch(text);
     if (m == null) return null;
-    return mapping[m.toLowerCase()];
+    return mapping[_normalizeKey(m)];
   }
 
   /// Returns the alternation pattern string used by [regexp].
@@ -270,7 +273,8 @@ final class DetectionMap {
   bool hasMatch(String s) => regexp.hasMatch(s);
 }
 
-/// Typed wrapper for simple keyword lists compiled into a single regex.
+/// Typed wrapper for simple keyword lists compiled into a single tolerant regex.
+/// Each keyword is matched allowing optional single spaces between characters.
 final class KeywordSet {
   /// Original keyword list (as provided).
   final List<String> keywords;
@@ -281,17 +285,23 @@ final class KeywordSet {
   /// Private constructor with original keywords and precompiled regex.
   KeywordSet._(this.keywords, this.regexp);
 
-  /// Builds a case-insensitive keyword set and one alternation regex (never-match if empty).
+  /// Builds a case-insensitive keyword set and one tolerant alternation regex (never-match if empty).
   factory KeywordSet.fromList(List<String> list) {
     if (list.isEmpty) {
       return KeywordSet._(const [], RegExp(neverMatchLiteral));
     }
-    final escaped =
+
+    final patterns =
         list
-            .map((k) => RegExp.escape(k.trim()))
-            .where((k) => k.isNotEmpty)
+            .map((k) => _optionalSpacesPattern(k.trim()))
+            .where((p) => p.isNotEmpty)
             .toList();
-    final pattern = '(${escaped.join('|')})';
+
+    if (patterns.isEmpty) {
+      return KeywordSet._(const [], RegExp(neverMatchLiteral));
+    }
+
+    final pattern = '(${patterns.join('|')})';
     return KeywordSet._(
       List.unmodifiable(list),
       RegExp(pattern, caseSensitive: false),
@@ -300,4 +310,23 @@ final class KeywordSet {
 
   /// Returns true if [text] contains any keyword.
   bool hasMatch(String text) => regexp.hasMatch(text);
+}
+
+/// Remove all Unicode whitespace and lowercase for stable lookup keys.
+String _normalizeKey(String s) =>
+    s.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+
+/// Build a regex pattern that allows zero-or-one space between each character
+/// of the provided literal. Example: "Aldi" → A\s?l\s?d\s?i
+String _optionalSpacesPattern(String literal) {
+  final stripped = literal.replaceAll(RegExp(r'\s+'), '');
+  if (stripped.isEmpty) return '';
+  final runes = stripped.runes.toList();
+  final parts = <String>[];
+  for (var i = 0; i < runes.length; i++) {
+    final ch = String.fromCharCode(runes[i]);
+    parts.add(RegExp.escape(ch));
+    if (i < runes.length - 1) parts.add(r'\s?');
+  }
+  return parts.join();
 }

@@ -16,7 +16,7 @@ abstract class Optimizer {
   RecognizedReceipt optimize(
     RecognizedReceipt receipt,
     ReceiptOptions options, {
-    bool singleScan = false,
+    bool singleScan = true,
   });
 
   /// Public entry to finalize and reconcile a manually accepted receipt.
@@ -121,9 +121,7 @@ final class ReceiptOptimizer implements Optimizer {
   @override
   void accept(RecognizedReceipt receipt) {
     _processPositions(receipt);
-    ReceiptLogger.kRecogVerbose = true;
     _reconcileToTotal(receipt, true);
-    ReceiptLogger.kRecogVerbose = false;
     _applySkewAngle(receipt);
     _updateEntities(receipt);
   }

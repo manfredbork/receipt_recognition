@@ -942,6 +942,7 @@ final class ReceiptParser {
     double leftmostX = double.infinity;
     RecognizedAmount? rightAmount;
     double rightmostX = -double.infinity;
+    RecognizedAmount? firstAmount;
 
     for (final e in entities) {
       if (e is RecognizedUnknown) {
@@ -951,6 +952,7 @@ final class ReceiptParser {
           leftUnknown = e;
         }
       } else if (e is RecognizedAmount) {
+        firstAmount ??= e;
         final rx = _right(e);
         if (rx > rightmostX) {
           rightmostX = rx;
@@ -965,8 +967,12 @@ final class ReceiptParser {
 
     final filtered = <RecognizedEntity>[];
     for (final entity in entities) {
-      if (entity is RecognizedStore ||
-          entity is RecognizedBounds ||
+      if (entity is RecognizedStore) {
+        if (firstAmount != null && _cy(entity) < _cy(firstAmount)) {
+          filtered.add(entity);
+        }
+        continue;
+      } else if (entity is RecognizedBounds ||
           entity is RecognizedPurchaseDate ||
           entity is RecognizedUnitPrice ||
           entity is RecognizedTotalLabel ||
