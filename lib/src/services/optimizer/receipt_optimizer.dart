@@ -521,18 +521,44 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Returns the most common string length (mode) in [strings].
+  int _mostCommonLength(List<String> strings) {
+    if (strings.isEmpty) return 0;
+
+    final counts = <int, int>{};
+    for (final s in strings) {
+      final len = s.length;
+      counts[len] = (counts[len] ?? 0) + 1;
+    }
+
+    final mostCommon = counts.entries.reduce(
+      (a, b) =>
+          a.value > b.value
+              ? a
+              : (a.value < b.value ? b : (a.key < b.key ? a : b)),
+    );
+
+    return mostCommon.key;
+  }
+
   /// Estimates and writes the receipt’s skew angle (radians) from product-column left edges.
   void _applySkewAngle(RecognizedReceipt receipt) {
     final pos = receipt.positions;
     if (pos.length < 2) return;
+
+    final mostCommon = _mostCommonLength(
+      pos.map((p) => p.product.postfixText).toList(),
+    );
 
     final pts = <Point<double>>[];
     for (final p in pos) {
       final a = p.product.line.boundingBox;
       final b = p.price.line.boundingBox;
       final yCenter = (a.center.dy + b.center.dy) / 2;
-      final xCenter = (a.left + b.left) / 2;
-      pts.add(Point<double>(yCenter, xCenter));
+      final xCenter = (a.left + b.right) / 2;
+      if (p.product.postfixText.length == mostCommon) {
+        pts.add(Point<double>(yCenter, xCenter));
+      }
     }
     if (pts.length < 2) return;
 
