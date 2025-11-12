@@ -520,10 +520,24 @@ final class ReceiptParser {
     List<RecognizedUnitPrice> yUnitPrices,
     RecognizedReceipt receipt,
   ) {
-    for (final entity in entities) {
-      if (entity is! RecognizedAmount) continue;
-      if (receipt.total?.line == entity.line) continue;
-      _createPositionForAmount(entity, yUnknowns, yUnitPrices, receipt);
+    final unprocessedAmounts = <RecognizedAmount>[];
+    final amounts = entities.whereType<RecognizedAmount>().toList();
+    for (final amount in amounts) {
+      if (identical(receipt.total?.line, amount.line)) break;
+      if (!_createPositionForAmount(amount, yUnknowns, yUnitPrices, receipt)) {
+        unprocessedAmounts.add(amount);
+      }
+    }
+    if (unprocessedAmounts.isNotEmpty && yUnknowns.isNotEmpty) {
+      for (final amount in unprocessedAmounts) {
+        _createPositionForAmount(
+          amount,
+          yUnknowns,
+          yUnitPrices,
+          receipt,
+          strict: false,
+        );
+      }
     }
     _assignUnitToPositions(yUnitPrices, receipt);
   }
@@ -611,33 +625,36 @@ final class ReceiptParser {
     }
   }
 
-  /// Creates a position for an amount by pairing a compatible unknown and unit lines.
-  static void _createPositionForAmount(
-    RecognizedAmount entity,
+  /// Returns true if a position for an amount and unknown is created.
+  static bool _createPositionForAmount(
+    RecognizedAmount amount,
     List<RecognizedUnknown> yUnknowns,
     List<RecognizedUnitPrice> yUnitPrices,
-    RecognizedReceipt receipt,
-  ) {
-    if (entity == receipt.total) return;
-
-    _sortByDistance(entity.line.boundingBox, yUnknowns);
-
+    RecognizedReceipt receipt, {
+    strict = true,
+  }) {
+    _sortByDistance(amount.line.boundingBox, yUnknowns);
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(entity, yUnknown) &&
-          identical(_findClosestEntity(entity, yUnknowns), yUnknown)) {
-        final position = _createPosition(yUnknown, entity, receipt.timestamp);
+      if (_isMatchingUnknown(amount, yUnknown) &&
+          identical(
+            _findClosestEntity(amount, yUnknowns, lineAbove: !strict),
+            yUnknown,
+          )) {
+        final position = _createPosition(yUnknown, amount, receipt.timestamp);
         receipt.positions.add(position);
         yUnknowns.removeWhere((e) => identical(e, yUnknown));
-        break;
+        return true;
       }
     }
+    return false;
   }
 
   /// Returns true if [unknown] is left of [amount] and vertically aligned.
   static bool _isMatchingUnknown(
     RecognizedAmount amount,
-    RecognizedUnknown unknown,
-  ) {
+    RecognizedUnknown unknown, {
+    strict = true,
+  }) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
     final isLikelyLabel = _isTotalLabelLike(unknownText);
     if (isLikelyLabel) return false;
@@ -646,7 +663,7 @@ final class ReceiptParser {
     final alignedVertically =
         _dy(amount.line, unknown.line).abs() <= _heightL(amount.line);
 
-    return isLeftOfAmount && alignedVertically;
+    return isLeftOfAmount && (alignedVertically || !strict);
   }
 
   /// Constructs a position from matched product text and amount.
@@ -1047,13 +1064,13 @@ final class ReceiptParser {
     final purchaseDate = _findPurchaseDate(entities);
     final bounds = _findBounds(entities);
 
-    _processAmounts(entities, yUnknowns, yUnitPrices, receipt);
     _processStore(store, receipt);
     _processTotalLabel(totalLabel, receipt);
     _processTotal(total, receipt);
     _processPurchaseDate(purchaseDate, receipt);
-    _processSuspicious(receipt);
     _processBounds(bounds, receipt);
+    _processAmounts(entities, yUnknowns, yUnitPrices, receipt);
+    _processSuspicious(receipt);
 
     return receipt.copyWith(entities: entities);
   }
