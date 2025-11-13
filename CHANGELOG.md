@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] – 2025-11-13
+
+### ✨ Added
+- Added **Spar** to the default store list.
+
+### 🛠️ Changed
+- Store and total-label detection is now **more tolerant** to OCR spacing glitches.
+- Store extraction now only considers candidates **above the first amount line**, reducing false positives.
+- Improved **skew angle estimation** for more stable item alignment.
+- Parser now performs a fallback pass to assign **unmatched amounts**, reducing missing line items.
+
+### 🐛 Fixed
+- **Purchase date** handling no longer locks onto early, unstable detections; continuous scans refine it correctly.
+- Minor stability improvements in the optimizer and parser.
+
+---
+
 ## [0.2.0] – 2025-11-08
 
 ### ✨ Added
@@ -26,6 +43,8 @@ All notable changes to this project will be documented in this file.
 - **Product group classification**: fixes to ensure correct group assignment and consistent downstream behavior.
 - General stability fixes across optimizer and parser components.
 
+---
+
 ## [0.1.9] – 2025-10-27
 
 ### ✨ Added
@@ -48,6 +67,8 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Fixed
 
 - **Pass static analysis**: Reformatted `receipt_recognition-dart` to reach 50/50 points
+
+---
 
 ## [0.1.7] – 2025-10-24
 
@@ -79,6 +100,8 @@ All notable changes to this project will be documented in this file.
   `ReceiptOptions`/`ReceiptTuning`.
 - Legacy `sum`/`sumLabel` naming: prefer `total` (`RecognizedTotal`) and `totalLabel` (`RecognizedTotalLabel`).
 - `RecognizedCompany` is considered legacy; prefer `RecognizedStore`.
+
+---
 
 ## [0.1.6] - 2025-09-22
 
