@@ -6,7 +6,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
-import 'package:receipt_recognition/src/utils/logging/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Parses OCR output into a structured receipt by extracting entities, ordering by
@@ -92,14 +91,14 @@ final class ReceiptParser {
     r'(?<!\d)(\d{4}([-–—])\d{1,2}\2\d{1,2})(?=T\d{1,2}[:.]\d{2}(?::\d{2})?(?:[.,]\d+)?\b)',
   );
 
-  /// Numeric Y-M-D; accepts -, –, —, ., /; allow time after or a non-alnum/end.
+  /// Y-M-D with exactly 0 or 1 space around separators; allows time after or a non-alnum/end.
   static final RegExp _dateYearMonthDayNumeric = RegExp(
-    r'(?<!\d)(\d{4}([./\-–—])\d{1,2}\2\d{1,2})(?:(?=[T\s]\d{1,2}[:.]\d{2})|(?![0-9A-Za-z]))',
+    r'(?<!\d)(\d{4} ?([./\-–—]) ?\d{1,2} ?\2 ?\d{1,2})(?:(?=[T\s]\d{1,2}[:.]\d{2})|(?![0-9A-Za-z]))',
   );
 
-  /// Numeric D-M-Y; accepts -, –, —, ., /; allow time after or a non-alnum/end.
+  /// D-M-Y with exactly 0 or 1 space around separators; allows time after or a non-alnum/end.
   static final RegExp _dateDayMonthYearNumeric = RegExp(
-    r'(?<!\d)(\d{1,2}([./\-–—])\d{1,2}\2\d{2,4})(?:(?=\s+\d{1,2}[:.]\d{2})|(?![0-9A-Za-z]))',
+    r'(?<!\d)(\d{1,2} ?([./\-–—]) ?\d{1,2} ?\2 ?\d{2,4})(?:(?=\s+\d{1,2}[:.]\d{2})|(?![0-9A-Za-z]))',
   );
 
   /// Matches English dates like "1.September 25", "1. September 2025", or "1 September 2025".
@@ -150,42 +149,14 @@ final class ReceiptParser {
     ReceiptOptions options,
   ) {
     return ReceiptRuntime.runWithOptions(options, () {
-      final lines = _convertText(text);
+      if (text.blocks.isEmpty) return RecognizedReceipt.empty();
 
-      lines.sort(_cmpCyThenCx);
-      ReceiptLogger.log('parse.start', {'lines': lines.length});
-
+      final lines = _convertText(text)..sort(_cmpCyThenCx);
       final parsed = _parseLines(lines);
-      ReceiptLogger.log('parse.after_parse', {
-        'entities': parsed.length,
-        'unknowns': parsed.whereType<RecognizedUnknown>().length,
-        'amounts': parsed.whereType<RecognizedAmount>().length,
-        'unitPrices': parsed.whereType<RecognizedUnitPrice>().length,
-      });
-
       final prunedUnknowns = _filterUnknownOutliers(parsed);
-      ReceiptLogger.log('filter.unknown.outliers', {
-        'before': parsed.whereType<RecognizedUnknown>().length,
-        'after': prunedUnknowns.whereType<RecognizedUnknown>().length,
-      });
-
       final prunedAmounts = _filterAmountOutliers(prunedUnknowns);
-      ReceiptLogger.log('filter.amount.outliers', {
-        'before': prunedUnknowns.whereType<RecognizedAmount>().length,
-        'after': prunedAmounts.whereType<RecognizedAmount>().length,
-      });
-
       final prunedIntermediary = _filterIntermediaryEntities(prunedAmounts);
-      ReceiptLogger.log('filter.intermediary', {
-        'before': prunedAmounts.length,
-        'after': prunedIntermediary.length,
-      });
-
       final prunedBelow = _filterBelowTotalAndLabel(prunedIntermediary);
-      ReceiptLogger.log('filter.below_total.summary', {
-        'before': prunedIntermediary.length,
-        'after': prunedBelow.length,
-      });
 
       return _buildReceipt(prunedBelow);
     });
@@ -241,21 +212,13 @@ final class ReceiptParser {
   ) {
     final total = _findTotal(parsed);
     if (total == null) return false;
+
     final amounts = parsed.whereType<RecognizedAmount>().toList();
     if (amounts.isEmpty) return false;
 
     final sum = amounts.fold<double>(0, (a, b) => a + b.value);
     final formattedSum = CalculatedTotal(value: sum).formattedValue;
-
     final stop = total.formattedValue == formattedSum;
-
-    ReceiptLogger.log('guard.stop_if_total_confirmed', {
-      'stop': stop,
-      'declared.total': total.formattedValue,
-      'sum.formatted': formattedSum,
-      'count.amounts': amounts.length,
-    });
-
     return stop;
   }
 
@@ -270,6 +233,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
   ) {
     if (_opts.totalLabels.mapping.isEmpty) return false;
+
     final totalLabel = _findTotalLabel(parsed);
     final total = _findTotalLabel(parsed);
     final label = _findTotalLabelLike(line.text);
@@ -457,9 +421,6 @@ final class ReceiptParser {
       _dateDayMonthYearDe,
     ];
 
-    RecognizedPurchaseDate? best;
-    double maxH = 0;
-
     for (final line in lines) {
       final t = line.text;
       for (final p in patterns) {
@@ -475,14 +436,13 @@ final class ReceiptParser {
                   : identical(p, _dateMonthDayYearEn)
                   ? ReceiptFormatter.parseNameMDY(s)
                   : ReceiptFormatter.parseNameDMY(s);
-          if (dt != null && line.boundingBox.height > maxH) {
-            best = RecognizedPurchaseDate(value: dt, line: line);
-            maxH = line.boundingBox.height;
+          if (dt != null) {
+            return RecognizedPurchaseDate(value: dt, line: line);
           }
         }
       }
     }
-    return best;
+    return null;
   }
 
   /// Returns the first detected store entity if any.
@@ -560,10 +520,24 @@ final class ReceiptParser {
     List<RecognizedUnitPrice> yUnitPrices,
     RecognizedReceipt receipt,
   ) {
-    for (final entity in entities) {
-      if (entity is! RecognizedAmount) continue;
-      if (receipt.total?.line == entity.line) continue;
-      _createPositionForAmount(entity, yUnknowns, yUnitPrices, receipt);
+    final unprocessedAmounts = <RecognizedAmount>[];
+    final amounts = entities.whereType<RecognizedAmount>().toList();
+    for (final amount in amounts) {
+      if (identical(receipt.total?.line, amount.line)) break;
+      if (!_createPositionForAmount(amount, yUnknowns, yUnitPrices, receipt)) {
+        unprocessedAmounts.add(amount);
+      }
+    }
+    if (unprocessedAmounts.isNotEmpty && yUnknowns.isNotEmpty) {
+      for (final amount in unprocessedAmounts) {
+        _createPositionForAmount(
+          amount,
+          yUnknowns,
+          yUnitPrices,
+          receipt,
+          strict: false,
+        );
+      }
     }
     _assignUnitToPositions(yUnitPrices, receipt);
   }
@@ -651,33 +625,36 @@ final class ReceiptParser {
     }
   }
 
-  /// Creates a position for an amount by pairing a compatible unknown and unit lines.
-  static void _createPositionForAmount(
-    RecognizedAmount entity,
+  /// Returns true if a position for an amount and unknown is created.
+  static bool _createPositionForAmount(
+    RecognizedAmount amount,
     List<RecognizedUnknown> yUnknowns,
     List<RecognizedUnitPrice> yUnitPrices,
-    RecognizedReceipt receipt,
-  ) {
-    if (entity == receipt.total) return;
-
-    _sortByDistance(entity.line.boundingBox, yUnknowns);
-
+    RecognizedReceipt receipt, {
+    strict = true,
+  }) {
+    _sortByDistance(amount.line.boundingBox, yUnknowns);
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(entity, yUnknown) &&
-          identical(_findClosestEntity(entity, yUnknowns), yUnknown)) {
-        final position = _createPosition(yUnknown, entity, receipt.timestamp);
+      if (_isMatchingUnknown(amount, yUnknown) &&
+          identical(
+            _findClosestEntity(amount, yUnknowns, lineAbove: !strict),
+            yUnknown,
+          )) {
+        final position = _createPosition(yUnknown, amount, receipt.timestamp);
         receipt.positions.add(position);
         yUnknowns.removeWhere((e) => identical(e, yUnknown));
-        break;
+        return true;
       }
     }
+    return false;
   }
 
   /// Returns true if [unknown] is left of [amount] and vertically aligned.
   static bool _isMatchingUnknown(
     RecognizedAmount amount,
-    RecognizedUnknown unknown,
-  ) {
+    RecognizedUnknown unknown, {
+    strict = true,
+  }) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
     final isLikelyLabel = _isTotalLabelLike(unknownText);
     if (isLikelyLabel) return false;
@@ -686,7 +663,7 @@ final class ReceiptParser {
     final alignedVertically =
         _dy(amount.line, unknown.line).abs() <= _heightL(amount.line);
 
-    return isLeftOfAmount && alignedVertically;
+    return isLeftOfAmount && (alignedVertically || !strict);
   }
 
   /// Constructs a position from matched product text and amount.
@@ -813,12 +790,6 @@ final class ReceiptParser {
   static List<RecognizedEntity> _filterUnknownOutliers(
     List<RecognizedEntity> entities,
   ) {
-    ReceiptLogger.log('filter.unknown.config', {
-      'metric': 'left(x)',
-      'tail': 'dropRightTail=true',
-      'k': 5.0,
-      'minSamples': 3,
-    });
     return _filterOneSidedXOutliers(
       entities,
       isTarget: (e) => e is RecognizedUnknown,
@@ -831,12 +802,6 @@ final class ReceiptParser {
   static List<RecognizedEntity> _filterAmountOutliers(
     List<RecognizedEntity> entities,
   ) {
-    ReceiptLogger.log('filter.amount.config', {
-      'metric': 'right(x)',
-      'tail': 'dropLeftTail=false',
-      'k': 5.0,
-      'minSamples': 3,
-    });
     return _filterOneSidedXOutliers(
       entities,
       isTarget: (e) => e is RecognizedAmount,
@@ -866,41 +831,17 @@ final class ReceiptParser {
       }
     }
 
-    if (xs.length < minSamples) {
-      ReceiptLogger.log('filter.skip', {
-        'reason': 'minSamples_not_met',
-        'count': xs.length,
-        'minSamples': minSamples,
-      });
-      return entities;
-    }
+    if (xs.length < minSamples) return entities;
 
     final scratch = <double>[];
     final med = _medianInPlace(List<double>.from(xs, growable: true));
+
     if (xs.isEmpty || med.isNaN || med.isInfinite) return entities;
 
     final madRaw = _madWithScratch(xs, med, scratch);
     final madScaled = (madRaw == 0.0) ? 0.0 : (1.4826 * madRaw);
-
     final lowerBound = med - k * madScaled;
     final upperBound = med + k * madScaled;
-
-    ReceiptLogger.log('filter.stats', {
-      'targets': xs.length,
-      'median': med,
-      'madRaw': madRaw,
-      'madScaled': madScaled,
-      'k': k,
-      'lowerBound': lowerBound,
-      'upperBound': upperBound,
-      'dropRightTail': dropRightTail,
-    });
-    if (madRaw == 0.0) {
-      ReceiptLogger.log('filter.note', {
-        'message': 'MAD==0; band collapses to median±tol',
-      });
-    }
-
     final out = <RecognizedEntity>[];
     final removed = <Map<String, Object?>>[];
     final kept = <Map<String, Object?>>[];
@@ -923,12 +864,6 @@ final class ReceiptParser {
         removed.add(_dbgEntity(e, xMetric));
       }
     }
-
-    ReceiptLogger.log('filter.result', {
-      'kept': kept.length,
-      'removed': removed.length,
-      'removedEntities': removed,
-    });
 
     return out;
   }
@@ -1024,6 +959,7 @@ final class ReceiptParser {
     double leftmostX = double.infinity;
     RecognizedAmount? rightAmount;
     double rightmostX = -double.infinity;
+    RecognizedAmount? firstAmount;
 
     for (final e in entities) {
       if (e is RecognizedUnknown) {
@@ -1033,6 +969,7 @@ final class ReceiptParser {
           leftUnknown = e;
         }
       } else if (e is RecognizedAmount) {
+        firstAmount ??= e;
         final rx = _right(e);
         if (rx > rightmostX) {
           rightmostX = rx;
@@ -1047,8 +984,12 @@ final class ReceiptParser {
 
     final filtered = <RecognizedEntity>[];
     for (final entity in entities) {
-      if (entity is RecognizedStore ||
-          entity is RecognizedBounds ||
+      if (entity is RecognizedStore) {
+        if (firstAmount != null && _cy(entity) < _cy(firstAmount)) {
+          filtered.add(entity);
+        }
+        continue;
+      } else if (entity is RecognizedBounds ||
           entity is RecognizedPurchaseDate ||
           entity is RecognizedUnitPrice ||
           entity is RecognizedTotalLabel ||
@@ -1109,12 +1050,6 @@ final class ReceiptParser {
       }
     }
 
-    ReceiptLogger.log('filter.below_total', {
-      'maxBottom': maxBottom,
-      'before': entities.length,
-      'after': out.length,
-      'removed': removed,
-    });
     return out;
   }
 
@@ -1129,13 +1064,13 @@ final class ReceiptParser {
     final purchaseDate = _findPurchaseDate(entities);
     final bounds = _findBounds(entities);
 
-    _processAmounts(entities, yUnknowns, yUnitPrices, receipt);
     _processStore(store, receipt);
     _processTotalLabel(totalLabel, receipt);
     _processTotal(total, receipt);
     _processPurchaseDate(purchaseDate, receipt);
-    _processSuspicious(receipt);
     _processBounds(bounds, receipt);
+    _processAmounts(entities, yUnknowns, yUnitPrices, receipt);
+    _processSuspicious(receipt);
 
     return receipt.copyWith(entities: entities);
   }

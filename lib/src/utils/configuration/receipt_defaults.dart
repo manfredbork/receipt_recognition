@@ -3,13 +3,13 @@
 const Map<String, dynamic> kReceiptDefaultOptions = {
   'storeNames': {
     'Aldi': 'Aldi',
-    'Rewe': 'Rewe',
     'Edeka': 'Edeka',
-    'Penny': 'Penny',
-    'Lidl': 'Lidl',
     'Kaufland': 'Kaufland',
+    'Lidl': 'Lidl',
     'Netto': 'Netto',
-    'Akzenta': 'Akzenta',
+    'Penny': 'Penny',
+    'Rewe': 'Rewe',
+    'Spar': 'Spar',
   },
   'totalLabels': {
     'Zu zahlen': 'Zu zahlen',

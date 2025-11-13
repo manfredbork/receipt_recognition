@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:collection/collection.dart';
 import 'package:receipt_recognition/src/models/index.dart';
@@ -17,14 +16,14 @@ abstract class Optimizer {
   RecognizedReceipt optimize(
     RecognizedReceipt receipt,
     ReceiptOptions options, {
-    bool singleScan = false,
+    bool singleScan = true,
   });
 
   /// Public entry to finalize and reconcile a manually accepted receipt.
   void accept(RecognizedReceipt receipt);
 
-  /// Resets all caches used by the optimizer.
-  void reset({RecognizedPurchaseDate? purchaseDate});
+  /// Resets resources used by the optimizer.
+  void reset();
 
   /// Releases resources used by the optimizer.
   void close();
@@ -122,22 +121,17 @@ final class ReceiptOptimizer implements Optimizer {
   @override
   void accept(RecognizedReceipt receipt) {
     _processPositions(receipt);
-    ReceiptLogger.kRecogVerbose = true;
     _reconcileToTotal(receipt, true);
-    ReceiptLogger.kRecogVerbose = false;
     _applySkewAngle(receipt);
     _updateEntities(receipt);
   }
 
-  /// Clears caches and only set purchase date.
+  /// Resets all resources used by the optimizer.
   @override
-  void reset({RecognizedPurchaseDate? purchaseDate}) {
+  void reset() {
     _shouldInitialize = true;
     _initializeIfNeeded();
     _resetFrameFreshness();
-    if (purchaseDate != null) {
-      _purchaseDates.add(purchaseDate);
-    }
   }
 
   /// Releases all resources used by the optimizer.
@@ -527,18 +521,44 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
+  /// Returns the most common string length (mode) in [strings].
+  int _mostCommonLength(List<String> strings) {
+    if (strings.isEmpty) return 0;
+
+    final counts = <int, int>{};
+    for (final s in strings) {
+      final len = s.length;
+      counts[len] = (counts[len] ?? 0) + 1;
+    }
+
+    final mostCommon = counts.entries.reduce(
+      (a, b) =>
+          a.value > b.value
+              ? a
+              : (a.value < b.value ? b : (a.key < b.key ? a : b)),
+    );
+
+    return mostCommon.key;
+  }
+
   /// Estimates and writes the receipt’s skew angle (radians) from product-column left edges.
   void _applySkewAngle(RecognizedReceipt receipt) {
     final pos = receipt.positions;
     if (pos.length < 2) return;
+
+    final mostCommon = _mostCommonLength(
+      pos.map((p) => p.product.postfixText).toList(),
+    );
 
     final pts = <Point<double>>[];
     for (final p in pos) {
       final a = p.product.line.boundingBox;
       final b = p.price.line.boundingBox;
       final yCenter = (a.center.dy + b.center.dy) / 2;
-      final xCenter = (a.left + b.left) / 2;
-      pts.add(Point<double>(yCenter, xCenter));
+      final xCenter = (a.left + b.right) / 2;
+      if (p.product.postfixText.length == mostCommon) {
+        pts.add(Point<double>(yCenter, xCenter));
+      }
     }
     if (pts.length < 2) return;
 
@@ -1009,43 +1029,8 @@ final class ReceiptOptimizer implements Optimizer {
 
       if (receipt.isValid) return;
 
-      final lastText =
-          receipt.positions.lastOrNull?.product.normalizedText ?? 'abc';
-      final upperCase = lastText == lastText.toUpperCase();
-      final productName = _opts.tuning.optimizerUnrecognizedProductName;
-      final proR =
-          receipt.positions.lastOrNull?.product.line.boundingBox ?? Rect.zero;
-      final priR =
-          receipt.positions.lastOrNull?.product.line.boundingBox ?? Rect.zero;
-      final product = RecognizedProduct(
-        line: ReceiptTextLine(
-          boundingBox: Rect.fromLTRB(
-            proR.left,
-            proR.top + proR.height,
-            proR.right,
-            proR.bottom,
-          ),
-        ),
-        value: upperCase ? productName.toUpperCase() : productName,
-      );
-      final price = RecognizedPrice(
-        line: ReceiptTextLine(
-          boundingBox: Rect.fromLTRB(
-            priR.left,
-            priR.top + priR.height,
-            priR.right,
-            priR.bottom,
-          ),
-        ),
-        value:
-            (total * 100 - receipt.calculatedTotal.value * 100).round() / 100,
-      );
-      final position = RecognizedPosition(
-        product: product,
-        price: price,
-        timestamp: receipt.timestamp,
-        operation: Operation.none,
-      );
+      final pseudoName = _opts.tuning.optimizerUnrecognizedProductName;
+      final position = RecognizedPosition.pseudo(receipt, pseudoName);
       _createNewGroup(position);
       receipt.positions.add(position);
     }

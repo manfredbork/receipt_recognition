@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:receipt_recognition/src/models/index.dart';
+import 'package:receipt_recognition/src/services/ocr/index.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
@@ -41,6 +42,61 @@ final class RecognizedPosition {
       product: RecognizedProduct.fromJson(json['product']),
       price: RecognizedPrice.fromJson(json['price']),
       timestamp: DateTime.tryParse(json['timestamp'] ?? '') ?? DateTime.now(),
+      operation: Operation.none,
+    );
+  }
+
+  /// Empty position with current timestamp.
+  factory RecognizedPosition.empty() {
+    return RecognizedPosition(
+      product: RecognizedProduct(line: ReceiptTextLine(), value: ''),
+      price: RecognizedPrice(line: ReceiptTextLine(), value: 0.0),
+      timestamp: DateTime.now(),
+      operation: Operation.none,
+    );
+  }
+
+  /// Pseudo position to use for unrecognized items.
+  factory RecognizedPosition.pseudo(
+    RecognizedReceipt receipt,
+    String pseudoName,
+  ) {
+    if (receipt.total == null || receipt.positions.isEmpty) {
+      return RecognizedPosition.empty();
+    }
+    final totalCents = (receipt.total!.value * 100).round();
+    final calculatedTotalCents = (receipt.calculatedTotal.value * 100).round();
+    final lastPos = receipt.positions.last;
+    final lastText = lastPos.product.normalizedText;
+    final upperCase = lastText == lastText.toUpperCase();
+    final aRect = lastPos.product.line.boundingBox;
+    final bRect = lastPos.price.line.boundingBox;
+    final product = RecognizedProduct(
+      line: ReceiptTextLine(
+        boundingBox: Rect.fromLTRB(
+          aRect.left,
+          aRect.top + aRect.height,
+          aRect.right,
+          aRect.bottom,
+        ),
+      ),
+      value: upperCase ? pseudoName.toUpperCase() : pseudoName,
+    );
+    final price = RecognizedPrice(
+      line: ReceiptTextLine(
+        boundingBox: Rect.fromLTRB(
+          bRect.left,
+          bRect.top + bRect.height,
+          bRect.right,
+          bRect.bottom,
+        ),
+      ),
+      value: (totalCents - calculatedTotalCents) / 100,
+    );
+    return RecognizedPosition(
+      product: product,
+      price: price,
+      timestamp: receipt.timestamp,
       operation: Operation.none,
     );
   }
