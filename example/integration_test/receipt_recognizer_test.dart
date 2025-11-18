@@ -32,7 +32,7 @@ void main() {
   group('OCR from asset images (no camera)', () {
     testWidgets('REWE receipt parses total + positions', (tester) async {
       final img = await _inputImageFromAssetAsPng(
-        'integration_test/assets/rewe_1.png',
+        'integration_test/assets/rewe.png',
       );
       final rr = ReceiptRecognizer(singleScan: true);
       try {
