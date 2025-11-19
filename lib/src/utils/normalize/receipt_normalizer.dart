@@ -293,11 +293,9 @@ final class ReceiptNormalizer {
 
     for (int i = 0; i < textWithSpace.length; i++) {
       if (textWithSpace[i] == ' ') {
-        // guard: only allow glue if the next char is a lowercase letter
         final next = (i + 1 < textWithSpace.length) ? textWithSpace[i + 1] : '';
         if (!_isLowerLetter(next)) continue;
 
-        // optional extra guard (keeps intent very tight): previous is a letter
         final prev = (i - 1 >= 0) ? textWithSpace[i - 1] : '';
         if (!_isNormalLetter(prev)) continue;
 
@@ -365,10 +363,8 @@ final class ReceiptNormalizer {
         }
       }
 
-      // After the existing per-char replacement loop
       String afterCharFix = chars.join();
 
-      // --- Token-wise correction (minimal) ---
       final tokens = afterCharFix.split(RegExp(r'\s+'));
       for (final other in ocrAlternatives) {
         final otherTokens = other.split(RegExp(r'\s+'));
@@ -386,7 +382,6 @@ final class ReceiptNormalizer {
             final oIsAlpha = _isAlpha(oTok);
 
             if (!tIsAlpha && oIsAlpha) {
-              // prefer letters over digits/specials (M1lka -> Milka)
               ReceiptLogger.log('ocr.token.correct', {
                 'from': t,
                 'to': oTok,
@@ -403,8 +398,7 @@ final class ReceiptNormalizer {
               final bIsStrictPrefixOfA = a.startsWith(b) && a.length > b.length;
 
               if (aIsStrictPrefixOfB || bIsStrictPrefixOfA) {
-                // If one is a strict prefix of the other, prefer the longer (avoid truncations)
-                final prefer = aIsStrictPrefixOfB ? b : a; // the longer one
+                final prefer = aIsStrictPrefixOfB ? b : a;
                 if (prefer != t) {
                   ReceiptLogger.log('ocr.token.correct', {
                     'from': t,
@@ -414,11 +408,9 @@ final class ReceiptNormalizer {
                   });
                   tokens[ti] = prefer;
                 }
-                continue; // don't let later rules override
+                continue;
               }
             }
-
-            // (tIsAlpha && !oIsAlpha) -> keep t (do nothing)
           }
         }
       }
