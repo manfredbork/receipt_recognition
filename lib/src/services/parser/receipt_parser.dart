@@ -361,7 +361,8 @@ final class ReceiptParser {
     if (unknown == null) return false;
     final leadingDigits = ReceiptFormatter.leadingDigits(unknown);
     final lettersOnly = ReceiptFormatter.lettersOnly(unknown);
-    if (leadingDigits.isEmpty && lettersOnly.length >= 4) {
+    if ((leadingDigits.isEmpty && lettersOnly.length >= 4) ||
+        lettersOnly.length >= 6) {
       parsed.add(RecognizedUnknown(line: line, value: unknown));
     }
     return true;

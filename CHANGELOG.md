@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] – 2025-11-19
+
+### 🛠️ Changed
+- **Product recognition threshold**: Increased strictness for position confirmation – now requires **80% of positions** to pass validation (up from 75%) for more reliable receipt parsing.
+- **Product name handling**: Improved handling of leading digits – now allows product names with leading digits if they contain **6 or more letters total**, reducing false rejections.
+
+### 🐛 Fixed
+- **Normalization**: Removed verbose debug comments from OCR correction logic, improving code clarity.
+- **Integration tests**: Corrected asset path reference in integration tests.
+
+### 🧹 Housekeeping
+- Removed `.metadata` tracking file from version control in example app.
+- Updated `.gitignore` to exclude metadata files going forward.
+
+---
+
 ## [0.2.1] – 2025-11-13
 
 ### ✨ Added
