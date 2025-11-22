@@ -52,8 +52,8 @@ final class ReceiptOptimizer implements Optimizer {
   /// Ordering stats by group.
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
 
-  /// Shorthand for the active options provided by [ReceiptRuntime].
-  final ReceiptOptions _opts = ReceiptRuntime.options;
+  /// Last active options used by optimize (fallback to current runtime options).
+  ReceiptOptions _opts = ReceiptRuntime.options;
 
   /// Internal convergence bookkeeping.
   int _unchangedCount = 0;
@@ -92,7 +92,8 @@ final class ReceiptOptimizer implements Optimizer {
     ReceiptOptions options, {
     bool singleScan = true,
   }) {
-    return ReceiptRuntime.runWithOptions(options, () {
+    _opts = options;
+    return ReceiptRuntime.runWithOptions(_opts, () {
       _initializeIfNeeded();
       _resetFrameFreshness();
       _checkConvergence(receipt);
@@ -120,10 +121,12 @@ final class ReceiptOptimizer implements Optimizer {
   /// Accepts a receipt manually and finalizes reconciliation if needed.
   @override
   void accept(RecognizedReceipt receipt) {
-    _processPositions(receipt);
-    _reconcileToTotal(receipt, true);
-    _applySkewAngle(receipt);
-    _updateEntities(receipt);
+    ReceiptRuntime.runWithOptions(_opts, () {
+      _processPositions(receipt);
+      _reconcileToTotal(receipt, true);
+      _applySkewAngle(receipt);
+      _updateEntities(receipt);
+    });
   }
 
   /// Resets all resources used by the optimizer.
