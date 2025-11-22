@@ -67,8 +67,6 @@ final class RecognizedPosition {
     final totalCents = (receipt.total!.value * 100).round();
     final calculatedTotalCents = (receipt.calculatedTotal.value * 100).round();
     final lastPos = receipt.positions.last;
-    final lastText = lastPos.product.normalizedText;
-    final upperCase = lastText == lastText.toUpperCase();
     final aRect = lastPos.product.line.boundingBox;
     final bRect = lastPos.price.line.boundingBox;
     final product = RecognizedProduct(
@@ -80,7 +78,7 @@ final class RecognizedPosition {
           aRect.bottom,
         ),
       ),
-      value: upperCase ? pseudoName.toUpperCase() : pseudoName,
+      value: pseudoName,
     );
     final price = RecognizedPrice(
       line: ReceiptTextLine(
