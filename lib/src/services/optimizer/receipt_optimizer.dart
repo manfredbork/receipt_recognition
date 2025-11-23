@@ -523,24 +523,43 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Returns the most common string length (mode) in [strings].
-  int _mostCommonLength(List<String> strings) {
-    if (strings.isEmpty) return 0;
+  /// Returns the median of the given numeric values.
+  double _median(List<double> values) {
+    if (values.isEmpty) return double.nan;
+    final sorted = [...values]..sort();
+    final mid = sorted.length ~/ 2;
+    if (sorted.length.isOdd) {
+      return sorted[mid];
+    } else {
+      return (sorted[mid - 1] + sorted[mid]) / 2.0;
+    }
+  }
 
-    final counts = <int, int>{};
-    for (final s in strings) {
-      final len = s.length;
-      counts[len] = (counts[len] ?? 0) + 1;
+  /// Filters out column outliers based on deviation from the median x coordinate using MAD.
+  List<Point<double>> _filterColumnOutliers(
+    List<Point<double>> pts, {
+    double k = 3.5,
+  }) {
+    if (pts.length <= 3) return pts;
+
+    final xs = pts.map((p) => p.y).toList();
+
+    final medianX = _median(xs);
+    final deviations = xs.map((x) => (x - medianX).abs()).toList();
+    final mad = _median(deviations);
+
+    if (mad == 0) return pts;
+
+    final threshold = k * mad;
+    final filtered = <Point<double>>[];
+
+    for (var i = 0; i < pts.length; i++) {
+      if (deviations[i] <= threshold) {
+        filtered.add(pts[i]);
+      }
     }
 
-    final mostCommon = counts.entries.reduce(
-      (a, b) =>
-          a.value > b.value
-              ? a
-              : (a.value < b.value ? b : (a.key < b.key ? a : b)),
-    );
-
-    return mostCommon.key;
+    return filtered;
   }
 
   /// Estimates and writes the receipt’s skew angle (radians) from product-column left edges.
@@ -548,23 +567,20 @@ final class ReceiptOptimizer implements Optimizer {
     final pos = receipt.positions;
     if (pos.length < 2) return;
 
-    final mostCommon = _mostCommonLength(
-      pos.map((p) => p.product.postfixText).toList(),
-    );
-
     final pts = <Point<double>>[];
     for (final p in pos) {
       final a = p.product.line.boundingBox;
-      final b = p.price.line.boundingBox;
-      final yCenter = (a.center.dy + b.center.dy) / 2;
-      final xCenter = (a.left + b.right) / 2;
-      if (p.product.postfixText.length == mostCommon) {
-        pts.add(Point<double>(yCenter, xCenter));
-      }
+      final yCenter = a.center.dy;
+      final xCenter = a.left;
+
+      pts.add(Point<double>(yCenter, xCenter));
     }
     if (pts.length < 2) return;
 
-    final slope = _theilSenSlopeXvsY(pts);
+    final filteredPts = _filterColumnOutliers(pts);
+    if (filteredPts.length < 2) return;
+
+    final slope = _theilSenSlopeXvsY(filteredPts);
     final skewRad = _wrapAngle(atan(slope));
 
     if (receipt.bounds != null) {
@@ -572,7 +588,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     ReceiptLogger.log('bounds.skew.leftEdge', {
-      'n': pts.length,
+      'n': filteredPts.length,
       'slope': slope,
       'skewRad': skewRad,
       'skewDeg': skewRad * 180 / pi,
