@@ -139,8 +139,8 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  /// Last active options used by optimize (fallback to current runtime options).
-  static ReceiptOptions _opts = ReceiptRuntime.options;
+  /// Shorthand for the active options provided by [ReceiptRuntime].
+  static ReceiptOptions get _opts => ReceiptRuntime.options;
 
   /// Parses [text] with [options] and returns a structured [RecognizedReceipt].
   /// Performs line ordering, entity extraction, geometric filtering, and building.
@@ -148,8 +148,7 @@ final class ReceiptParser {
     RecognizedText text,
     ReceiptOptions options,
   ) {
-    _opts = options;
-    return ReceiptRuntime.runWithOptions(_opts, () {
+    return ReceiptRuntime.runWithOptions(options, () {
       if (text.blocks.isEmpty) return RecognizedReceipt.empty();
 
       final lines = _convertText(text)..sort(_cmpCyThenCx);

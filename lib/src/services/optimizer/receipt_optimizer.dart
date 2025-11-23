@@ -20,7 +20,7 @@ abstract class Optimizer {
   });
 
   /// Public entry to finalize and reconcile a manually accepted receipt.
-  void accept(RecognizedReceipt receipt);
+  void accept(RecognizedReceipt receipt, ReceiptOptions options);
 
   /// Resets resources used by the optimizer.
   void reset();
@@ -52,9 +52,6 @@ final class ReceiptOptimizer implements Optimizer {
   /// Ordering stats by group.
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
 
-  /// Last active options used by optimize (fallback to current runtime options).
-  ReceiptOptions _opts = ReceiptRuntime.options;
-
   /// Internal convergence bookkeeping.
   int _unchangedCount = 0;
 
@@ -79,6 +76,9 @@ final class ReceiptOptimizer implements Optimizer {
   /// Last fingerprint to detect stalling.
   String? _lastFingerprint;
 
+  /// Shorthand for the active options provided by [ReceiptRuntime].
+  static ReceiptOptions get _opts => ReceiptRuntime.options;
+
   /// Marks the optimizer for reinitialization on next optimization.
   @override
   void init() => _shouldInitialize = true;
@@ -92,8 +92,7 @@ final class ReceiptOptimizer implements Optimizer {
     ReceiptOptions options, {
     bool singleScan = true,
   }) {
-    _opts = options;
-    return ReceiptRuntime.runWithOptions(_opts, () {
+    return ReceiptRuntime.runWithOptions(options, () {
       _initializeIfNeeded();
       _resetFrameFreshness();
       _checkConvergence(receipt);
@@ -120,8 +119,8 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Accepts a receipt manually and finalizes reconciliation if needed.
   @override
-  void accept(RecognizedReceipt receipt) {
-    ReceiptRuntime.runWithOptions(_opts, () {
+  void accept(RecognizedReceipt receipt, ReceiptOptions options) {
+    ReceiptRuntime.runWithOptions(options, () {
       _processPositions(receipt);
       _reconcileToTotal(receipt, true);
       _applySkewAngle(receipt);
