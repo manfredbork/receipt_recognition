@@ -16,9 +16,8 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
     'Gesamt': 'Gesamt',
     'Summe': 'Summe',
     'Total': 'Total',
-    'Subtotal': 'Subtotal',
   },
-  'ignoreKeywords': ['E-Bon', 'Coupon', 'Eingabe', 'Posten'],
+  'ignoreKeywords': ['E-Bon', 'Coupon', 'Eingabe', 'Posten', 'Subtotal'],
   'stopKeywords': ['Geg.', 'Rückgeld', 'Bar', 'Change'],
   'allowedProductGroups': ['A', 'B', 'AW', 'BW', '1', '2'],
   'tuning': {
