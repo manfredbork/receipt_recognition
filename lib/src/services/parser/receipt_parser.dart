@@ -63,7 +63,7 @@ final class ReceiptParser {
 
   static double _cxMedian(List<RecognizedEntity> parsed) {
     final bounds = parsed.whereType<RecognizedBounds>();
-    return bounds.isNotEmpty ? _cxR(bounds.last.boundingBox) * 1.5 : 0;
+    return bounds.isNotEmpty ? _cxR(bounds.last.boundingBox) : 0;
   }
 
   /// Comparator by center-Y, then center-X (ascending).
@@ -320,7 +320,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    if (_cxL(line) <= median) return false;
+    if (_rightL(line) <= (3 / 4) * median) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
     final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
@@ -335,7 +335,8 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    if (_cxL(line) > median) return false;
+    if (_rightL(line) > (3 / 4) * median) return false;
+    if (_leftL(line) <= (1 / 4) * median) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
     final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
@@ -351,7 +352,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double median,
   ) {
-    if (_cxL(line) > median) return false;
+    if (_leftL(line) > (1 / 4) * median) return false;
     final unknown = _unknown.stringMatch(
       ReceiptNormalizer.shouldNormalizeTail(line.text)
           ? ReceiptNormalizer.normalizeTail(line.text)
