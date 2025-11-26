@@ -215,9 +215,9 @@ final class ReceiptParser {
     final amounts = parsed.whereType<RecognizedAmount>().toList();
     if (amounts.isEmpty) return false;
 
-    final sum = amounts.fold<double>(0, (a, b) => a + b.value);
-    final formattedSum = CalculatedTotal(value: sum).formattedValue;
-    final stop = total.formattedValue == formattedSum;
+    final amountsTotal = amounts.fold<double>(0, (a, b) => a + b.value);
+    final formattedTotal = CalculatedTotal(value: amountsTotal).formattedValue;
+    final stop = total.formattedValue == formattedTotal;
     return stop;
   }
 
@@ -528,17 +528,6 @@ final class ReceiptParser {
         unprocessedAmounts.add(amount);
       }
     }
-    if (unprocessedAmounts.isNotEmpty && yUnknowns.isNotEmpty) {
-      for (final amount in unprocessedAmounts) {
-        _createPositionForAmount(
-          amount,
-          yUnknowns,
-          yUnitPrices,
-          receipt,
-          strict: false,
-        );
-      }
-    }
     _assignUnitToPositions(yUnitPrices, receipt);
   }
 
@@ -630,16 +619,12 @@ final class ReceiptParser {
     RecognizedAmount amount,
     List<RecognizedUnknown> yUnknowns,
     List<RecognizedUnitPrice> yUnitPrices,
-    RecognizedReceipt receipt, {
-    strict = true,
-  }) {
+    RecognizedReceipt receipt,
+  ) {
     _sortByDistance(amount.line.boundingBox, yUnknowns);
     for (final yUnknown in yUnknowns) {
       if (_isMatchingUnknown(amount, yUnknown) &&
-          identical(
-            _findClosestEntity(amount, yUnknowns, lineAbove: !strict),
-            yUnknown,
-          )) {
+          identical(_findClosestEntity(amount, yUnknowns), yUnknown)) {
         final position = _createPosition(yUnknown, amount, receipt.timestamp);
         receipt.positions.add(position);
         yUnknowns.removeWhere((e) => identical(e, yUnknown));
@@ -991,10 +976,22 @@ final class ReceiptParser {
         continue;
       } else if (entity is RecognizedBounds ||
           entity is RecognizedPurchaseDate ||
-          entity is RecognizedUnitPrice ||
-          entity is RecognizedTotalLabel ||
-          entity is RecognizedTotal) {
+          entity is RecognizedUnitPrice) {
         filtered.add(entity);
+        continue;
+      } else if (entity is RecognizedTotalLabel) {
+        if (identical(entity, totalLabel)) {
+          filtered.add(entity);
+        } else {
+          filtered.add(entity as RecognizedUnknown);
+        }
+        continue;
+      } else if (entity is RecognizedTotal) {
+        if (identical(entity, total)) {
+          filtered.add(entity);
+        } else {
+          filtered.add(entity as RecognizedAmount);
+        }
         continue;
       }
 
