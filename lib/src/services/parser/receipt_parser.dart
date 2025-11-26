@@ -131,7 +131,7 @@ final class ReceiptParser {
   );
 
   /// Pattern to match strings likely to be product descriptions.
-  static final RegExp _unknown = RegExp(r'[\D\S]{4,}');
+  static final RegExp _unknown = RegExp(r'(?:.*[^\d ]){4}');
 
   /// Pattern to filter out suspicious or metadata-like product names.
   static final RegExp _suspiciousProductName = RegExp(
@@ -324,9 +324,11 @@ final class ReceiptParser {
     if (_cxL(line) <= median) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
+    final value =
+        double.tryParse(ReceiptFormatter.normalizeAmount(amount)) ??
+        int.tryParse(ReceiptFormatter.integersOnly(line.text));
     if (value == null) return false;
-    parsed.add(RecognizedAmount(line: line, value: value));
+    parsed.add(RecognizedAmount(line: line, value: value.toDouble()));
     return true;
   }
 
@@ -339,9 +341,11 @@ final class ReceiptParser {
     if (_cxL(line) > median) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
+    final value =
+        double.tryParse(ReceiptFormatter.normalizeAmount(amount)) ??
+        int.tryParse(ReceiptFormatter.integersOnly(line.text));
     if (value == null) return false;
-    parsed.add(RecognizedUnitPrice(line: line, value: value));
+    parsed.add(RecognizedUnitPrice(line: line, value: value.toDouble()));
     _tryParseUnknown(line, parsed, median);
     return true;
   }
