@@ -96,11 +96,6 @@ final class ReceiptFormatter {
     return s.replaceAll(RegExp(r'[^A-Za-z]+'), '').trim();
   }
 
-  /// Returns [s] with all non-integers characters removed (-0–9).
-  static String integersOnly(String s) {
-    return s.replaceAll(RegExp(r'[^-0-9]+'), '').trim();
-  }
-
   /// Returns the leading integer part of [s], ignoring leading spaces.
   static String leadingDigits(String s) {
     final match = RegExp(r'^\s*(\d+)').firstMatch(s);

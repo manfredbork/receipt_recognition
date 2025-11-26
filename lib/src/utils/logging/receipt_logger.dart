@@ -60,7 +60,7 @@ final class ReceiptLogger {
         debugPrint(
           '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padHalfWidth)}'
           '${'🗄  ${position.product.productGroup}'.padRight(padHalfWidth)}'
-          '${'🏷️  ${position.product.unit.quantity.formattedValue} x ${position.product.unit.price.formattedValue}'.padRight(padHalfWidth)}'
+          '${'🏷️  ${position.product.unit.quantity.formattedValue} × ${position.product.unit.price.formattedValue}'.padRight(padHalfWidth)}'
           '${'📈  $confidence % Confidence'.padRight(padFullWidth)}'
           '${'⚖️  $stability % Stability'.padRight(padFullWidth)}'
           '${'📊  Distribution: $distribution '.padRight(padFullWidth)}',

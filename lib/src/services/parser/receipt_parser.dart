@@ -155,10 +155,9 @@ final class ReceiptParser {
       final parsed = _parseLines(lines);
       final prunedUnknowns = _filterUnknownOutliers(parsed);
       final prunedAmounts = _filterAmountOutliers(prunedUnknowns);
-      final prunedIntermediary = _filterIntermediaryEntities(prunedAmounts);
-      final prunedBelow = _filterBelowTotalAndLabel(prunedIntermediary);
+      final prunedEntities = _filterEntities(prunedAmounts);
 
-      return _buildReceipt(prunedBelow);
+      return _buildReceipt(prunedEntities);
     });
   }
 
@@ -324,9 +323,7 @@ final class ReceiptParser {
     if (_cxL(line) <= median) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value =
-        double.tryParse(ReceiptFormatter.normalizeAmount(amount)) ??
-        int.tryParse(ReceiptFormatter.integersOnly(line.text));
+    final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
     if (value == null) return false;
     parsed.add(RecognizedAmount(line: line, value: value.toDouble()));
     return true;
@@ -341,11 +338,9 @@ final class ReceiptParser {
     if (_cxL(line) > median) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value =
-        double.tryParse(ReceiptFormatter.normalizeAmount(amount)) ??
-        int.tryParse(ReceiptFormatter.integersOnly(line.text));
+    final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
     if (value == null) return false;
-    parsed.add(RecognizedUnitPrice(line: line, value: value.toDouble()));
+    parsed.add(RecognizedUnitPrice(line: line, value: value));
     _tryParseUnknown(line, parsed, median);
     return true;
   }
@@ -956,14 +951,14 @@ final class ReceiptParser {
     });
   }
 
-  /// Removes entities that sit between left products and right amounts.
-  static List<RecognizedEntity> _filterIntermediaryEntities(
+  /// Removes entities that are not required anymore.
+  static List<RecognizedEntity> _filterEntities(
     List<RecognizedEntity> entities,
   ) {
     RecognizedUnknown? leftUnknown;
-    double leftmostX = double.infinity;
+    double leftmostX = double.maxFinite;
     RecognizedAmount? rightAmount;
-    double rightmostX = -double.infinity;
+    double rightmostX = 0;
     RecognizedAmount? firstAmount;
 
     for (final e in entities) {
@@ -990,7 +985,7 @@ final class ReceiptParser {
     final filtered = <RecognizedEntity>[];
     for (final entity in entities) {
       if (entity is RecognizedStore) {
-        if (firstAmount != null && _cy(entity) < _cy(firstAmount)) {
+        if (firstAmount != null && _cy(entity) < _top(firstAmount)) {
           filtered.add(entity);
         }
         continue;
@@ -1014,48 +1009,17 @@ final class ReceiptParser {
 
       final betweenUnknownAndAmount = horizontallyBetween && verticallyAligned;
 
-      final betweenTotalLabelAndTotal =
+      final belowTotalLabelAndTotal =
           totalLabel != null &&
           total != null &&
-          _cy(entity) > _top(totalLabel) &&
-          _cy(entity) < _bottom(total);
+          _cy(entity) > _bottom(totalLabel) &&
+          _cy(entity) > _bottom(total);
 
-      if (!betweenUnknownAndAmount && !betweenTotalLabelAndTotal) {
+      if (!betweenUnknownAndAmount && !belowTotalLabelAndTotal) {
         filtered.add(entity);
       }
     }
     return filtered;
-  }
-
-  /// Drop entities strictly below total/label (keep RecognizedPurchaseDate).
-  static List<RecognizedEntity> _filterBelowTotalAndLabel(
-    List<RecognizedEntity> entities,
-  ) {
-    final totalLabel = _findTotalLabel(entities);
-    final total = _findTotal(entities);
-
-    if (totalLabel == null || total == null) return entities;
-
-    double maxBottom = max(_bottom(totalLabel), _bottom(total));
-
-    final out = <RecognizedEntity>[];
-    final removed = <String>[];
-
-    for (final e in entities) {
-      if (e is RecognizedPurchaseDate) {
-        out.add(e);
-        continue;
-      }
-      final tol = _heightL(e.line);
-      final isBelow = _top(e) > maxBottom + tol;
-      if (!isBelow) {
-        out.add(e);
-      } else {
-        removed.add(_dbgId(e));
-      }
-    }
-
-    return out;
   }
 
   /// Builds a complete receipt from entities and post-filters.
