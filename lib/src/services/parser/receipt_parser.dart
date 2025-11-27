@@ -55,16 +55,8 @@ final class ReceiptParser {
   /// Center-Y of a Rect.
   static double _cyR(Rect r) => r.center.dy;
 
-  /// Center-X of a Rect.
-  static double _cxR(Rect r) => r.center.dx;
-
   /// Absolute vertical distance between two TextLines’ centers.
   static double _dy(TextLine a, TextLine b) => _cyL(a) - _cyL(b);
-
-  static double _cxMedian(List<RecognizedEntity> parsed) {
-    final bounds = parsed.whereType<RecognizedBounds>();
-    return bounds.isNotEmpty ? _cxR(bounds.last.boundingBox) : 0;
-  }
 
   /// Comparator by center-Y, then center-X (ascending).
   static int _cmpCyThenCx(TextLine a, TextLine b) {
@@ -130,9 +122,6 @@ final class ReceiptParser {
     r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
   );
 
-  /// Pattern to match strings likely to be product descriptions.
-  static final RegExp _unknown = RegExp(r'(?:.*[^\d ]){4}');
-
   /// Pattern to filter out suspicious or metadata-like product names.
   static final RegExp _suspiciousProductName = RegExp(
     r'\bx\s?\d+|^\s*[\[(]?\s*\d{1,3}[.,]\d{3}\b',
@@ -171,14 +160,18 @@ final class ReceiptParser {
 
   /// Extracts entities from sorted lines using geometry, patterns, and options.
   static List<RecognizedEntity> _parseLines(List<TextLine> lines) {
-    if (lines.isEmpty) return <RecognizedEntity>[];
-
     final parsed = <RecognizedEntity>[];
+    if (lines.isEmpty) return parsed;
 
     _applyPurchaseDate(lines, parsed);
     _applyBounds(lines, parsed);
 
-    final median = _cxMedian(parsed);
+    final bounds = _findBounds(parsed);
+    if (bounds == null) return parsed;
+
+    final quarter = (1 / 4) * _rightL(bounds.line);
+    final leftBound = _leftL(bounds.line) + quarter;
+    final rightBound = _rightL(bounds.line) - quarter;
 
     for (final line in lines) {
       if (_shouldStopIfTotalConfirmed(line, parsed)) break;
@@ -186,10 +179,10 @@ final class ReceiptParser {
       if (_shouldIgnoreLine(line)) continue;
       if (_tryParseStore(line, parsed)) continue;
       if (_tryParseTotalLabel(line, parsed)) continue;
-      if (_tryParseTotal(line, parsed, median)) continue;
-      if (_tryParseAmount(line, parsed, median)) continue;
-      if (_tryParseUnit(line, parsed, median)) continue;
-      if (_tryParseUnknown(line, parsed, median)) continue;
+      if (_tryParseTotal(line, parsed, leftBound)) continue;
+      if (_tryParseAmount(line, parsed, leftBound)) continue;
+      if (_tryParseUnit(line, parsed, rightBound)) continue;
+      if (_tryParseUnknown(line, parsed, leftBound)) continue;
     }
 
     return parsed;
@@ -274,12 +267,12 @@ final class ReceiptParser {
   static bool _tryParseTotal(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double median,
+    double leftBound,
   ) {
     final totalLabel = _findTotalLabel(parsed);
     if (totalLabel == null) return false;
     final total = _findTotal(parsed);
-    if (_tryParseAmount(line, parsed, median)) {
+    if (_tryParseAmount(line, parsed, leftBound)) {
       final amounts = parsed.whereType<RecognizedAmount>().toList();
       final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
       if (closestAmount == null) {
@@ -318,9 +311,9 @@ final class ReceiptParser {
   static bool _tryParseAmount(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double median,
+    double leftBound,
   ) {
-    if (_rightL(line) <= (3 / 4) * median) return false;
+    if (_rightL(line) <= leftBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
     final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
@@ -333,16 +326,15 @@ final class ReceiptParser {
   static bool _tryParseUnit(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double median,
+    double rightBound,
   ) {
-    if (_rightL(line) > (3 / 4) * median) return false;
-    if (_leftL(line) <= (1 / 4) * median) return false;
+    if (_leftL(line) > rightBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
     final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
     if (value == null) return false;
     parsed.add(RecognizedUnitPrice(line: line, value: value));
-    _tryParseUnknown(line, parsed, median);
+    _tryParseUnknown(line, parsed, rightBound);
     return true;
   }
 
@@ -350,21 +342,11 @@ final class ReceiptParser {
   static bool _tryParseUnknown(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double median,
+    double leftBound,
   ) {
-    if (_leftL(line) > (1 / 4) * median) return false;
-    final unknown = _unknown.stringMatch(
-      ReceiptNormalizer.shouldNormalizeTail(line.text)
-          ? ReceiptNormalizer.normalizeTail(line.text)
-          : line.text,
-    );
-    if (unknown == null) return false;
-    final leadingDigits = ReceiptFormatter.leadingDigits(unknown);
-    final lettersOnly = ReceiptFormatter.lettersOnly(unknown);
-    if ((leadingDigits.isEmpty && lettersOnly.length >= 4) ||
-        lettersOnly.length >= 6) {
-      parsed.add(RecognizedUnknown(line: line, value: unknown));
-    }
+    if (_leftL(line) > leftBound) return false;
+    final unknown = line.text;
+    parsed.add(RecognizedUnknown(line: line, value: unknown));
     return true;
   }
 

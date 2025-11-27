@@ -91,17 +91,6 @@ final class ReceiptFormatter {
     );
   }
 
-  /// Returns [s] with all non-letter characters removed (A–Z, a–z).
-  static String lettersOnly(String s) {
-    return s.replaceAll(RegExp(r'[^A-Za-z]+'), '').trim();
-  }
-
-  /// Returns the leading integer part of [s], ignoring leading spaces.
-  static String leadingDigits(String s) {
-    final match = RegExp(r'^\s*(\d+)').firstMatch(s);
-    return match?.group(1) ?? '';
-  }
-
   /// Normalizes a raw amount string to a plain ASCII decimal:
   /// converts dash variants and negatives, unifies decimal marks to `.`,
   /// removes thousand separators and non-numeric chars, returns e.g. `-1234.56`.
