@@ -121,9 +121,9 @@ final class ReceiptParser {
     r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
   );
 
-  /// Matches quantity expressions like "2x Item", "3 × Item", "2 kg × Another", allowing 1–3 non-space unit chars.
+  /// Matches quantity expressions like "2x Item", "3 × Item", "2 kg × Another", and "2 Stk x".
   static final RegExp _quantity = RegExp(
-    r'\s*(\d+)\s*[xX×]\s*(\S{1,3})?\s+(.*)',
+    r'\s*(\d+)\s*(\S{1,3})?\s*[xX×]\s*(.*)',
   );
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
@@ -174,9 +174,9 @@ final class ReceiptParser {
       if (_shouldStopIfStopWord(line)) break;
       if (_shouldIgnoreLine(line)) continue;
       if (_tryParseStore(line, parsed)) continue;
-      if (_tryParseTotalLabel(line, parsed)) continue;
-      if (_tryParseTotal(line, parsed, leftBound)) continue;
-      if (_tryParseAmount(line, parsed, leftBound)) continue;
+      if (_tryParseTotalLabel(line, parsed, leftBound)) continue;
+      if (_tryParseTotal(line, parsed, rightBound)) continue;
+      if (_tryParseAmount(line, parsed, rightBound)) continue;
       if (_tryParseUnitQuantity(line, parsed, rightBound)) continue;
       if (_tryParseUnitPrice(line, parsed, rightBound)) continue;
       if (_tryParseUnknown(line, parsed, leftBound)) continue;
@@ -220,7 +220,10 @@ final class ReceiptParser {
   static bool _tryParseTotalLabel(
     TextLine line,
     List<RecognizedEntity> parsed,
+    double leftBound,
   ) {
+    if (_leftL(line) > leftBound) return false;
+
     if (_options.totalLabels.mapping.isEmpty) return false;
 
     final totalLabel = _findTotalLabel(parsed);
@@ -261,17 +264,31 @@ final class ReceiptParser {
     return bestLabel;
   }
 
+  /// Detects store name via custom map; early-bails if we already saw a store or an amount.
+  static bool _tryParseStore(TextLine line, List<RecognizedEntity> parsed) {
+    final store = _findStore(parsed);
+    if (store != null) return false;
+    final amount = _findAmount(parsed);
+    if (amount != null) return false;
+    final customDetection = _options.storeNames;
+    final text = ReceiptFormatter.trim(line.text);
+    final customStore = customDetection.detect(text);
+    if (customStore == null) return false;
+    parsed.add(RecognizedStore(line: line, value: customStore));
+    return true;
+  }
+
   /// Finds the amount nearest to total label and marks it as [RecognizedTotal].
   /// Adds it to [parsed] and returns `true` if successful.
   static bool _tryParseTotal(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double leftBound,
+    double rightBound,
   ) {
     final totalLabel = _findTotalLabel(parsed);
     if (totalLabel == null) return false;
     final total = _findTotal(parsed);
-    if (_tryParseAmount(line, parsed, leftBound)) {
+    if (_tryParseAmount(line, parsed, rightBound)) {
       final amounts = parsed.whereType<RecognizedAmount>().toList();
       final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
       if (closestAmount == null) {
@@ -292,30 +309,16 @@ final class ReceiptParser {
     return false;
   }
 
-  /// Detects store name via custom map; early-bails if we already saw a store or an amount.
-  static bool _tryParseStore(TextLine line, List<RecognizedEntity> parsed) {
-    final store = _findStore(parsed);
-    if (store != null) return false;
-    final amount = _findAmount(parsed);
-    if (amount != null) return false;
-    final customDetection = _options.storeNames;
-    final text = ReceiptFormatter.trim(line.text);
-    final customStore = customDetection.detect(text);
-    if (customStore == null) return false;
-    parsed.add(RecognizedStore(line: line, value: customStore));
-    return true;
-  }
-
   /// Recognizes right-side numeric lines as amounts and parses values.
   static bool _tryParseAmount(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double leftBound,
+    double rightBound,
   ) {
-    if (_rightL(line) <= leftBound) return false;
+    if (_leftL(line) <= rightBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value = double.tryParse(amount);
+    final value = double.tryParse(_convertToAmount(amount));
     if (value == null || value == 0) return false;
     parsed.add(RecognizedAmount(line: line, value: value.toDouble()));
     return true;
@@ -327,10 +330,10 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double rightBound,
   ) {
-    if (_leftL(line) > rightBound) return false;
+    if (_rightL(line) > rightBound) return false;
     final quantity = _quantity.stringMatch(line.text);
     if (quantity == null) return false;
-    final value = int.tryParse(quantity);
+    final value = int.tryParse(_convertToInteger(quantity));
     if (value == null || value == 0) return false;
     parsed.add(RecognizedUnitQuantity(line: line, value: value));
     _tryParseUnitPrice(line, parsed, rightBound);
@@ -343,10 +346,10 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double rightBound,
   ) {
-    if (_leftL(line) > rightBound) return false;
+    if (_rightL(line) > rightBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value = double.tryParse(amount);
+    final value = double.tryParse(_convertToAmount(amount));
     if (value == null || value == 0) return false;
     parsed.add(RecognizedUnitPrice(line: line, value: value));
     _tryParseUnknown(line, parsed, rightBound);
@@ -375,6 +378,20 @@ final class ReceiptParser {
     );
     parsed.add(RecognizedBounds(line: line, value: line.boundingBox));
     return true;
+  }
+
+  /// Returns a string containing only the digits from the input.
+  static String _convertToInteger(String input) {
+    final norm = input.replaceAll(RegExp(r'[^0-9]'), '');
+    return norm;
+  }
+
+  /// Normalizes dash and decimal characters and strips all non-numeric symbols from an amount string.
+  static String _convertToAmount(String input) {
+    final norm1 = input.replaceAll(RegExp('[-−–—]'), '-');
+    final norm2 = norm1.replaceAll(RegExp('[.,‚،٫·]'), '.');
+    final norm3 = norm2.replaceAll(RegExp('[^-0-9.]'), '');
+    return norm3;
   }
 
   /// Computes the tight axis-aligned bounding [Rect] that encloses all [lines].
@@ -793,7 +810,8 @@ final class ReceiptParser {
         continue;
       } else if (entity is RecognizedBounds ||
           entity is RecognizedPurchaseDate ||
-          entity is RecognizedUnitPrice) {
+          entity is RecognizedUnitPrice ||
+          entity is RecognizedUnitQuantity) {
         filtered.add(entity);
         continue;
       } else if (entity is RecognizedTotalLabel) {
