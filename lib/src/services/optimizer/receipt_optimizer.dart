@@ -77,7 +77,7 @@ final class ReceiptOptimizer implements Optimizer {
   String? _lastFingerprint;
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
-  static ReceiptOptions get _opts => ReceiptRuntime.options;
+  static ReceiptOptions get _options => ReceiptRuntime.options;
 
   /// Marks the optimizer for reinitialization on next optimization.
   @override
@@ -173,7 +173,7 @@ final class ReceiptOptimizer implements Optimizer {
     final totalHash = receipt.total?.formattedValue ?? '';
     final fingerprint = '$positionsHash|$totalHash';
 
-    final loopThreshold = _opts.tuning.optimizerLoopThreshold;
+    final loopThreshold = _options.tuning.optimizerLoopThreshold;
 
     if (_lastFingerprint == fingerprint) {
       _unchangedCount++;
@@ -228,7 +228,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Trims a cache list to the configured precision size.
   void _trimCache(List list) {
-    final maxCacheSize = _opts.tuning.optimizerMaxCacheSize;
+    final maxCacheSize = _options.tuning.optimizerMaxCacheSize;
     while (list.length > maxCacheSize) {
       list.removeAt(0);
     }
@@ -424,7 +424,7 @@ final class ReceiptOptimizer implements Optimizer {
         if (overshoot != null) {
           final reduc = entry.key / 100.0;
           if (plannedReduction + reduc >
-              overshoot + _opts.tuning.optimizerTotalTolerance) {
+              overshoot + _options.tuning.optimizerTotalTolerance) {
             break;
           }
           plannedReduction += reduc;
@@ -675,7 +675,7 @@ final class ReceiptOptimizer implements Optimizer {
 
     final closeY = _isYCloseToGroup(position, group);
     final samePrice = _hasSamePriceInGroup(position, group);
-    final thrNew = _opts.tuning.optimizerConfidenceThreshold;
+    final thrNew = _options.tuning.optimizerConfidenceThreshold;
     final thrBase = (thrNew - 5).clamp(0, 100);
     final thr = (samePrice && closeY) ? (thrBase - 5).clamp(0, 100) : thrBase;
 
@@ -776,7 +776,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
-    final maxCacheSize = _opts.tuning.optimizerMaxCacheSize;
+    final maxCacheSize = _options.tuning.optimizerMaxCacheSize;
     final newGroup = RecognizedGroup(maxGroupSize: maxCacheSize);
     position.group = newGroup;
     position.operation = Operation.added;
@@ -813,7 +813,7 @@ final class ReceiptOptimizer implements Optimizer {
       'total?': receipt.total?.value,
     });
 
-    final halfStability = _opts.tuning.optimizerStabilityThreshold ~/ 2;
+    final halfStability = _options.tuning.optimizerStabilityThreshold ~/ 2;
     final halfCacheSize = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 2;
 
     bool stable(stab, size) => stab >= halfStability && size >= halfCacheSize;
@@ -935,7 +935,7 @@ final class ReceiptOptimizer implements Optimizer {
     final total = receipt.total?.value;
     if (total == null) return;
 
-    final tol = _opts.tuning.optimizerTotalTolerance;
+    final tol = _options.tuning.optimizerTotalTolerance;
     final beforeLen = receipt.positions.length;
 
     receipt.positions.removeWhere(
@@ -1047,7 +1047,7 @@ final class ReceiptOptimizer implements Optimizer {
 
       if (receipt.isValid) return;
 
-      final pseudoName = _opts.tuning.optimizerUnrecognizedProductName;
+      final pseudoName = _options.tuning.optimizerUnrecognizedProductName;
       final position = RecognizedPosition.pseudo(receipt, pseudoName);
       _createNewGroup(position);
       receipt.positions.add(position);
@@ -1144,7 +1144,7 @@ final class ReceiptOptimizer implements Optimizer {
     observed.sort((a, b) => a.y.compareTo(b.y));
 
     final now = DateTime.now();
-    final alpha = _opts.tuning.optimizerEwmaAlpha;
+    final alpha = _options.tuning.optimizerEwmaAlpha;
     for (final o in observed) {
       final s = _orderStats.putIfAbsent(
         o.group,
@@ -1164,7 +1164,7 @@ final class ReceiptOptimizer implements Optimizer {
       }
     }
 
-    final decayThreshold = _opts.tuning.optimizerAboveCountDecayThreshold;
+    final decayThreshold = _options.tuning.optimizerAboveCountDecayThreshold;
     for (final s in _orderStats.values) {
       final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
       if (total > decayThreshold) {
@@ -1189,7 +1189,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
-    final tiePx = _opts.tuning.optimizerTotalTolerance;
+    final tiePx = _options.tuning.optimizerTotalTolerance;
 
     final sa = _orderStats[a];
     final sb = _orderStats[b];
@@ -1221,8 +1221,8 @@ final class ReceiptOptimizer implements Optimizer {
 
     final staleForAWhile = now.difference(g.timestamp) >= grace;
     final veryWeak =
-        g.stability < (_opts.tuning.optimizerStabilityThreshold ~/ 2) &&
-        g.confidence < (_opts.tuning.optimizerConfidenceThreshold ~/ 2);
+        g.stability < (_options.tuning.optimizerStabilityThreshold ~/ 2) &&
+        g.confidence < (_options.tuning.optimizerConfidenceThreshold ~/ 2);
     final tiny = g.members.length <= 2;
     return staleForAWhile && veryWeak && tiny;
   }

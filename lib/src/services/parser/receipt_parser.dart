@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:collection/collection.dart';
+import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
@@ -120,8 +121,13 @@ final class ReceiptParser {
     r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
   );
 
+  /// Matches quantity expressions like "2x Item", "3 × Item", "2 kg × Another", allowing 1–3 non-space unit chars.
+  static final RegExp _quantity = RegExp(
+    r'\s*(\d+)\s*[xX×]\s*(\S{1,3})?\s+(.*)',
+  );
+
   /// Shorthand for the active options provided by [ReceiptRuntime].
-  static ReceiptOptions get _opts => ReceiptRuntime.options;
+  static ReceiptOptions get _options => ReceiptRuntime.options;
 
   /// Parses [text] with [options] and returns a structured [RecognizedReceipt].
   /// Performs line ordering, entity extraction, geometric filtering, and building.
@@ -134,11 +140,9 @@ final class ReceiptParser {
 
       final lines = _convertText(text)..sort(_cmpCyThenCx);
       final parsed = _parseLines(lines);
-      final prunedUnknowns = _filterUnknownOutliers(parsed);
-      final prunedAmounts = _filterAmountOutliers(prunedUnknowns);
-      final prunedEntities = _filterEntities(prunedAmounts);
+      final entities = _filterEntities(parsed);
 
-      return _buildReceipt(prunedEntities);
+      return _buildReceipt(entities);
     });
   }
 
@@ -161,7 +165,7 @@ final class ReceiptParser {
     final bounds = _findBounds(parsed);
     if (bounds == null) return parsed;
 
-    final quarter = (1 / 4) * _rightL(bounds.line);
+    final quarter = (1 / 4) * (_rightL(bounds.line) - _leftL(bounds.line));
     final leftBound = _leftL(bounds.line) + quarter;
     final rightBound = _rightL(bounds.line) - quarter;
 
@@ -173,7 +177,8 @@ final class ReceiptParser {
       if (_tryParseTotalLabel(line, parsed)) continue;
       if (_tryParseTotal(line, parsed, leftBound)) continue;
       if (_tryParseAmount(line, parsed, leftBound)) continue;
-      if (_tryParseUnit(line, parsed, rightBound)) continue;
+      if (_tryParseUnitQuantity(line, parsed, rightBound)) continue;
+      if (_tryParseUnitPrice(line, parsed, rightBound)) continue;
       if (_tryParseUnknown(line, parsed, leftBound)) continue;
     }
 
@@ -182,7 +187,7 @@ final class ReceiptParser {
 
   /// Returns true if the line matches ignore keywords.
   static bool _shouldIgnoreLine(TextLine line) =>
-      _opts.ignoreKeywords.hasMatch(line.text);
+      _options.ignoreKeywords.hasMatch(line.text);
 
   /// Stops parsing once the running sum of detected amounts equals the confirmed total.
   ///
@@ -209,19 +214,19 @@ final class ReceiptParser {
   /// Returns `true` if the line matches a configured stop keyword.
   /// Used to terminate parsing once a footer or end-of-receipt marker is seen.
   static bool _shouldStopIfStopWord(TextLine line) =>
-      _opts.stopKeywords.hasMatch(line.text);
+      _options.stopKeywords.hasMatch(line.text);
 
   /// Detects a total label on [line] via fuzzy match and appends it to [parsed]; returns true if added.
   static bool _tryParseTotalLabel(
     TextLine line,
     List<RecognizedEntity> parsed,
   ) {
-    if (_opts.totalLabels.mapping.isEmpty) return false;
+    if (_options.totalLabels.mapping.isEmpty) return false;
 
     final totalLabel = _findTotalLabel(parsed);
     final total = _findTotalLabel(parsed);
     final label = _findTotalLabelLike(line.text);
-    final canonical = _opts.totalLabels.mapping[label] ?? label;
+    final canonical = _options.totalLabels.mapping[label] ?? label;
     if (canonical != null) {
       if (totalLabel != null && total != null) {
         parsed.removeWhere(
@@ -240,17 +245,19 @@ final class ReceiptParser {
 
   /// Best-match total label key for [text] using normalized similarity + adaptive threshold, or null if none.
   static String? _findTotalLabelLike(String text) {
-    int thr(String label) => _adaptiveThreshold(label);
     String? bestLabel;
     int bestScore = 0;
-    for (final label in _opts.totalLabels.mapping.keys) {
-      final s = ReceiptNormalizer.similarity(text.toLowerCase(), label);
+    for (final label in _options.totalLabels.mapping.keys) {
+      final s = ratio(text.toLowerCase(), label);
+
       if (s > bestScore && text.length >= label.length) {
         bestScore = s;
         bestLabel = label;
       }
     }
-    if (bestLabel == null || bestScore < thr(bestLabel)) return null;
+    if (bestLabel == null) return null;
+    final threshold = bestLabel.length > 5 ? 90 : 95;
+    if (bestScore < threshold) return null;
     return bestLabel;
   }
 
@@ -291,7 +298,7 @@ final class ReceiptParser {
     if (store != null) return false;
     final amount = _findAmount(parsed);
     if (amount != null) return false;
-    final customDetection = _opts.storeNames;
+    final customDetection = _options.storeNames;
     final text = ReceiptFormatter.trim(line.text);
     final customStore = customDetection.detect(text);
     if (customStore == null) return false;
@@ -308,14 +315,30 @@ final class ReceiptParser {
     if (_rightL(line) <= leftBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
-    if (value == null) return false;
+    final value = double.tryParse(amount);
+    if (value == null || value == 0) return false;
     parsed.add(RecognizedAmount(line: line, value: value.toDouble()));
     return true;
   }
 
+  /// Recognizes left-side and centered numeric lines as unit quantity and parses values.
+  static bool _tryParseUnitQuantity(
+    TextLine line,
+    List<RecognizedEntity> parsed,
+    double rightBound,
+  ) {
+    if (_leftL(line) > rightBound) return false;
+    final quantity = _quantity.stringMatch(line.text);
+    if (quantity == null) return false;
+    final value = int.tryParse(quantity);
+    if (value == null || value == 0) return false;
+    parsed.add(RecognizedUnitQuantity(line: line, value: value));
+    _tryParseUnitPrice(line, parsed, rightBound);
+    return true;
+  }
+
   /// Recognizes left-side and centered numeric lines as unit price and parses values.
-  static bool _tryParseUnit(
+  static bool _tryParseUnitPrice(
     TextLine line,
     List<RecognizedEntity> parsed,
     double rightBound,
@@ -323,8 +346,8 @@ final class ReceiptParser {
     if (_leftL(line) > rightBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value = double.tryParse(ReceiptFormatter.normalizeAmount(amount));
-    if (value == null) return false;
+    final value = double.tryParse(amount);
+    if (value == null || value == 0) return false;
     parsed.add(RecognizedUnitPrice(line: line, value: value));
     _tryParseUnknown(line, parsed, rightBound);
     return true;
@@ -347,7 +370,9 @@ final class ReceiptParser {
     List<TextLine> lines,
     List<RecognizedEntity> parsed,
   ) {
-    final line = ReceiptTextLine.fromRect(_extractRectFromLines(lines));
+    final line = ReceiptTextLine().copyWith(
+      boundingBox: _extractRectFromLines(lines),
+    );
     parsed.add(RecognizedBounds(line: line, value: line.boundingBox));
     return true;
   }
@@ -493,80 +518,100 @@ final class ReceiptParser {
     List<RecognizedEntity> entities,
     List<RecognizedUnknown> yUnknowns,
     List<RecognizedUnitPrice> yUnitPrices,
+    List<RecognizedUnitQuantity> yUnitQuantities,
     RecognizedReceipt receipt,
   ) {
-    final unprocessedAmounts = <RecognizedAmount>[];
     final amounts = entities.whereType<RecognizedAmount>().toList();
     for (final amount in amounts) {
-      if (identical(receipt.total?.line, amount.line)) break;
-      if (!_createPositionForAmount(amount, yUnknowns, yUnitPrices, receipt)) {
-        unprocessedAmounts.add(amount);
+      _createPositionForAmount(amount, yUnknowns, receipt);
+    }
+    _assignUnitToPositions(yUnitPrices, yUnitQuantities, receipt);
+  }
+
+  /// Pairs unit price and quantity for a position.
+  static RecognizedUnit? _processUnit(
+    RecognizedProduct product,
+    List<RecognizedProduct> products,
+    List<RecognizedUnitPrice> yUnitPrices,
+    List<RecognizedUnitQuantity> yUnitQuantities,
+  ) {
+    if (product.position == null) return null;
+
+    final yUnitPrice = _findClosestEntity(
+      product,
+      yUnitPrices,
+      lineBelow: true,
+      crossCheckEntities: products,
+    );
+
+    final yUnitQuantity = _findClosestEntity(
+      product,
+      yUnitQuantities,
+      lineBelow: true,
+      crossCheckEntities: products,
+    );
+
+    final tolerance = _options.tuning.optimizerTotalTolerance;
+    final defaultLine = product.line;
+    final defaultPrice = product.position!.price.value;
+    final defaultQuantity = 1;
+
+    final unitPrice = yUnitPrice?.value ?? defaultPrice;
+    final unitQuantity = yUnitQuantity?.value ?? defaultQuantity;
+
+    if (yUnitPrice != null) yUnitPrices.remove(yUnitPrice);
+    if (yUnitQuantity != null) yUnitQuantities.remove(yUnitQuantity);
+
+    if (unitPrice != defaultPrice && unitQuantity != defaultQuantity) {
+      final test = (unitPrice * unitQuantity - defaultPrice).abs() < tolerance;
+      if (test) {
+        return RecognizedUnit.fromNumbers(unitQuantity, unitPrice, defaultLine);
+      }
+    } else if (unitPrice != defaultPrice) {
+      final quantity = (defaultPrice / unitPrice).abs().round();
+      final test = defaultPrice % quantity == 0;
+      if (test) {
+        return RecognizedUnit.fromNumbers(
+          quantity,
+          defaultPrice / quantity,
+          defaultLine,
+        );
+      }
+    } else if (unitQuantity != defaultQuantity) {
+      final test = defaultPrice % unitQuantity == 0;
+      if (test) {
+        return RecognizedUnit.fromNumbers(
+          unitQuantity,
+          defaultPrice / unitQuantity,
+          defaultLine,
+        );
       }
     }
-    _assignUnitToPositions(yUnitPrices, receipt);
+
+    return RecognizedUnit.fromNumbers(
+      defaultQuantity,
+      defaultPrice,
+      defaultLine,
+    );
   }
 
   /// Assigns each unit to the closest position.
   static void _assignUnitToPositions(
     List<RecognizedUnitPrice> yUnitPrices,
+    List<RecognizedUnitQuantity> yUnitQuantities,
     RecognizedReceipt receipt,
   ) {
     final positions = receipt.positions;
     final products = positions.map((p) => p.product).toList();
     for (final position in positions) {
-      final yUnitPrice = _findClosestEntity(
+      final unit = _processUnit(
         position.product,
+        products,
         yUnitPrices,
-        lineBelow: true,
-        crossCheckEntities: products,
+        yUnitQuantities,
       );
-
-      if (yUnitPrice != null) {
-        final unitPrice = yUnitPrice as RecognizedUnitPrice;
-        final isDeposit = position.price.value < 0 && unitPrice.value > 0;
-        final unitSign = isDeposit ? -1 : 1;
-        final centsUnitPrice = (unitPrice.value * 100).round();
-        final centsPrice = (position.price.value * 100).round();
-
-        if (centsPrice % centsUnitPrice == 0) {
-          position.unit = RecognizedUnit.fromNumbers(
-            (centsPrice ~/ centsUnitPrice) * unitSign,
-            (unitPrice.value * unitSign),
-            yUnitPrice.line,
-          );
-          yUnitPrices.removeWhere((e) => identical(e, yUnitPrice));
-        } else {
-          position.unit = RecognizedUnit.fromNumbers(
-            1,
-            position.price.value,
-            yUnitPrice.line,
-          );
-        }
-
-        if (isDeposit) {
-          final oldGroup = position.group;
-
-          final newPosition = position.copyWith(
-            product: position.product.copyWith(
-              value: position.product.line.text,
-            ),
-          );
-          newPosition.group = oldGroup;
-          newPosition.product.position = newPosition;
-          newPosition.price.position = newPosition;
-
-          final i = receipt.positions.indexOf(position);
-          if (i >= 0) receipt.positions[i] = newPosition;
-
-          final gi = oldGroup?.members.indexOf(position) ?? -1;
-          if (gi >= 0) oldGroup!.members[gi] = newPosition;
-        }
-      } else {
-        position.unit = RecognizedUnit.fromNumbers(
-          1,
-          position.price.value,
-          position.price.line,
-        );
+      if (unit != null) {
+        position.unit = unit;
       }
     }
   }
@@ -575,7 +620,6 @@ final class ReceiptParser {
   static bool _createPositionForAmount(
     RecognizedAmount amount,
     List<RecognizedUnknown> yUnknowns,
-    List<RecognizedUnitPrice> yUnitPrices,
     RecognizedReceipt receipt,
   ) {
     _sortByDistance(amount.line.boundingBox, yUnknowns);
@@ -594,9 +638,8 @@ final class ReceiptParser {
   /// Returns true if [unknown] is left of [amount] and vertically aligned.
   static bool _isMatchingUnknown(
     RecognizedAmount amount,
-    RecognizedUnknown unknown, {
-    strict = true,
-  }) {
+    RecognizedUnknown unknown,
+  ) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
     final isLikelyLabel = _isTotalLabelLike(unknownText);
     if (isLikelyLabel) return false;
@@ -605,7 +648,7 @@ final class ReceiptParser {
     final alignedVertically =
         _dy(amount.line, unknown.line).abs() <= _heightL(amount.line);
 
-    return isLeftOfAmount && (alignedVertically || !strict);
+    return isLeftOfAmount && alignedVertically;
   }
 
   /// Constructs a position from matched product text and amount.
@@ -617,7 +660,7 @@ final class ReceiptParser {
     final product = RecognizedProduct(
       value: unknown.value,
       line: unknown.line,
-      options: _opts,
+      options: _options,
     );
     final price = RecognizedPrice(line: amount.line, value: amount.value);
     final position = RecognizedPosition(
@@ -679,36 +722,6 @@ final class ReceiptParser {
     return entity != null ? entity as RecognizedAmount : null;
   }
 
-  /// Computes an adaptive fuzzy threshold based on label length and
-  /// the number of allowed edits. Short labels require near-exact matches,
-  /// while longer labels tolerate more deviations.
-  ///
-  /// Formula:
-  /// `threshold(L, k) = round(100 × (1 − k / L)) − margin`,
-  /// clamped between 75 and 98 to avoid extremes.
-  static int _adaptiveThreshold(String label) {
-    final L = label.length;
-    if (L <= 0) return 100;
-    if (L <= 3) return 98;
-
-    int k;
-    if (L <= 5) {
-      k = 1;
-    } else if (L <= 10) {
-      k = 2;
-    } else if (L <= 20) {
-      k = 3;
-    } else {
-      k = 4;
-    }
-
-    const int margin = 2;
-    final double base = 100.0 * (1.0 - (k / L));
-    int thr = (base - margin).round();
-    thr = thr.clamp(75, 98);
-    return thr;
-  }
-
   /// Returns absolute ΔY if within vertical tolerance, otherwise `double.infinity` (lower is better).
   static double _distanceScore(
     TextLine sourceLine,
@@ -726,159 +739,6 @@ final class ReceiptParser {
     final isSameLine = targetCy >= srcTop && targetCy <= srcBottom;
 
     return isSameLine ? _dy(sourceLine, targetLine).abs() : double.infinity;
-  }
-
-  /// Filters left-alignment outliers among unknown product lines.
-  static List<RecognizedEntity> _filterUnknownOutliers(
-    List<RecognizedEntity> entities,
-  ) {
-    return _filterOneSidedXOutliers(
-      entities,
-      isTarget: (e) => e is RecognizedUnknown,
-      xMetric: (e) => _left(e),
-      dropRightTail: true,
-    );
-  }
-
-  /// Filters X-center outliers among amount lines.
-  static List<RecognizedEntity> _filterAmountOutliers(
-    List<RecognizedEntity> entities,
-  ) {
-    return _filterOneSidedXOutliers(
-      entities,
-      isTarget: (e) => e is RecognizedAmount,
-      xMetric: (e) => _right(e),
-      dropRightTail: false,
-    );
-  }
-
-  /// One-sided MAD filter in X-space for target entities (single pass filter without sets).
-  static List<RecognizedEntity> _filterOneSidedXOutliers(
-    List<RecognizedEntity> entities, {
-    required bool Function(RecognizedEntity e) isTarget,
-    required double Function(RecognizedEntity e) xMetric,
-    required bool dropRightTail,
-    int minSamples = 3,
-    double k = 5.0,
-  }) {
-    final xs = <double>[];
-    final ids = <String>[];
-    final targets = <RecognizedEntity>[];
-
-    for (final e in entities) {
-      if (isTarget(e)) {
-        xs.add(xMetric(e));
-        ids.add(_dbgId(e));
-        targets.add(e);
-      }
-    }
-
-    if (xs.length < minSamples) return entities;
-
-    final scratch = <double>[];
-    final med = _medianInPlace(List<double>.from(xs, growable: true));
-
-    if (xs.isEmpty || med.isNaN || med.isInfinite) return entities;
-
-    final madRaw = _madWithScratch(xs, med, scratch);
-    final madScaled = (madRaw == 0.0) ? 0.0 : (1.4826 * madRaw);
-    final lowerBound = med - k * madScaled;
-    final upperBound = med + k * madScaled;
-    final out = <RecognizedEntity>[];
-    final removed = <Map<String, Object?>>[];
-    final kept = <Map<String, Object?>>[];
-
-    for (final e in entities) {
-      if (!isTarget(e)) {
-        out.add(e);
-        kept.add(_dbgEntity(e, xMetric));
-        continue;
-      }
-      final x = xMetric(e);
-      final tol = _heightL(e.line);
-      final isOutlier =
-          dropRightTail ? (x > upperBound + tol) : (x < lowerBound - tol);
-
-      if (!isOutlier) {
-        out.add(e);
-        kept.add(_dbgEntity(e, xMetric));
-      } else {
-        removed.add(_dbgEntity(e, xMetric));
-      }
-    }
-
-    return out;
-  }
-
-  /// Returns a short debug identifier with entity type and approximate position.
-  static String _dbgId(RecognizedEntity e) {
-    try {
-      return '${e.runtimeType}@'
-          '${_left(e).toStringAsFixed(1)},'
-          '${_cy(e).toStringAsFixed(1)}';
-    } catch (_) {
-      return '${e.runtimeType}';
-    }
-  }
-
-  /// Returns a compact debug map describing an entity’s geometry and text/value.
-  static Map<String, Object?> _dbgEntity(
-    RecognizedEntity e,
-    double Function(RecognizedEntity) xMetric,
-  ) {
-    double? left, right, cx, cy;
-    try {
-      left = _left(e);
-      right = _right(e);
-      cx = _cx(e);
-      cy = _cy(e);
-    } catch (_) {}
-
-    return {
-      'id': _dbgId(e),
-      'type': '${e.runtimeType}',
-      'xMetric': xMetric(e),
-      'left': left,
-      'right': right,
-      'cx': cx,
-      'cy': cy,
-      'text':
-          (e is RecognizedUnknown)
-              ? ReceiptFormatter.trim(e.value)
-              : (e is RecognizedAmount)
-              ? e.value
-              : (e is RecognizedTotalLabel)
-              ? e.value
-              : (e is RecognizedStore)
-              ? e.value
-              : null,
-    };
-  }
-
-  /// Returns the median of a list by sorting in place.
-  static double _medianInPlace(List<double> a) {
-    if (a.isEmpty) return double.nan;
-    a.sort();
-    final n = a.length;
-    final mid = n >> 1;
-    return (n & 1) == 1 ? a[mid] : (a[mid - 1] + a[mid]) / 2.0;
-  }
-
-  /// Returns the median absolute deviation (MAD) of [xs] using a reusable buffer.
-  static double _madWithScratch(
-    List<double> xs,
-    double med,
-    List<double> scratch,
-  ) {
-    if (scratch.length != xs.length) {
-      scratch
-        ..clear()
-        ..addAll(List<double>.filled(xs.length, 0.0));
-    }
-    for (int i = 0; i < xs.length; i++) {
-      scratch[i] = (xs[i] - med).abs();
-    }
-    return _medianInPlace(scratch);
   }
 
   /// Sorts entities by vertical distance to an amount, then by X.
@@ -980,6 +840,8 @@ final class ReceiptParser {
   static RecognizedReceipt _buildReceipt(List<RecognizedEntity> entities) {
     final yUnknowns = entities.whereType<RecognizedUnknown>().toList();
     final yUnitPrices = entities.whereType<RecognizedUnitPrice>().toList();
+    final yUnitQuantities =
+        entities.whereType<RecognizedUnitQuantity>().toList();
     final receipt = RecognizedReceipt.empty();
     final store = _findStore(entities);
     final totalLabel = _findTotalLabel(entities);
@@ -992,7 +854,7 @@ final class ReceiptParser {
     _processTotal(total, receipt);
     _processPurchaseDate(purchaseDate, receipt);
     _processBounds(bounds, receipt);
-    _processAmounts(entities, yUnknowns, yUnitPrices, receipt);
+    _processAmounts(entities, yUnknowns, yUnitPrices, yUnitQuantities, receipt);
 
     return receipt.copyWith(entities: entities);
   }

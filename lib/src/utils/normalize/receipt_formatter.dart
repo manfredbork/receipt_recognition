@@ -5,24 +5,6 @@ final class ReceiptFormatter {
   /// Collapses whitespace around comma/dot separators: "12 , 34" -> "12,34".
   static final RegExp _reCommaDotSpaces = RegExp(r'(\d)\s*([,.])\s*(\d)');
 
-  /// Matches any Unicode dash/minus-like character to normalize as ASCII '-'.
-  static final RegExp _reAnyDash = RegExp(r'[‐-‒–—−-]');
-
-  /// Matches decimal marks observed on receipts (commas, Arabic marks, middle-dot variants).
-  static final RegExp _reDecimalMarks = RegExp(r'[.,‚،٫·]');
-
-  /// Collapses any whitespace to a single space.
-  static final RegExp _reWs = RegExp(r'\s+');
-
-  /// Matches characters that are not digits, '.' or '-'.
-  static final RegExp _reNotNum = RegExp(r'[^0-9.\-]');
-
-  /// Detects trailing minus patterns like "12,34-".
-  static final RegExp _reTrailingMinus = RegExp(r'^\s*(.+?)\s*-\s*$');
-
-  /// Detects parentheses negatives like "(12,34)".
-  static final RegExp _reParenNegative = RegExp(r'^\s*\(\s*(.+?)\s*\)\s*$');
-
   /// Detects amount prefix to convert into postfix text.
   static final RegExp _amountPostfixText = RegExp(
     r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
@@ -89,51 +71,6 @@ final class ReceiptFormatter {
       _reCommaDotSpaces,
       (m) => '${m[1]}${m[2]}${m[3]}',
     );
-  }
-
-  /// Normalizes a raw amount string to a plain ASCII decimal:
-  /// converts dash variants and negatives, unifies decimal marks to `.`,
-  /// removes thousand separators and non-numeric chars, returns e.g. `-1234.56`.
-  static String normalizeAmount(String amount) {
-    if (amount.isEmpty) return amount;
-
-    String s = amount.replaceAll('\u00A0', ' ').replaceAll(_reWs, ' ').trim();
-
-    final paren = _reParenNegative.firstMatch(s);
-    bool negative = false;
-    if (paren != null) {
-      s = paren.group(1)!;
-      negative = true;
-    }
-
-    s = s.replaceAll(_reAnyDash, '-');
-
-    final trail = _reTrailingMinus.firstMatch(s);
-    if (trail != null) {
-      s = '-${trail.group(1)!}';
-    }
-
-    s = s.replaceAll(_reDecimalMarks, '.');
-
-    s = s.replaceAll(' ', '');
-
-    s = s.replaceAll(_reNotNum, '');
-
-    final lastDot = s.lastIndexOf('.');
-    if (lastDot >= 0) {
-      final before = s.substring(0, lastDot).replaceAll('.', '');
-      final after = s.substring(lastDot + 1);
-      s = '$before.$after';
-    }
-
-    if (s.contains('-')) {
-      s = s.replaceAll('-', '');
-      s = '-$s';
-    }
-
-    if (negative && !s.startsWith('-')) s = '-$s';
-
-    return s;
   }
 
   /// Removes a leading amount pattern from [text], returning the remainder.
