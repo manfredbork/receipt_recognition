@@ -10,8 +10,6 @@ import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// Parses OCR output into a structured receipt by extracting entities, ordering by
 /// vertical position, filtering outliers, and assembling positions, total, store, and bounds.
-///
-/// Use [ReceiptTextProcessor.processText] to run this off the UI thread.
 final class ReceiptParser {
   /// Center-Y of a TextLine.
   static double _cyL(TextLine l) => l.boundingBox.center.dy;
@@ -120,12 +118,6 @@ final class ReceiptParser {
   /// Pattern to match monetary values (e.g., 1,99 or -5.00).
   static final RegExp _amount = RegExp(
     r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
-  );
-
-  /// Pattern to filter out suspicious or metadata-like product names.
-  static final RegExp _suspiciousProductName = RegExp(
-    r'\bx\s?\d+|^\s*[\[(]?\s*\d{1,3}[.,]\d{3}\b',
-    caseSensitive: false,
   );
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
@@ -512,24 +504,6 @@ final class ReceiptParser {
       }
     }
     _assignUnitToPositions(yUnitPrices, receipt);
-  }
-
-  /// Removes obviously suspicious product-name positions.
-  static void _processSuspicious(RecognizedReceipt receipt) {
-    final toRemove = <RecognizedPosition>[];
-    for (final pos in receipt.positions) {
-      final productText = ReceiptFormatter.trim(pos.product.value);
-      if (_suspiciousProductName.hasMatch(productText)) {
-        toRemove.add(pos);
-      }
-    }
-    for (final pos in toRemove) {
-      receipt.positions.remove(pos);
-      pos.group?.members.remove(pos);
-      if ((pos.group?.members.isEmpty ?? false)) {
-        receipt.positions.removeWhere((p) => p.group == pos.group);
-      }
-    }
   }
 
   /// Assigns each unit to the closest position.
@@ -1019,7 +993,6 @@ final class ReceiptParser {
     _processPurchaseDate(purchaseDate, receipt);
     _processBounds(bounds, receipt);
     _processAmounts(entities, yUnknowns, yUnitPrices, receipt);
-    _processSuspicious(receipt);
 
     return receipt.copyWith(entities: entities);
   }
