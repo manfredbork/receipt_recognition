@@ -43,6 +43,9 @@ final class ReceiptRecognizer {
   /// Callback invoked when a scan session reaches timeout.
   final Function(RecognizedReceipt)? _onScanTimeout;
 
+  /// Timer to enforce scan timeout even if no further frames arrive.
+  Timer? _scanTimeoutTimer;
+
   /// Whether a full reinit is needed.
   bool _shouldInitialize = false;
 
@@ -119,7 +122,11 @@ final class ReceiptRecognizer {
   }
 
   /// Marks the recognizer for reinitialization on next recognition.
-  void init() => _shouldInitialize = true;
+  void init() {
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = null;
+    _shouldInitialize = true;
+  }
 
   /// Releases all resources used by the recognizer.
   Future<void> close() async {
@@ -131,10 +138,22 @@ final class ReceiptRecognizer {
   void _initializeIfNeeded() {
     if (!_shouldInitialize) return;
     _initializedScan = null;
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = null;
     _lastScan = null;
     _lastReceipt = RecognizedReceipt.empty();
     _optimizer.init();
     _shouldInitialize = false;
+  }
+
+  /// Starts a one-time timeout timer that fires even if no further scan frames arrive.
+  void _scheduleTimeoutIfNeeded(DateTime now) {
+    _initializedScan ??= now;
+    _scanTimeoutTimer ??= Timer(_scanTimeout, () {
+      final receipt = _lastReceipt;
+      init();
+      _onScanTimeout?.call(receipt);
+    });
   }
 
   /// Runs OCR + parse for [inputImage] using [options].
@@ -229,12 +248,8 @@ final class ReceiptRecognizer {
     ReceiptValidationResult validation,
   ) {
     _handleOnScanUpdate(receipt, validation);
-    _initializedScan ??= now;
-    if (_initializedScan != null &&
-        now.difference(_initializedScan!) >= _scanTimeout) {
-      init();
-      _onScanTimeout?.call(receipt);
-    }
+    _lastReceipt = receipt;
+    _scheduleTimeoutIfNeeded(now);
     return receipt;
   }
 
