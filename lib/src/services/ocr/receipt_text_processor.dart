@@ -10,6 +10,9 @@ import 'package:receipt_recognition/src/utils/configuration/index.dart';
 /// [ReceiptTextProcessor.processText] rather than calling the private isolate
 /// entry point directly.
 final class ReceiptTextProcessor {
+  /// When true, bypasses `compute` and runs parsing synchronously on the main isolate for testing.
+  static bool debugRunSynchronouslyForTests = false;
+
   /// Runs parsing off the UI thread and returns a structured receipt.
   ///
   /// Uses `compute` to execute parsing on a background isolate with the
@@ -18,6 +21,11 @@ final class ReceiptTextProcessor {
     RecognizedText text,
     ReceiptOptions options,
   ) {
+    if (debugRunSynchronouslyForTests) {
+      final result = ReceiptParser.processText(text, options);
+      return Future.value(result);
+    }
+
     return compute<_ParseArgs, RecognizedReceipt>(
       _parseTextInBackground,
       _ParseArgs(text, options),

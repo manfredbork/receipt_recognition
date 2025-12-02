@@ -29,6 +29,10 @@ Future<InputImage> _inputImageFromAssetAsPng(String assetKey) async {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() {
+    ReceiptTextProcessor.debugRunSynchronouslyForTests = true;
+  });
+
   group('OCR from asset images (no camera)', () {
     testWidgets('REWE receipt parses total + positions', (tester) async {
       final img = await _inputImageFromAssetAsPng(
@@ -93,6 +97,10 @@ void main() {
       } finally {
         await rr.close();
       }
+    });
+
+    tearDown(() {
+      ReceiptTextProcessor.debugRunSynchronouslyForTests = false;
     });
   });
 }
