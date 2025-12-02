@@ -12,7 +12,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  unorm_dart: ^0.3.0
   fuzzywuzzy: ^1.2.0
   google_mlkit_text_recognition: ^0.15.0
   intl: ^0.20.2

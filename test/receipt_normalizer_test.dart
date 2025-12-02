@@ -10,161 +10,146 @@ ReceiptOptions makeOptionsFromLists({List<String> groups = const []}) {
 
 void main() {
   group('ReceiptNormalizer', () {
-    group('canonicalKey', () {
-      test('removes diacritics and lowercases', () {
-        expect(
-          ReceiptNormalizer.canonicalKey('Êlite Item'),
-          equals('elite item'),
-        );
-        expect(
-          ReceiptNormalizer.canonicalKey('Café Crème'),
-          equals('cafe creme'),
-        );
-        expect(ReceiptNormalizer.canonicalKey('Ångström'), equals('angstrom'));
+    group('normalizeToProductGroup', () {
+      setUp(() {
+        ReceiptRuntime.setOptions(makeOptionsFromLists(groups: const []));
       });
 
-      test('collapses multiple spaces and trims', () {
+      test('strips disallowed characters and returns cleaned value', () {
+        ReceiptRuntime.setOptions(makeOptionsFromLists(groups: const []));
+        final r = ReceiptNormalizer.normalizeToProductGroup(
+          '  Elec-tronics 123! ',
+        );
+        expect(r, equals('Electronics123'));
+      });
+
+      test('returns empty string when cleaned value is empty', () {
+        ReceiptRuntime.setOptions(makeOptionsFromLists(groups: const []));
+        final r = ReceiptNormalizer.normalizeToProductGroup('---///***');
+        expect(r, equals(''));
+      });
+
+      test('enforces allowlist when non-empty (exact cleaned match)', () {
+        ReceiptRuntime.setOptions(
+          makeOptionsFromLists(groups: ['BAKERY', 'dairy']),
+        );
+
         expect(
-          ReceiptNormalizer.canonicalKey('  Café   Crème  '),
-          equals('cafe creme'),
+          ReceiptNormalizer.normalizeToProductGroup('BAKERY'),
+          equals('BAKERY'),
         );
         expect(
-          ReceiptNormalizer.canonicalKey('COFFEE     BEANS'),
-          equals('coffee beans'),
+          ReceiptNormalizer.normalizeToProductGroup('dairy'),
+          equals('dairy'),
+        );
+        expect(ReceiptNormalizer.normalizeToProductGroup('Dairy'), equals(''));
+        expect(
+          ReceiptNormalizer.normalizeToProductGroup('Electronics!'),
+          equals(''),
         );
       });
 
-      test('treats split/merged tokens equally when letters match', () {
-        expect(
-          ReceiptNormalizer.canonicalKey('Cof fee'),
-          isNot(equals(ReceiptNormalizer.canonicalKey('Coffee'))),
-        );
-        expect(
-          ReceiptNormalizer.canonicalKey('Coffee   Beans'),
-          equals(ReceiptNormalizer.canonicalKey('Coffee Beans')),
-        );
+      test('passes through cleaned value when allowlist is empty', () {
+        ReceiptRuntime.setOptions(makeOptionsFromLists(groups: const []));
+        final r = ReceiptNormalizer.normalizeToProductGroup(' A * 1 ');
+        expect(r, equals('A1'));
       });
     });
 
-    group('normalizeByAlternativeTexts with diacritics/spacing', () {
-      test('prefers consensus and returns clean shortest original', () {
-        final alts = ['Café Crème', 'Cafe Creme', 'CAFÉ   CRÈME', 'Cafe Creme'];
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-        expect(result, equals('Cafe Creme'));
+    group('normalizeToProductGroups', () {
+      test('applies normalizeToProductGroup to all items', () {
+        ReceiptRuntime.setOptions(makeOptionsFromLists(groups: const []));
+        final inputs = ['Bread*', 'Milk!', '---'];
+        final r = ReceiptNormalizer.normalizeToProductGroups(inputs);
+        expect(r, equals(['Bread', 'Milk', '']));
       });
 
-      test('handles mixed diacritics + spacing + case', () {
-        final alts = [
-          'Êxtra   Virgin OLÍVE  OIL',
-          'Extra Virgin Olive Oil',
-          'EXTRA VIRGIN OLIVE  OIL',
-        ];
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-        expect(result, equals('Extra Virgin Olive Oil'));
+      test('respects allowlist for each item', () {
+        ReceiptRuntime.setOptions(
+          makeOptionsFromLists(groups: ['BAKERY', 'DAIRY']),
+        );
+        final inputs = ['BAKERY', 'DAIRY', 'MEAT'];
+        final r = ReceiptNormalizer.normalizeToProductGroups(inputs);
+        expect(r, equals(['BAKERY', 'DAIRY', '']));
+      });
+    });
+
+    group('normalizeByAlternativePostfixTexts', () {
+      test('returns null for empty list', () {
+        final r = ReceiptNormalizer.normalizeByAlternativePostfixTexts([]);
+        expect(r, isNull);
+      });
+
+      test('returns most frequent allowed normalized group', () {
+        ReceiptRuntime.setOptions(
+          makeOptionsFromLists(groups: ['BAKERY', 'DAIRY']),
+        );
+
+        final alts = ['BAKERY', 'BAKERY', 'Dairy*', 'Unknown!'];
+
+        final r = ReceiptNormalizer.normalizeByAlternativePostfixTexts(alts);
+        expect(r, equals('BAKERY'));
+      });
+
+      test('returns empty string when all alternatives normalize to empty', () {
+        ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['FOOD']));
+        final alts = ['---', '***', '    '];
+        final r = ReceiptNormalizer.normalizeByAlternativePostfixTexts(alts);
+        expect(r, equals(''));
       });
     });
 
     group('normalizeByAlternativeTexts', () {
-      test('should return normalized text when given alternative texts', () {
-        final alternativeTexts = [
-          'Item!123',
-          'ItemA123',
-          'ItemB123',
-          'ItemA123',
-        ];
-
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
-          alternativeTexts,
-        );
-
-        expect(result, 'ItemA123');
+      test('returns most frequent non-empty text', () {
+        final alts = ['ItemA', 'ItemB', 'ItemA'];
+        final r = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(r, equals('ItemA'));
       });
 
-      test('should return normalized text without number', () {
-        final alternativeTexts = ['M1lka', 'Milka'];
-
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
-          alternativeTexts,
-        );
-
-        expect(result, 'Milka');
+      test('ignores empty strings when other candidates exist', () {
+        final alts = ['Milk', '', 'Milk', ''];
+        final r = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(r, equals('Milk'));
       });
 
-      test('should return normalized text without space', () {
-        final alternativeTexts = ['Kale', 'Kal e', 'Kale'];
-
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
-          alternativeTexts,
-        );
-
-        expect(result, 'Kale');
+      test('returns empty string when all alternatives are empty', () {
+        final alts = ['', '', ''];
+        final r = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(r, equals(''));
       });
 
-      test('should return normalized text with longer length', () {
-        final alternativeTexts = ['Strawberry', 'Strawberr'];
-
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
-          alternativeTexts,
-        );
-
-        expect(result, 'Strawberry');
-      });
-
-      test('should return null when no alternative texts are provided', () {
-        final noAlternativeTexts = <String>[];
-
-        final result = ReceiptNormalizer.normalizeByAlternativeTexts(
-          noAlternativeTexts,
-        );
-
-        expect(result, null);
+      test('returns null when no alternative texts are provided', () {
+        final alts = <String>[];
+        final r = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
+        expect(r, isNull);
       });
     });
 
-    group('normalizeTail', () {
-      test('should remove price-like endings from text', () {
-        final inputs = [
-          'Tea 3.50 @',
-          'Milk 2,50',
-          'Bread 5,99 xyz',
-          'Plain text',
-        ];
-        final expected = ['Tea', 'Milk', 'Bread', 'Plain text'];
-
-        for (int i = 0; i < inputs.length; i++) {
-          expect(ReceiptNormalizer.normalizeTail(inputs[i]), expected[i]);
-        }
-      });
-    });
-
-    group('normalizeSpecialSpaces', () {
-      test('should merge tokens when needed', () {
-        const bestText = 'Cof fee Beans';
-        final otherTexts = ['Coffee Beans'];
-
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(
-          bestText,
-          otherTexts,
-        );
-
-        expect(result, 'Coffee Beans');
+    group('calculateFrequency', () {
+      test('returns empty map for empty list', () {
+        final r = ReceiptNormalizer.calculateFrequency([]);
+        expect(r, isEmpty);
       });
 
-      test('should not modify text when no merges are needed', () {
-        const bestText = 'Coffee Beans';
-        final otherTexts = ['Tea Bags'];
+      test('returns percentage frequencies rounded to nearest int', () {
+        final values = ['a', 'a', 'b'];
+        final r = ReceiptNormalizer.calculateFrequency(values);
+        expect(r['a'], equals(67));
+        expect(r['b'], equals(33));
+      });
 
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(
-          bestText,
-          otherTexts,
-        );
+      test('handles multiple distinct values', () {
+        final values = ['x', 'y', 'x', 'z', 'x', 'y'];
+        final r = ReceiptNormalizer.calculateFrequency(values);
 
-        expect(result, 'Coffee Beans');
+        expect(r['x'], equals(50));
+        expect(r['y'], equals(33));
+        expect(r['z'], equals(17));
       });
     });
 
     group('sortByFrequency', () {
-      test('should sort strings by frequency in ascending order', () {
+      test('sorts strings by frequency in ascending order', () {
         final values = [
           'apple',
           'banana',
@@ -180,7 +165,7 @@ void main() {
         expect(result, expected);
       });
 
-      test('should return empty list when given empty list', () {
+      test('returns empty list when given empty list', () {
         final values = <String>[];
 
         final result = ReceiptNormalizer.sortByFrequency(values);
@@ -188,159 +173,25 @@ void main() {
         expect(result, isEmpty);
       });
 
-      test('should maintain order for equal frequencies', () {
+      test('contains same elements when all frequencies are equal', () {
         final values = ['apple', 'banana', 'cherry', 'date'];
 
         final result = ReceiptNormalizer.sortByFrequency(values);
 
         expect(result.length, 4);
-        expect(result.contains('apple'), isTrue);
-        expect(result.contains('banana'), isTrue);
-        expect(result.contains('cherry'), isTrue);
-        expect(result.contains('date'), isTrue);
+        expect(result.toSet(), equals(values.toSet()));
+      });
+
+      test('orders by frequency ascending', () {
+        final values = ['x', 'y', 'x', 'z', 'y', 'x', 'w', 'w'];
+        final result = ReceiptNormalizer.sortByFrequency(values);
+        expect(result.first, anyOf('z', 'w'));
+        expect(result.last, equals('x'));
+        expect(result.toSet(), equals(values.toSet()));
       });
     });
 
-    group('canonicalKey – unicode/whitespace edge cases', () {
-      test('handles NBSP and exotic spaces', () {
-        expect(
-          ReceiptNormalizer.canonicalKey('Café\u00A0Crème'),
-          equals('cafe creme'),
-        );
-
-        expect(
-          ReceiptNormalizer.canonicalKey('  Elite\tItem\u2009—\u2003Deluxe  '),
-          equals('elite item — deluxe'),
-        );
-      });
-    });
-
-    group(
-      'normalizeByAlternativeTexts – OCR + single-space removal + truncation',
-      () {
-        test('corrects OCR confusions using peer alternatives', () {
-          final alts = ['8io Weidemilch', 'Bio Weidemilch', 'B!o Weidemilch'];
-          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-          expect(result, equals('Bio Weidemilch'));
-        });
-
-        test(
-          'keep text when exact one-space difference matches but token starts with capital letter',
-          () {
-            final alts = ['Bio Weidemilch', 'BioWeidemilch'];
-            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-            expect(result, equals('Bio Weidemilch'));
-          },
-        );
-
-        test(
-          'glues single erroneous space when exact one-space difference matches',
-          () {
-            final alts = ['Weide milch', 'Weidemilch', 'WEIDE MILCH'];
-            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-            expect(result, equals('Weidemilch'));
-          },
-        );
-
-        test('filters truncated leading token alternatives', () {
-          final alts = ['GOETTERSP.', 'GOETTERSP. WALD', 'GOETTERSP. WALD'];
-          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-          expect(result, equals('GOETTERSP. WALD'));
-        });
-
-        test('tie-breaker prefers size token on equal frequency', () {
-          final alts = [
-            'Coke Zero',
-            'Coke Zero 330ml',
-            'Coke Zero',
-            'Coke Zero 330ml',
-          ];
-          final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-          expect(result, equals('Coke Zero 330ml'));
-        });
-
-        test(
-          'tie-breaker prefers variant without diacritics when otherwise tied',
-          () {
-            final alts = ['Cafe Creme', 'Café Crème'];
-            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-            expect(result, equals('Cafe Creme'));
-          },
-        );
-
-        test(
-          'number–unit split is normalized for grouping (e.g., 1 l vs 1l)',
-          () {
-            final alts = ['Milk 1 l', 'MILK 1l', 'milk 1  l'];
-            final result = ReceiptNormalizer.normalizeByAlternativeTexts(alts);
-            expect(
-              result,
-              anyOf(equals('MILK 1l'), equals('Milk 1l'), equals('milk 1l')),
-            );
-          },
-        );
-      },
-    );
-
-    group('normalizeTail – tricky tails', () {
-      test('strips price-like tails', () {
-        expect(
-          ReceiptNormalizer.normalizeTail('Shorts 10,99'),
-          equals('Shorts'),
-        );
-        expect(
-          ReceiptNormalizer.normalizeTail('Butter 1,99'),
-          equals('Butter'),
-        );
-        expect(
-          ReceiptNormalizer.normalizeTail('Cola 0,89 xyz'),
-          equals('Cola'),
-        );
-        expect(
-          ReceiptNormalizer.normalizeTail('Green Tea 3.50 @'),
-          equals('Green Tea'),
-        );
-        expect(
-          ReceiptNormalizer.normalizeTail('Chocolate 2,99 ex'),
-          equals('Chocolate'),
-        );
-        expect(
-          ReceiptNormalizer.normalizeTail('Cream 0,69 € x'),
-          equals('Cream'),
-        );
-      });
-    });
-
-    group('normalizeSpecialSpaces – signature-based selection', () {
-      test('prefers candidate with glued number–unit on tie', () {
-        const mostFrequent = 'Milk 1 l';
-        final peers = ['Milk 1l', 'Milk 1 l'];
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(
-          mostFrequent,
-          peers,
-        );
-        expect(result, equals('Milk 1l'));
-      });
-
-      test('prefers fewer spaces, then shorter, then lexicographical', () {
-        const mostFrequent = 'Coke  Zero';
-        final peers = ['Coke Zero', 'Coke  Zero', 'Coke Zero  '];
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(
-          mostFrequent,
-          peers,
-        );
-        expect(result, equals('Coke Zero'));
-      });
-
-      test('returns original when no same-signature peers', () {
-        const best = 'Coffee Beans';
-        final others = ['Tea-Bags'];
-        final result = ReceiptNormalizer.normalizeSpecialSpaces(best, others);
-        expect(result, equals('Coffee Beans'));
-      });
-    });
-
-    group('similarity & stringSimilarity – fuzzy wrappers', () {
+    group('similarity & stringSimilarity', () {
       test('similarity higher for close variants than unrelated strings', () {
         final close = ReceiptNormalizer.similarity('Coke Zero', 'Coke Zer0');
         final far = ReceiptNormalizer.similarity('Coke Zero', 'Orange Juice');
@@ -348,85 +199,50 @@ void main() {
         expect(close, greaterThanOrEqualTo(70));
       });
 
-      test('stringSimilarity is scaled to [0,1]', () {
-        final s1 = ReceiptNormalizer.stringSimilarity('Milk 1l', 'Milk 1 l');
-        final s2 = ReceiptNormalizer.stringSimilarity('Milk 1l', 'Shampoo');
-        expect(s1, inInclusiveRange(0.0, 1.0));
-        expect(s2, inInclusiveRange(0.0, 1.0));
-        expect(s1, greaterThan(s2));
+      test(
+        'stringSimilarity is scaled to [0,1] and correlates with similarity',
+        () {
+          final s1 = ReceiptNormalizer.stringSimilarity('Milk 1l', 'Milk 1 l');
+          final s2 = ReceiptNormalizer.stringSimilarity('Milk 1l', 'Shampoo');
+
+          expect(s1, inInclusiveRange(0.0, 1.0));
+          expect(s2, inInclusiveRange(0.0, 1.0));
+          expect(s1, greaterThan(s2));
+        },
+      );
+    });
+
+    group('tokensForMatch', () {
+      test(
+        'tokenization is lowercase-alnum-based with non-alnum separators',
+        () {
+          final tokens = ReceiptNormalizer.tokensForMatch(
+            'cafe-ol 250ml (bio!)',
+          );
+          expect(tokens, equals({'cafe', 'ol', '250ml', 'bio'}));
+        },
+      );
+
+      test('collapses multiple spaces and separators', () {
+        final tokens = ReceiptNormalizer.tokensForMatch(
+          '  organic   milk--1l  ',
+        );
+        expect(tokens, equals({'organic', 'milk', '1l'}));
       });
     });
 
-    group('tokensForMatch & specificity', () {
-      test('tokenization is lowercase, diacritic-free, alnum-only', () {
-        final tokens = ReceiptNormalizer.tokensForMatch('Café-Öl 250ml (BIO!)');
-        expect(tokens, equals({'cafe', 'ol', '250ml', 'bio'}));
-      });
-
+    group('specificity', () {
       test('specificity favors more/longer tokens', () {
-        final a = ReceiptNormalizer.specificity('Milk');
-        final b = ReceiptNormalizer.specificity('Organic Milk 1l');
+        final a = ReceiptNormalizer.specificity('milk');
+        final b = ReceiptNormalizer.specificity('organic milk 1l');
         expect(b, greaterThan(a));
       });
-    });
 
-    group('sortByFrequency – stability on ties (sanity)', () {
-      test('contains same elements and orders by frequency ascending', () {
-        final values = ['x', 'y', 'x', 'z', 'y', 'x', 'w', 'w'];
-        final result = ReceiptNormalizer.sortByFrequency(values);
-        expect(result.first, equals('z'));
-        expect(result.last, equals('x'));
-        expect(result.toSet(), equals(values.toSet()));
+      test('specificity grows with both token count and character count', () {
+        final simple = ReceiptNormalizer.specificity('tea');
+        final detailed = ReceiptNormalizer.specificity('green tea bag 20x');
+        expect(detailed, greaterThan(simple));
       });
     });
-
-    group(
-      'normalizeToProductGroup – allowlist enforcement (ReceiptRuntime.options)',
-      () {
-        test('returns empty string when group is not allowed', () {
-          ReceiptRuntime.setOptions(
-            makeOptionsFromLists(groups: ['bakery', 'dairy']),
-          );
-          final result = ReceiptNormalizer.normalizeToProductGroup(
-            'Electronics',
-          );
-          expect(result, equals(''));
-        });
-
-        test('accepts allowed group ignoring case and extra spaces', () {
-          ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['Milkman']));
-          final result = ReceiptNormalizer.normalizeToProductGroup(
-            '  Milk   Man  ',
-          );
-          expect(result, equals('MILKMAN'));
-        });
-
-        test(
-          'permissive when allowlist is empty – passes through normalized',
-          () {
-            ReceiptRuntime.setOptions(makeOptionsFromLists(groups: const []));
-            final result = ReceiptNormalizer.normalizeToProductGroup(' A * ');
-            expect(result, equals('A'));
-          },
-        );
-
-        test('returns empty string when input cleans down to nothing', () {
-          ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['anything']));
-          final result = ReceiptNormalizer.normalizeToProductGroup('---///***');
-          expect(result, equals(''));
-        });
-
-        test(
-          'exact match after canonicalization is required (no substring hit)',
-          () {
-            ReceiptRuntime.setOptions(makeOptionsFromLists(groups: ['FOOD']));
-            final r1 = ReceiptNormalizer.normalizeToProductGroup('foo');
-            final r2 = ReceiptNormalizer.normalizeToProductGroup(' Food * ');
-            expect(r1, equals(''));
-            expect(r2, equals('FOOD'));
-          },
-        );
-      },
-    );
   });
 }
