@@ -125,6 +125,35 @@ void main() {
       });
     });
 
+    group('calculateTruncatedFrequency', () {
+      test(
+        'merges truncated leading-token alternatives into longer variant',
+        () {
+          final values = ['Red Carpet', 'Red', 'Rod Capet', 'Rod Pet'];
+          final result = ReceiptNormalizer.calculateTruncatedFrequency(values);
+
+          expect(result.length, 3);
+          expect(result['Red Carpet'], equals(50));
+          expect(result['Rod Capet'], equals(25));
+          expect(result['Rod Pet'], equals(25));
+          expect(result.containsKey('Red'), isFalse);
+        },
+      );
+
+      test('behaves like calculateFrequency when no truncations exist', () {
+        final values = ['Apple', 'Banana', 'Apple', 'Cherry'];
+        final truncated = ReceiptNormalizer.calculateTruncatedFrequency(values);
+        final plain = ReceiptNormalizer.calculateFrequency(values);
+
+        expect(truncated, equals(plain));
+      });
+
+      test('returns empty map for empty list', () {
+        final result = ReceiptNormalizer.calculateTruncatedFrequency([]);
+        expect(result, isEmpty);
+      });
+    });
+
     group('calculateFrequency', () {
       test('returns empty map for empty list', () {
         final r = ReceiptNormalizer.calculateFrequency([]);

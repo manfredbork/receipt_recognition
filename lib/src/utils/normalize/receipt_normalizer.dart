@@ -17,36 +17,6 @@ final class ReceiptNormalizer {
   static String _normalizeSpaces(String s) =>
       s.replaceAll(_allSpaces, ' ').trim();
 
-  /// Filters out alternatives that are just leading tokens of longer variants.
-  static List<String> _filterTruncatedAlternatives(List<String> alternatives) {
-    final alts = alternatives.map((s) => _normalizeSpaces(s)).toList();
-    if (alts.length <= 1) return alts;
-
-    final filtered = <String>[];
-    for (final candidate in alts) {
-      bool isTruncated = false;
-      for (final other in alts) {
-        if (other.length > candidate.length) {
-          final candidateTrimmed = candidate.trim();
-          final otherTrimmed = other.trim();
-          if (otherTrimmed.startsWith(candidateTrimmed) &&
-              otherTrimmed.length > candidateTrimmed.length) {
-            final nextChar = otherTrimmed[candidateTrimmed.length];
-            if (nextChar == ' ') {
-              isTruncated = true;
-              break;
-            }
-          }
-        }
-      }
-      if (!isTruncated) {
-        filtered.add(candidate);
-      }
-    }
-
-    return filtered.isEmpty ? alts : filtered;
-  }
-
   /// Normalizes postfix text to a product group. If `ReceiptRuntime.options`
   /// defines `allowedProductGroups` and the normalized value is not contained
   /// this returns ''.
@@ -92,6 +62,49 @@ final class ReceiptNormalizer {
     );
 
     return bestResult;
+  }
+
+  /// Like [calculateFrequency], but merges truncated leading-token alternatives
+  /// into their longer counterparts before counting.
+  static Map<String, int> calculateTruncatedFrequency(List<String> values) {
+    if (values.isEmpty) return const {};
+
+    final normalized = values.map((s) => _normalizeSpaces(s)).toList();
+
+    final repIndex = <int, int>{};
+
+    for (var i = 0; i < normalized.length; i++) {
+      var representative = i;
+      final candidate = normalized[i];
+
+      for (var j = 0; j < normalized.length; j++) {
+        if (i == j) continue;
+        final other = normalized[j];
+
+        if (other.length > candidate.length) {
+          final candidateTrimmed = candidate.trim();
+          final otherTrimmed = other.trim();
+          if (otherTrimmed.startsWith(candidateTrimmed) &&
+              otherTrimmed.length > candidateTrimmed.length) {
+            final nextChar = otherTrimmed[candidateTrimmed.length];
+            if (nextChar == ' ') {
+              representative = j;
+              break;
+            }
+          }
+        }
+      }
+
+      repIndex[i] = representative;
+    }
+
+    final remapped = <String>[];
+    for (var i = 0; i < values.length; i++) {
+      final idx = repIndex[i]!;
+      remapped.add(values[idx]);
+    }
+
+    return calculateFrequency(remapped);
   }
 
   /// Map of each unique alternative text to its percentage frequency.
