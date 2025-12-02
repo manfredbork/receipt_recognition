@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] – 2025-12-02
+
+### ✨ Added
+- **Text processor testing support**: Added `debugRunSynchronouslyForTests` flag to `ReceiptTextProcessor` for synchronous parsing in test environments.
+- **Truncated frequency calculation**: New `calculateTruncatedFrequency` method that merges truncated leading-token alternatives into their longer counterparts before counting frequency.
+
+### 🛠️ Changed
+- **Normalization improvements**:
+    - Updated frequency calculation for alternative postfix texts to use truncated frequency method.
+    - Moved truncated frequency calculator to the correct normalization method for alternative texts.
+    - Refined alternative text frequency calculation in `RecognizedProduct`.
+- **Parser simplification**: Reduced complexity by removing overly complicated logic and making the codebase simpler and more maintainable.
+- **OCR autocorrection**: Reduced OCR autocorrection aggressiveness for better accuracy.
+- **Skew calculation**: Removed outliers from skew angle calculation for more stable alignment.
+- **Ignored keywords**: Added "Subtotal" to the list of keywords to ignore during product recognition.
+- **Timeout handling**: Improved timeout behavior for better responsiveness.
+
+### 🐛 Fixed
+- **Unit parsing**: Fixed a critical bug where unit prices with negative total prices were not correctly handled with proper sign adjustment.
+- **Unit validation**: Corrected unit price-quantity validation logic to properly check tolerance thresholds.
+- **Parsing stability**: Multiple fixes to improve parsing reliability and reduce edge-case errors.
+
+---
+
 ## [0.2.2] – 2025-11-19
 
 ### 🛠️ Changed
