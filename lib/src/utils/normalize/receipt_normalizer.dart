@@ -42,7 +42,10 @@ final class ReceiptNormalizer {
     if (altPostfixTexts.isEmpty) return null;
 
     final normalized = normalizeToProductGroups(altPostfixTexts);
-    final mostFrequent = sortByFrequency(normalized);
+    final mostFrequent = sortByFrequency(
+      normalized,
+      frequencyCalculator: calculateTruncatedFrequency,
+    );
     final bestResult = mostFrequent.lastWhere(
       (s) => s.isNotEmpty,
       orElse: () => '',
@@ -122,8 +125,12 @@ final class ReceiptNormalizer {
   }
 
   /// Sorts a list of strings by frequency of occurrence in ascending order.
-  static List<String> sortByFrequency(List<String> values) {
-    final entries = calculateFrequency(values).entries.toList();
+  static List<String> sortByFrequency(
+    List<String> values, {
+    Map<String, int> Function(List<String> values)? frequencyCalculator,
+  }) {
+    final freq = (frequencyCalculator ?? calculateFrequency)(values);
+    final entries = freq.entries.toList();
     entries.sort((a, b) => a.value.compareTo(b.value));
     return entries.map((e) => e.key).toList();
   }
