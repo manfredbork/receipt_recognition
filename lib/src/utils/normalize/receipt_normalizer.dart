@@ -42,10 +42,7 @@ final class ReceiptNormalizer {
     if (altPostfixTexts.isEmpty) return null;
 
     final normalized = normalizeToProductGroups(altPostfixTexts);
-    final mostFrequent = sortByFrequency(
-      normalized,
-      frequencyCalculator: calculateTruncatedFrequency,
-    );
+    final mostFrequent = sortByFrequency(normalized);
     final bestResult = mostFrequent.lastWhere(
       (s) => s.isNotEmpty,
       orElse: () => '',
@@ -58,7 +55,10 @@ final class ReceiptNormalizer {
   static String? normalizeByAlternativeTexts(List<String> altTexts) {
     if (altTexts.isEmpty) return null;
 
-    final mostFrequent = sortByFrequency(altTexts);
+    final mostFrequent = sortByFrequency(
+      altTexts,
+      frequencyCalculator: calculateTruncatedFrequency,
+    );
     final bestResult = mostFrequent.lastWhere(
       (s) => s.isNotEmpty,
       orElse: () => '',
