@@ -573,14 +573,15 @@ final class ReceiptParser {
     final defaultPrice = product.position!.price.value;
     final defaultQuantity = 1;
 
-    final unitPrice = yUnitPrice?.value ?? defaultPrice;
+    final sign = (yUnitPrice?.value ?? 0) > 0 && defaultPrice < 0 ? -1.0 : 1.0;
+    final unitPrice = sign * (yUnitPrice?.value ?? defaultPrice);
     final unitQuantity = yUnitQuantity?.value ?? defaultQuantity;
 
     if (yUnitPrice != null) yUnitPrices.remove(yUnitPrice);
     if (yUnitQuantity != null) yUnitQuantities.remove(yUnitQuantity);
 
     if (unitPrice != defaultPrice && unitQuantity != defaultQuantity) {
-      final test = (unitPrice * unitQuantity - defaultPrice).abs() < tolerance;
+      final test = unitPrice * unitQuantity - defaultPrice < tolerance;
       if (test) {
         return RecognizedUnit.fromNumbers(unitQuantity, unitPrice, defaultLine);
       }
