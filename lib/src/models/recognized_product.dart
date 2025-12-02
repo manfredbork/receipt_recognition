@@ -134,5 +134,5 @@ final class RecognizedProduct extends RecognizedEntity<String> {
 
   /// Map of each unique alternative text to its percentage frequency.
   Map<String, int> get alternativeTextPercentages =>
-      ReceiptNormalizer.calculateFrequency(alternativePostfixTexts);
+      ReceiptNormalizer.calculateFrequency(alternativeTexts);
 }

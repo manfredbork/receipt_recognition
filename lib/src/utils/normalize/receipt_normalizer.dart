@@ -11,7 +11,7 @@ final class ReceiptNormalizer {
   );
 
   /// Product group disallowed chars
-  static final RegExp _disallowedGroupChars = RegExp(r'[^A-Za-z0-9]');
+  static final RegExp _disallowedGroupChars = RegExp(r'[^A-Z0-9]');
 
   /// Collapse all Unicode spaces to a normal space first.
   static String _normalizeSpaces(String s) =>
