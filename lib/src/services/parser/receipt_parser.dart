@@ -177,8 +177,7 @@ final class ReceiptParser {
       if (_tryParseTotalLabel(line, parsed, leftBound)) continue;
       if (_tryParseTotal(line, parsed, rightBound)) continue;
       if (_tryParseAmount(line, parsed, rightBound)) continue;
-      if (_tryParseUnitQuantity(line, parsed, rightBound)) continue;
-      if (_tryParseUnitPrice(line, parsed, rightBound)) continue;
+      if (_tryParseUnit(line, parsed, rightBound)) continue;
       if (_tryParseUnknown(line, parsed, leftBound)) continue;
     }
 
@@ -227,7 +226,7 @@ final class ReceiptParser {
     if (_options.totalLabels.mapping.isEmpty) return false;
 
     final totalLabel = _findTotalLabel(parsed);
-    final total = _findTotalLabel(parsed);
+    final total = _findTotal(parsed);
     final label = _findTotalLabelLike(line.text);
     final canonical = _options.totalLabels.mapping[label] ?? label;
     if (canonical != null) {
@@ -236,7 +235,16 @@ final class ReceiptParser {
           (e) => identical(e, totalLabel) || identical(e, total),
         );
       }
-      parsed.add(RecognizedTotalLabel(line: line, value: canonical));
+      final addTotalLabel = RecognizedTotalLabel(line: line, value: canonical);
+      parsed.add(addTotalLabel);
+      if (totalLabel == null && total == null) {
+        final amounts = parsed.whereType<RecognizedAmount>().toList();
+        final closestAmount = _findClosestTotalAmount(addTotalLabel, amounts);
+        if (closestAmount != null) {
+          parsed.add(_toTotal(closestAmount));
+          return true;
+        }
+      }
     }
     return canonical != null;
   }
@@ -251,9 +259,11 @@ final class ReceiptParser {
     String? bestLabel;
     int bestScore = 0;
     for (final label in _options.totalLabels.mapping.keys) {
-      final s = ratio(text.toLowerCase(), label);
+      final normText = ReceiptNormalizer.normalizeKey(text).toLowerCase();
+      if (normText.startsWith(label)) return label;
 
-      if (s > bestScore && text.length >= label.length) {
+      final s = ratio(normText, label);
+      if (s > bestScore && normText.length >= label.length) {
         bestScore = s;
         bestLabel = label;
       }
@@ -315,7 +325,7 @@ final class ReceiptParser {
     List<RecognizedEntity> parsed,
     double rightBound,
   ) {
-    if (_leftL(line) <= rightBound) return false;
+    if (_rightL(line) <= rightBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
     final value = double.tryParse(_convertToAmount(amount));
@@ -324,35 +334,50 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Recognizes left-side and centered numeric lines as unit quantity and parses values.
-  static bool _tryParseUnitQuantity(
+  /// Recognizes left-side lines as unit quantity and/or price and parses values.
+  static bool _tryParseUnit(
     TextLine line,
     List<RecognizedEntity> parsed,
     double rightBound,
   ) {
     if (_rightL(line) > rightBound) return false;
     final quantity = _quantity.stringMatch(line.text);
-    if (quantity == null) return false;
-    final value = int.tryParse(_convertToInteger(quantity));
-    if (value == null || value == 0) return false;
-    parsed.add(RecognizedUnitQuantity(line: line, value: value));
-    _tryParseUnitPrice(line, parsed, rightBound);
-    return true;
-  }
-
-  /// Recognizes left-side and centered numeric lines as unit price and parses values.
-  static bool _tryParseUnitPrice(
-    TextLine line,
-    List<RecognizedEntity> parsed,
-    double rightBound,
-  ) {
-    if (_rightL(line) > rightBound) return false;
     final amount = _amount.stringMatch(line.text);
-    if (amount == null) return false;
-    final value = double.tryParse(_convertToAmount(amount));
-    if (value == null || value == 0) return false;
-    parsed.add(RecognizedUnitPrice(line: line, value: value));
-    _tryParseUnknown(line, parsed, rightBound);
+    int? unitQuantity;
+    if (quantity != null) {
+      unitQuantity = int.tryParse(_convertToInteger(quantity));
+      if (unitQuantity != null) {
+        parsed.add(RecognizedUnitQuantity(line: line, value: unitQuantity));
+      }
+    }
+    double? unitPrice;
+    if (amount != null) {
+      unitPrice = double.tryParse(_convertToAmount(amount));
+      if (unitPrice != null) {
+        parsed.add(RecognizedUnitPrice(line: line, value: unitPrice));
+      }
+    }
+    if (unitQuantity == null && unitPrice == null) return false;
+    final qTokens = line.text.split(_quantity);
+    final aTokens = line.text.split(_amount);
+
+    String text = line.text;
+    if (qTokens.length > 1 && aTokens.length > 1) {
+      text =
+          qTokens.first.length < aTokens.first.length
+              ? qTokens.first
+              : aTokens.first;
+    } else if (qTokens.length > 1) {
+      text = qTokens.first;
+    } else if (aTokens.length > 1) {
+      text = aTokens.first;
+    }
+
+    if (text.length / line.text.length >= 0.5) {
+      final modified = ReceiptTextLine.fromLine(line).copyWith(text: text);
+      _tryParseUnknown(modified, parsed, rightBound);
+    }
+
     return true;
   }
 
@@ -364,8 +389,12 @@ final class ReceiptParser {
   ) {
     if (_leftL(line) > leftBound) return false;
     final unknown = line.text;
-    parsed.add(RecognizedUnknown(line: line, value: unknown));
-    return true;
+    final numeric = _convertToAmount(unknown);
+    if (numeric.length / unknown.length < 0.5) {
+      parsed.add(RecognizedUnknown(line: line, value: unknown));
+      return true;
+    }
+    return false;
   }
 
   /// Appends an aggregate (axis-aligned) receipt bounding box entity derived from all lines.
@@ -819,14 +848,18 @@ final class ReceiptParser {
         if (identical(entity, totalLabel)) {
           filtered.add(entity);
         } else {
-          filtered.add(entity as RecognizedUnknown);
+          filtered.add(
+            RecognizedUnknown(value: entity.value, line: entity.line),
+          );
         }
         continue;
       } else if (entity is RecognizedTotal) {
         if (identical(entity, total)) {
           filtered.add(entity);
         } else {
-          filtered.add(entity as RecognizedAmount);
+          filtered.add(
+            RecognizedAmount(value: entity.value, line: entity.line),
+          );
         }
         continue;
       }

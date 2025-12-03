@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -26,6 +26,21 @@ Future<InputImage> _inputImageFromAssetAsPng(String assetKey) async {
   return InputImage.fromFilePath(pngFile.path);
 }
 
+Future<RecognizedReceipt> _processImage(String file) async {
+  final img = await _inputImageFromAssetAsPng('integration_test/assets/$file');
+  final rr = ReceiptRecognizer(singleScan: true);
+  try {
+    final receipt = await rr.processImage(img);
+    debugPrint(
+      '\n############### Integration test where receipt is recognized from image "$file" ###############',
+    );
+    ReceiptLogger.logReceipt(receipt);
+    return receipt;
+  } finally {
+    await rr.close();
+  }
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -34,23 +49,17 @@ void main() {
   });
 
   group('OCR from asset images (no camera)', () {
-    testWidgets('REWE receipt parses total + positions', (tester) async {
-      final img = await _inputImageFromAssetAsPng(
-        'integration_test/assets/rewe.png',
-      );
-      final rr = ReceiptRecognizer(singleScan: true);
-      try {
-        final receipt = await rr.processImage(img);
-
-        ReceiptLogger.logReceipt(receipt);
-
-        final items = receipt.positions;
+    testWidgets(
+      'REWE receipt check store + total + positions + units + group',
+      (tester) async {
+        final receipt = await _processImage('rewe.png');
 
         expect(receipt.store?.formattedValue, equals('REWE'));
-        expect(
-          receipt.purchaseDate?.parsedDateTime?.toString() ?? 'N/A',
-          equals('N/A'),
-        );
+        expect(receipt.totalLabel?.formattedValue, equals('SUMME'));
+        expect(receipt.calculatedTotal.formattedValue, equals('30.82'));
+        expect(receipt.total?.formattedValue, equals('30.82'));
+
+        final items = receipt.positions;
 
         expect(items[0].product.formattedValue, equals('BEDIENUNGSTHEKE'));
         expect(items[0].price.formattedValue, equals('7.77'));
@@ -86,18 +95,71 @@ void main() {
         expect(items[15].price.formattedValue, equals('-1.50'));
         expect(items[16].product.formattedValue, equals('LEERGUT EINWEG'));
         expect(items[16].price.formattedValue, equals('-1.50'));
-
         expect(items[16].product.unit.quantity.value, equals(6));
         expect(items[16].product.unit.price.value, equals(-0.25));
         expect(items[16].product.productGroup, equals('A'));
+      },
+    );
 
+    testWidgets(
+      'EDEKA receipt check store + total + positions length + single position',
+      (tester) async {
+        final receipt = await _processImage('edeka.png');
+
+        expect(receipt.store?.formattedValue, equals('EDEKA'));
         expect(receipt.totalLabel?.formattedValue, equals('SUMME'));
-        expect(receipt.calculatedTotal.formattedValue, equals('30.82'));
-        expect(receipt.total?.formattedValue, equals('30.82'));
-      } finally {
-        await rr.close();
-      }
-    });
+        expect(receipt.calculatedTotal.formattedValue, equals('27.63'));
+        expect(receipt.total?.formattedValue, equals('27.63'));
+
+        final items = receipt.positions;
+
+        expect(items.length, equals(11));
+        expect(items[6].product.text, equals('Gurken mini'));
+      },
+    );
+
+    testWidgets(
+      'LIDL receipt check total + purchase date + positions length + single position',
+      (tester) async {
+        final receipt = await _processImage('lidl.png');
+
+        expect(receipt.totalLabel?.formattedValue, equals('ZU ZAHLEN'));
+        expect(receipt.calculatedTotal.formattedValue, equals('14.24'));
+        expect(receipt.total?.formattedValue, equals('14.24'));
+        expect(
+          receipt.purchaseDate?.formattedValue,
+          equals('2025-10-21T00:00:00.000Z'),
+        );
+
+        final items = receipt.positions;
+
+        expect(items.length, equals(5));
+        expect(items[4].product.text, equals('Weihenstephan Tafel.'));
+        expect(items[4].price.value, equals(1.99));
+      },
+    );
+
+    testWidgets(
+      'ALDI receipt check store + total + purchase date + positions length + single position',
+      (tester) async {
+        final receipt = await _processImage('aldi.png');
+
+        expect(receipt.store?.formattedValue, equals('ALDI'));
+        expect(receipt.totalLabel?.formattedValue, equals('ZU ZAHLEN'));
+        expect(receipt.calculatedTotal.formattedValue, equals('11.86'));
+        expect(receipt.total?.formattedValue, equals('11.86'));
+        expect(
+          receipt.purchaseDate?.formattedValue,
+          equals('2025-11-08T00:00:00.000Z'),
+        );
+
+        final items = receipt.positions;
+
+        expect(items.length, equals(4));
+        expect(items[3].product.text, equals('DT. MARKENBUTTER'));
+        expect(items[3].price.value, equals(1.39));
+      },
+    );
 
     tearDown(() {
       ReceiptTextProcessor.debugRunSynchronouslyForTests = false;

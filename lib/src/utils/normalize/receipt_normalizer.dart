@@ -166,4 +166,8 @@ final class ReceiptNormalizer {
     final chars = t.join().length;
     return t.length * 10 + chars;
   }
+
+  /// Remove all Unicode whitespace and lowercase for stable lookup keys.
+  static String normalizeKey(String s) =>
+      s.replaceAll(RegExp(r'\s+'), '').toLowerCase();
 }

@@ -1,4 +1,5 @@
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
+import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
 /// How user config should interact with built-in defaults.
 enum MergePolicy {
@@ -249,7 +250,7 @@ final class DetectionMap {
       final p = _optionalSpacesPattern(k);
       if (p.isEmpty) continue;
       patterns.add(p);
-      normalized[_normalizeKey(k)] = e.value;
+      normalized[ReceiptNormalizer.normalizeKey(k)] = e.value;
     }
 
     final pattern = '(${patterns.join('|')})';
@@ -263,7 +264,7 @@ final class DetectionMap {
   String? detect(String text) {
     final m = regexp.stringMatch(text);
     if (m == null) return null;
-    return mapping[_normalizeKey(m)];
+    return mapping[ReceiptNormalizer.normalizeKey(m)];
   }
 
   /// Returns the alternation pattern string used by [regexp].
@@ -311,10 +312,6 @@ final class KeywordSet {
   /// Returns true if [text] contains any keyword.
   bool hasMatch(String text) => regexp.hasMatch(text);
 }
-
-/// Remove all Unicode whitespace and lowercase for stable lookup keys.
-String _normalizeKey(String s) =>
-    s.replaceAll(RegExp(r'\s+'), '').toLowerCase();
 
 /// Build a regex pattern that allows zero-or-one space between each character
 /// of the provided literal. Example: "Aldi" → A\s?l\s?d\s?i
