@@ -46,24 +46,25 @@ final class ReceiptLogger {
       debugPrint(
         '📅 Purchase datetime: ${receipt.purchaseDate?.formattedValue ?? 'N/A'}',
       );
-      const int padFullWidth = 30;
+      const int padFullWidth = 40;
       final int padHalfWidth = padFullWidth ~/ 2;
+      final int padQuarterWidth = padFullWidth ~/ 4;
       for (final position in receipt.positions) {
         final product = position.product.normalizedText;
         final price = position.price.formattedValue;
         final confidence = position.confidence;
         final stability = position.stability;
-        final distribution =
-            position.product.alternativeTextPercentages.entries
-                .map((e) => '${e.key} ${e.value}%')
-                .toList();
+        final distribution = position.product.alternativeTextPercentages.entries
+            .map((e) => '${e.key} ${e.value}%')
+            .toList()
+            .take(3);
         debugPrint(
-          '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padHalfWidth)}'
-          '${'🗄  ${position.product.productGroup}'.padRight(padHalfWidth)}'
-          '${'🏷️  ${position.product.unit.quantity.formattedValue} x ${position.product.unit.price.formattedValue}'.padRight(padHalfWidth)}'
-          '${'📈  $confidence % Confidence'.padRight(padFullWidth)}'
-          '${'⚖️  $stability % Stability'.padRight(padFullWidth)}'
-          '${'📊  Distribution: $distribution '.padRight(padFullWidth)}',
+          '${'🛍️  $product'.padRight(padFullWidth)}${'💰  $price'.padRight(padQuarterWidth)}'
+          '${'🗄  ${position.product.productGroup}'.padRight(padQuarterWidth)}'
+          '${'🏷️  ${position.product.unit.quantity.formattedValue} × ${position.product.unit.price.formattedValue}'.padRight(padHalfWidth)}'
+          '${'📈  Conf: $confidence %'.padRight(padHalfWidth)}'
+          '${'⚖️  Stab: $stability %'.padRight(padHalfWidth)}'
+          '${'📊  Dist: $distribution '.padRight(padHalfWidth)}',
         );
       }
       debugPrint(

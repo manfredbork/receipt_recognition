@@ -45,7 +45,35 @@ class ReceiptTextLine implements TextLine {
     this.angle,
   });
 
-  /// Convenience constructor to build a synthetic line from a [box] and optional [angle].
-  factory ReceiptTextLine.fromRect(Rect box, {double? angle}) =>
-      ReceiptTextLine(boundingBox: box, angle: angle);
+  /// Convenience constructor to build a synthetic line from [TextLine] line.
+  factory ReceiptTextLine.fromLine(TextLine line) => ReceiptTextLine(
+    text: line.text,
+    elements: line.elements,
+    boundingBox: line.boundingBox,
+    recognizedLanguages: line.recognizedLanguages,
+    cornerPoints: line.cornerPoints,
+    confidence: line.confidence,
+    angle: line.angle,
+  );
+
+  /// Returns a copy with updated fields.
+  ReceiptTextLine copyWith({
+    String? text,
+    List<TextElement>? elements,
+    Rect? boundingBox,
+    List<String>? recognizedLanguages,
+    List<Point<int>>? cornerPoints,
+    double? confidence,
+    double? angle,
+  }) {
+    return ReceiptTextLine(
+      text: text ?? this.text,
+      elements: elements ?? this.elements,
+      boundingBox: boundingBox ?? this.boundingBox,
+      recognizedLanguages: recognizedLanguages ?? this.recognizedLanguages,
+      cornerPoints: cornerPoints ?? this.cornerPoints,
+      confidence: confidence ?? this.confidence,
+      angle: angle ?? this.angle,
+    );
+  }
 }

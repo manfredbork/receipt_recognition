@@ -57,13 +57,13 @@ mixin CameraHandlerMixin<T extends StatefulWidget> on State<T> {
                 : ImageFormatGroup.bgra8888,
       );
 
-      await cameraController!.initialize();
-      isControllerDisposed = false;
       if (!mounted) return;
 
+      await cameraController!.initialize();
       await cameraController!.lockCaptureOrientation(
         DeviceOrientation.portraitUp,
       );
+      isControllerDisposed = false;
     }
 
     _streamActive = true;

@@ -20,7 +20,7 @@ abstract class Optimizer {
   });
 
   /// Public entry to finalize and reconcile a manually accepted receipt.
-  void accept(RecognizedReceipt receipt);
+  void accept(RecognizedReceipt receipt, ReceiptOptions options);
 
   /// Resets resources used by the optimizer.
   void reset();
@@ -52,9 +52,6 @@ final class ReceiptOptimizer implements Optimizer {
   /// Ordering stats by group.
   final Map<RecognizedGroup, _OrderStats> _orderStats = {};
 
-  /// Shorthand for the active options provided by [ReceiptRuntime].
-  final ReceiptOptions _opts = ReceiptRuntime.options;
-
   /// Internal convergence bookkeeping.
   int _unchangedCount = 0;
 
@@ -78,6 +75,9 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Last fingerprint to detect stalling.
   String? _lastFingerprint;
+
+  /// Shorthand for the active options provided by [ReceiptRuntime].
+  static ReceiptOptions get _options => ReceiptRuntime.options;
 
   /// Marks the optimizer for reinitialization on next optimization.
   @override
@@ -119,11 +119,13 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Accepts a receipt manually and finalizes reconciliation if needed.
   @override
-  void accept(RecognizedReceipt receipt) {
-    _processPositions(receipt);
-    _reconcileToTotal(receipt, true);
-    _applySkewAngle(receipt);
-    _updateEntities(receipt);
+  void accept(RecognizedReceipt receipt, ReceiptOptions options) {
+    ReceiptRuntime.runWithOptions(options, () {
+      _processPositions(receipt);
+      _reconcileToTotal(receipt, true);
+      _applySkewAngle(receipt);
+      _updateEntities(receipt);
+    });
   }
 
   /// Resets all resources used by the optimizer.
@@ -171,7 +173,7 @@ final class ReceiptOptimizer implements Optimizer {
     final totalHash = receipt.total?.formattedValue ?? '';
     final fingerprint = '$positionsHash|$totalHash';
 
-    final loopThreshold = _opts.tuning.optimizerLoopThreshold;
+    final loopThreshold = _options.tuning.optimizerLoopThreshold;
 
     if (_lastFingerprint == fingerprint) {
       _unchangedCount++;
@@ -226,7 +228,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Trims a cache list to the configured precision size.
   void _trimCache(List list) {
-    final maxCacheSize = _opts.tuning.optimizerMaxCacheSize;
+    final maxCacheSize = _options.tuning.optimizerMaxCacheSize;
     while (list.length > maxCacheSize) {
       list.removeAt(0);
     }
@@ -422,7 +424,7 @@ final class ReceiptOptimizer implements Optimizer {
         if (overshoot != null) {
           final reduc = entry.key / 100.0;
           if (plannedReduction + reduc >
-              overshoot + _opts.tuning.optimizerTotalTolerance) {
+              overshoot + _options.tuning.optimizerTotalTolerance) {
             break;
           }
           plannedReduction += reduc;
@@ -521,24 +523,43 @@ final class ReceiptOptimizer implements Optimizer {
     }
   }
 
-  /// Returns the most common string length (mode) in [strings].
-  int _mostCommonLength(List<String> strings) {
-    if (strings.isEmpty) return 0;
+  /// Returns the median of the given numeric values.
+  double _median(List<double> values) {
+    if (values.isEmpty) return double.nan;
+    final sorted = [...values]..sort();
+    final mid = sorted.length ~/ 2;
+    if (sorted.length.isOdd) {
+      return sorted[mid];
+    } else {
+      return (sorted[mid - 1] + sorted[mid]) / 2.0;
+    }
+  }
 
-    final counts = <int, int>{};
-    for (final s in strings) {
-      final len = s.length;
-      counts[len] = (counts[len] ?? 0) + 1;
+  /// Filters out column outliers based on deviation from the median x coordinate using MAD.
+  List<Point<double>> _filterColumnOutliers(
+    List<Point<double>> pts, {
+    double k = 3.5,
+  }) {
+    if (pts.length <= 3) return pts;
+
+    final xs = pts.map((p) => p.y).toList();
+
+    final medianX = _median(xs);
+    final deviations = xs.map((x) => (x - medianX).abs()).toList();
+    final mad = _median(deviations);
+
+    if (mad == 0) return pts;
+
+    final threshold = k * mad;
+    final filtered = <Point<double>>[];
+
+    for (var i = 0; i < pts.length; i++) {
+      if (deviations[i] <= threshold) {
+        filtered.add(pts[i]);
+      }
     }
 
-    final mostCommon = counts.entries.reduce(
-      (a, b) =>
-          a.value > b.value
-              ? a
-              : (a.value < b.value ? b : (a.key < b.key ? a : b)),
-    );
-
-    return mostCommon.key;
+    return filtered;
   }
 
   /// Estimates and writes the receipt’s skew angle (radians) from product-column left edges.
@@ -546,23 +567,20 @@ final class ReceiptOptimizer implements Optimizer {
     final pos = receipt.positions;
     if (pos.length < 2) return;
 
-    final mostCommon = _mostCommonLength(
-      pos.map((p) => p.product.postfixText).toList(),
-    );
-
     final pts = <Point<double>>[];
     for (final p in pos) {
       final a = p.product.line.boundingBox;
-      final b = p.price.line.boundingBox;
-      final yCenter = (a.center.dy + b.center.dy) / 2;
-      final xCenter = (a.left + b.right) / 2;
-      if (p.product.postfixText.length == mostCommon) {
-        pts.add(Point<double>(yCenter, xCenter));
-      }
+      final yCenter = a.center.dy;
+      final xCenter = a.left;
+
+      pts.add(Point<double>(yCenter, xCenter));
     }
     if (pts.length < 2) return;
 
-    final slope = _theilSenSlopeXvsY(pts);
+    final filteredPts = _filterColumnOutliers(pts);
+    if (filteredPts.length < 2) return;
+
+    final slope = _theilSenSlopeXvsY(filteredPts);
     final skewRad = _wrapAngle(atan(slope));
 
     if (receipt.bounds != null) {
@@ -570,7 +588,7 @@ final class ReceiptOptimizer implements Optimizer {
     }
 
     ReceiptLogger.log('bounds.skew.leftEdge', {
-      'n': pts.length,
+      'n': filteredPts.length,
       'slope': slope,
       'skewRad': skewRad,
       'skewDeg': skewRad * 180 / pi,
@@ -657,7 +675,7 @@ final class ReceiptOptimizer implements Optimizer {
 
     final closeY = _isYCloseToGroup(position, group);
     final samePrice = _hasSamePriceInGroup(position, group);
-    final thrNew = _opts.tuning.optimizerConfidenceThreshold;
+    final thrNew = _options.tuning.optimizerConfidenceThreshold;
     final thrBase = (thrNew - 5).clamp(0, 100);
     final thr = (samePrice && closeY) ? (thrBase - 5).clamp(0, 100) : thrBase;
 
@@ -758,7 +776,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Creates a fresh group for the given position.
   void _createNewGroup(RecognizedPosition position) {
-    final maxCacheSize = _opts.tuning.optimizerMaxCacheSize;
+    final maxCacheSize = _options.tuning.optimizerMaxCacheSize;
     final newGroup = RecognizedGroup(maxGroupSize: maxCacheSize);
     position.group = newGroup;
     position.operation = Operation.added;
@@ -795,7 +813,7 @@ final class ReceiptOptimizer implements Optimizer {
       'total?': receipt.total?.value,
     });
 
-    final halfStability = _opts.tuning.optimizerStabilityThreshold ~/ 2;
+    final halfStability = _options.tuning.optimizerStabilityThreshold ~/ 2;
     final halfCacheSize = ReceiptRuntime.tuning.optimizerMaxCacheSize ~/ 2;
 
     bool stable(stab, size) => stab >= halfStability && size >= halfCacheSize;
@@ -917,7 +935,7 @@ final class ReceiptOptimizer implements Optimizer {
     final total = receipt.total?.value;
     if (total == null) return;
 
-    final tol = _opts.tuning.optimizerTotalTolerance;
+    final tol = _options.tuning.optimizerTotalTolerance;
     final beforeLen = receipt.positions.length;
 
     receipt.positions.removeWhere(
@@ -1029,7 +1047,7 @@ final class ReceiptOptimizer implements Optimizer {
 
       if (receipt.isValid) return;
 
-      final pseudoName = _opts.tuning.optimizerUnrecognizedProductName;
+      final pseudoName = _options.tuning.optimizerUnrecognizedProductName;
       final position = RecognizedPosition.pseudo(receipt, pseudoName);
       _createNewGroup(position);
       receipt.positions.add(position);
@@ -1126,7 +1144,7 @@ final class ReceiptOptimizer implements Optimizer {
     observed.sort((a, b) => a.y.compareTo(b.y));
 
     final now = DateTime.now();
-    final alpha = _opts.tuning.optimizerEwmaAlpha;
+    final alpha = _options.tuning.optimizerEwmaAlpha;
     for (final o in observed) {
       final s = _orderStats.putIfAbsent(
         o.group,
@@ -1146,7 +1164,7 @@ final class ReceiptOptimizer implements Optimizer {
       }
     }
 
-    final decayThreshold = _opts.tuning.optimizerAboveCountDecayThreshold;
+    final decayThreshold = _options.tuning.optimizerAboveCountDecayThreshold;
     for (final s in _orderStats.values) {
       final total = s.aboveCounts.values.fold<int>(0, (a, b) => a + b);
       if (total > decayThreshold) {
@@ -1171,7 +1189,7 @@ final class ReceiptOptimizer implements Optimizer {
 
   /// Comparator for group ordering with tie-breakers and history.
   int _compareGroupsForOrder(RecognizedGroup a, RecognizedGroup b) {
-    final tiePx = _opts.tuning.optimizerTotalTolerance;
+    final tiePx = _options.tuning.optimizerTotalTolerance;
 
     final sa = _orderStats[a];
     final sb = _orderStats[b];
@@ -1203,8 +1221,8 @@ final class ReceiptOptimizer implements Optimizer {
 
     final staleForAWhile = now.difference(g.timestamp) >= grace;
     final veryWeak =
-        g.stability < (_opts.tuning.optimizerStabilityThreshold ~/ 2) &&
-        g.confidence < (_opts.tuning.optimizerConfidenceThreshold ~/ 2);
+        g.stability < (_options.tuning.optimizerStabilityThreshold ~/ 2) &&
+        g.confidence < (_options.tuning.optimizerConfidenceThreshold ~/ 2);
     final tiny = g.members.length <= 2;
     return staleForAWhile && veryWeak && tiny;
   }

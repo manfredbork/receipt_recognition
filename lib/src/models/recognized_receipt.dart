@@ -189,17 +189,30 @@ class RecognizedReceipt {
           final enoughMembers = (p.group?.members.length ?? 0) >= minSize ~/ 2;
           final enoughStability = p.stability >= stabThr ~/ 2;
           final enoughConfidence = p.confidence >= confThr ~/ 2;
-          return enoughMembers && enoughStability && enoughConfidence;
+          final enoughUnits =
+              p.product.alternativeUnits.isEmpty ||
+              p.product.alternativeUnits.length >= minSize ~/ 2;
+          return enoughMembers &&
+              enoughStability &&
+              enoughConfidence &&
+              enoughUnits;
         }).length;
     final passing =
         positions.where((p) {
           final enoughMembers = (p.group?.members.length ?? 0) >= minSize;
           final enoughStability = p.stability >= stabThr;
           final enoughConfidence = p.confidence >= confThr;
-          return enoughMembers && enoughStability && enoughConfidence;
+          final enoughUnits =
+              p.product.alternativeUnits.isEmpty ||
+              p.product.alternativeUnits.length >= minSize;
+          return enoughMembers &&
+              enoughStability &&
+              enoughConfidence &&
+              enoughUnits;
         }).length;
     final minNeed = positions.length;
-    final need = minNeed - positions.length ~/ 5;
+    final part = positions.length ~/ 4;
+    final need = minNeed - part;
     return minPassing >= minNeed && passing >= need;
   }
 }

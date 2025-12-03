@@ -37,6 +37,9 @@ export 'src/models/index.dart'
 /// High-level recognizer (public entry point)
 export 'src/services/ocr/receipt_recognizer.dart' show ReceiptRecognizer;
 
+/// Background isolate text processor
+export 'src/services/ocr/receipt_text_processor.dart' show ReceiptTextProcessor;
+
 /// ── Public services ──
 export 'src/services/optimizer/receipt_optimizer.dart'
     show Optimizer, ReceiptOptimizer;
