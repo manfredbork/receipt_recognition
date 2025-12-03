@@ -2,13 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.3] – 2025-12-02
+## [0.2.3] – 2025-12-03
 
 ### ✨ Added
+- **Extended integration tests**: Added comprehensive integration tests for multiple receipt types (EDEKA, LIDL, and ALDI) with validation of store names, totals, purchase dates, positions, and specific line items.
 - **Text processor testing support**: Added `debugRunSynchronouslyForTests` flag to `ReceiptTextProcessor` for synchronous parsing in test environments.
 - **Truncated frequency calculation**: New `calculateTruncatedFrequency` method that merges truncated leading-token alternatives into their longer counterparts before counting frequency.
 
 ### 🛠️ Changed
+- **Unified unit parsing**: Merged `_tryParseUnitQuantity` and `_tryParseUnitPrice` into a single `_tryParseUnit` method for more efficient unit detection.
+- **Total label detection improvements**:
+    - Now uses normalized keys for better matching accuracy
+    - Added prefix matching for total labels (e.g., "SUMME EUR" will match "summe")
+- **Parser refinements**:
+    - Fixed bug where `_findTotalLabel` was incorrectly called instead of `_findTotal` when searching for totals
+    - Improved unit text extraction to avoid including numeric portions
+    - Enhanced unknown entity filtering to prevent lines with too many numeric characters from being classified as unknown
 - **Normalization improvements**:
     - Updated frequency calculation for alternative postfix texts to use truncated frequency method.
     - Moved truncated frequency calculator to the correct normalization method for alternative texts.
@@ -20,6 +29,8 @@ All notable changes to this project will be documented in this file.
 - **Timeout handling**: Improved timeout behavior for better responsiveness.
 
 ### 🐛 Fixed
+- **Entity type preservation**: Fixed issue where entities were being incorrectly cast, now properly creates new instances with correct types when filtering (e.g., `RecognizedTotal` → `RecognizedAmount`, `RecognizedTotalLabel` → `RecognizedUnknown`)
+- **Unit boundary detection**: Changed unit parsing to use `_rightL(line)` instead of `_leftL(line)` for proper right-bound checking
 - **Unit parsing**: Fixed a critical bug where unit prices with negative total prices were not correctly handled with proper sign adjustment.
 - **Unit validation**: Corrected unit price-quantity validation logic to properly check tolerance thresholds.
 - **Parsing stability**: Multiple fixes to improve parsing reliability and reduce edge-case errors.
