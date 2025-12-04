@@ -129,7 +129,7 @@ final class RecognizedProduct extends RecognizedEntity<String> {
     for (final v in counts.values) {
       if (v > maxCount) maxCount = v;
     }
-    return (maxCount * 100) ~/ alts.length;
+    return (maxCount * 100 / alts.length).round();
   }
 
   /// Map of each unique alternative text to its percentage frequency.

@@ -74,6 +74,11 @@ final class ReceiptNormalizer {
 
     final normalized = values.map((s) => _normalizeSpaces(s)).toList();
 
+    final initialCounts = <String, int>{};
+    for (final s in normalized) {
+      initialCounts[s] = (initialCounts[s] ?? 0) + 1;
+    }
+
     final repIndex = <int, int>{};
 
     for (var i = 0; i < normalized.length; i++) {
@@ -91,8 +96,12 @@ final class ReceiptNormalizer {
               otherTrimmed.length > candidateTrimmed.length) {
             final nextChar = otherTrimmed[candidateTrimmed.length];
             if (nextChar == ' ') {
-              representative = j;
-              break;
+              final candidateCount = initialCounts[candidateTrimmed] ?? 0;
+              final otherCount = initialCounts[otherTrimmed] ?? 0;
+              if (candidateCount < otherCount) {
+                representative = j;
+                break;
+              }
             }
           }
         }

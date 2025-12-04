@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] – 2025-12-04
+
+### ✨ Added
+- **Extended integration test coverage**: Added some comprehensive integration tests with special validation for deposit positions.
+
+### 🐛 Fixed
+- **Total identification**: Fixed a critical bug where totals were not correctly identified when total labels were present.
+- **Unit parsing tolerance**: Adjusted vertical tolerance for better multi-line receipt handling.
+
+---
+
 ## [0.2.3] – 2025-12-03
 
 ### ✨ Added

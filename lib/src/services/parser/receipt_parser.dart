@@ -170,12 +170,12 @@ final class ReceiptParser {
     final rightBound = _rightL(bounds.line) - quarter;
 
     for (final line in lines) {
+      if (_tryIdentifyTotal(line, parsed, rightBound)) continue;
       if (_shouldStopIfTotalConfirmed(line, parsed)) break;
       if (_shouldStopIfStopWord(line)) break;
       if (_shouldIgnoreLine(line)) continue;
-      if (_tryParseStore(line, parsed)) continue;
       if (_tryParseTotalLabel(line, parsed, leftBound)) continue;
-      if (_tryParseTotal(line, parsed, rightBound)) continue;
+      if (_tryParseStore(line, parsed)) continue;
       if (_tryParseAmount(line, parsed, rightBound)) continue;
       if (_tryParseUnit(line, parsed, rightBound)) continue;
       if (_tryParseUnknown(line, parsed, leftBound)) continue;
@@ -198,6 +198,9 @@ final class ReceiptParser {
     TextLine line,
     List<RecognizedEntity> parsed,
   ) {
+    final totalLabel = _findTotalLabel(parsed);
+    if (totalLabel == null) return false;
+
     final total = _findTotal(parsed);
     if (total == null) return false;
 
@@ -205,9 +208,9 @@ final class ReceiptParser {
     if (amounts.isEmpty) return false;
 
     final amountsTotal = amounts.fold<double>(0, (a, b) => a + b.value);
-    final formattedTotal = CalculatedTotal(value: amountsTotal).formattedValue;
-    final stop = total.formattedValue == formattedTotal;
-    return stop;
+    final calculatedTotal = CalculatedTotal(value: amountsTotal);
+
+    return total.formattedValue == calculatedTotal.formattedValue;
   }
 
   /// Returns `true` if the line matches a configured stop keyword.
@@ -225,28 +228,13 @@ final class ReceiptParser {
 
     if (_options.totalLabels.mapping.isEmpty) return false;
 
-    final totalLabel = _findTotalLabel(parsed);
-    final total = _findTotal(parsed);
     final label = _findTotalLabelLike(line.text);
     final canonical = _options.totalLabels.mapping[label] ?? label;
     if (canonical != null) {
-      if (totalLabel != null && total != null) {
-        parsed.removeWhere(
-          (e) => identical(e, totalLabel) || identical(e, total),
-        );
-      }
-      final addTotalLabel = RecognizedTotalLabel(line: line, value: canonical);
-      parsed.add(addTotalLabel);
-      if (totalLabel == null && total == null) {
-        final amounts = parsed.whereType<RecognizedAmount>().toList();
-        final closestAmount = _findClosestTotalAmount(addTotalLabel, amounts);
-        if (closestAmount != null) {
-          parsed.add(_toTotal(closestAmount));
-          return true;
-        }
-      }
+      parsed.add(RecognizedTotalLabel(line: line, value: canonical));
+      return true;
     }
-    return canonical != null;
+    return false;
   }
 
   /// Returns true if [text] fuzzy-matches any configured total label above the adaptive threshold.
@@ -288,33 +276,28 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Finds the amount nearest to total label and marks it as [RecognizedTotal].
-  /// Adds it to [parsed] and returns `true` if successful.
-  static bool _tryParseTotal(
+  /// Attempts to identify and swap the closest amount entity near a total label as the receipt total.
+  /// Returns `false` always; modifies [parsed] in place by converting detected total/amount pairs.
+  static bool _tryIdentifyTotal(
     TextLine line,
     List<RecognizedEntity> parsed,
     double rightBound,
   ) {
     final totalLabel = _findTotalLabel(parsed);
     if (totalLabel == null) return false;
-    final total = _findTotal(parsed);
-    if (_tryParseAmount(line, parsed, rightBound)) {
-      final amounts = parsed.whereType<RecognizedAmount>().toList();
-      final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
-      if (closestAmount == null) {
-        parsed.removeLast();
-        return false;
-      } else {
-        final i = parsed.indexWhere((e) => identical(e, total));
-        if (i >= 0) {
-          parsed[i] = _toAmount(parsed[i] as RecognizedTotal);
-        }
-        parsed.removeWhere(
-          (e) => e is RecognizedAmount && identical(e, closestAmount),
-        );
-        parsed.add(_toTotal(closestAmount));
-        return true;
-      }
+    final amounts = parsed.whereType<RecognizedAmount>().toList();
+    final closestAmount = _findClosestTotalAmount(totalLabel, amounts);
+    if (closestAmount != null) {
+      replaceWhere<RecognizedEntity>(
+        parsed,
+        (e) => e is RecognizedTotal,
+        (e) => _toAmount(e as RecognizedTotal),
+      );
+      replaceWhere<RecognizedEntity>(
+        parsed,
+        (e) => identical(e, closestAmount),
+        (e) => _toTotal(e as RecognizedAmount),
+      );
     }
     return false;
   }
@@ -343,6 +326,7 @@ final class ReceiptParser {
     if (_rightL(line) > rightBound) return false;
     final quantity = _quantity.stringMatch(line.text);
     final amount = _amount.stringMatch(line.text);
+
     int? unitQuantity;
     if (quantity != null) {
       unitQuantity = int.tryParse(_convertToInteger(quantity));
@@ -350,6 +334,7 @@ final class ReceiptParser {
         parsed.add(RecognizedUnitQuantity(line: line, value: unitQuantity));
       }
     }
+
     double? unitPrice;
     if (amount != null) {
       unitPrice = double.tryParse(_convertToAmount(amount));
@@ -358,8 +343,12 @@ final class ReceiptParser {
       }
     }
     if (unitQuantity == null && unitPrice == null) return false;
+
     final qTokens = line.text.split(_quantity);
     final aTokens = line.text.split(_amount);
+    final qLen = qTokens.join().length;
+    final aLen = aTokens.join().length;
+    final minLen = qLen < aLen ? qLen : aLen;
 
     String text = line.text;
     if (qTokens.length > 1 && aTokens.length > 1) {
@@ -373,9 +362,18 @@ final class ReceiptParser {
       text = aTokens.first;
     }
 
-    if (text.length / line.text.length >= 0.5) {
+    final minLenSatisfied1 = minLen / line.text.length >= 0.5;
+    final minLenSatisfied2 = text.length / line.text.length >= 0.5;
+
+    final looksLikeExtension = minLenSatisfied1 && minLenSatisfied2;
+    if (looksLikeExtension) {
       final modified = ReceiptTextLine.fromLine(line).copyWith(text: text);
       _tryParseUnknown(modified, parsed, rightBound);
+    }
+
+    final looksLikeInsideProduct = minLenSatisfied1 && !minLenSatisfied2;
+    if (looksLikeInsideProduct) {
+      _tryParseUnknown(line, parsed, rightBound);
     }
 
     return true;
@@ -421,6 +419,23 @@ final class ReceiptParser {
     final norm2 = norm1.replaceAll(RegExp('[.,‚،٫·]'), '.');
     final norm3 = norm2.replaceAll(RegExp('[^-0-9.]'), '');
     return norm3;
+  }
+
+  /// Replaces elements in [list] that satisfy [test] by applying [replace] to them.
+  /// Returns the count of elements that were replaced.
+  static int replaceWhere<T>(
+    List<T> list,
+    bool Function(T element) test,
+    T Function(T element) replace,
+  ) {
+    int count = 0;
+    for (int i = 0; i < list.length; i++) {
+      if (test(list[i])) {
+        list[i] = replace(list[i]);
+        count++;
+      }
+    }
+    return count;
   }
 
   /// Computes the tight axis-aligned bounding [Rect] that encloses all [lines].
@@ -779,8 +794,8 @@ final class ReceiptParser {
     if (identical(sourceLine, targetLine)) return double.infinity;
 
     final tol = max(_heightL(sourceLine), _heightL(targetLine));
-    final srcTop = _topL(sourceLine) - (lineAbove ? tol * pi : 0);
-    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol * pi : 0);
+    final srcTop = _topL(sourceLine) - (lineAbove ? tol * pi : tol / 2);
+    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol * pi : tol / 2);
 
     final targetCy = _cyL(targetLine);
     final isSameLine = targetCy >= srcTop && targetCy <= srcBottom;
