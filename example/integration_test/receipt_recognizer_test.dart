@@ -52,7 +52,7 @@ void main() {
     testWidgets(
       'REWE receipt check store + total + positions + units + group',
       (tester) async {
-        final receipt = await _processImage('rewe.png');
+        final receipt = await _processImage('01-rewe-de.png');
 
         expect(receipt.store?.formattedValue, equals('REWE'));
         expect(receipt.totalLabel?.formattedValue, equals('SUMME'));
@@ -104,7 +104,7 @@ void main() {
     testWidgets(
       'EDEKA receipt check store + total + positions length + single position',
       (tester) async {
-        final receipt = await _processImage('edeka.png');
+        final receipt = await _processImage('02-edeka-de.png');
 
         expect(receipt.store?.formattedValue, equals('EDEKA'));
         expect(receipt.totalLabel?.formattedValue, equals('SUMME'));
@@ -121,7 +121,7 @@ void main() {
     testWidgets(
       'LIDL receipt check total + purchase date + positions length + single position',
       (tester) async {
-        final receipt = await _processImage('lidl.png');
+        final receipt = await _processImage('03-lidl-de.png');
 
         expect(receipt.totalLabel?.formattedValue, equals('ZU ZAHLEN'));
         expect(receipt.calculatedTotal.formattedValue, equals('14.24'));
@@ -142,7 +142,7 @@ void main() {
     testWidgets(
       'ALDI receipt check store + total + purchase date + positions length + single position',
       (tester) async {
-        final receipt = await _processImage('aldi.png');
+        final receipt = await _processImage('04-aldi-de.png');
 
         expect(receipt.store?.formattedValue, equals('ALDI'));
         expect(receipt.totalLabel?.formattedValue, equals('ZU ZAHLEN'));
@@ -160,6 +160,25 @@ void main() {
         expect(items[3].price.value, equals(1.39));
       },
     );
+
+    testWidgets('REWE receipt special checks related to deposit positions', (
+      tester,
+    ) async {
+      final receipt = await _processImage('05-rewe-de.png');
+
+      expect(receipt.store?.formattedValue, equals('REWE'));
+      expect(receipt.totalLabel?.formattedValue, equals('SUMME'));
+      expect(receipt.calculatedTotal.formattedValue, equals('32.68'));
+      expect(receipt.total?.formattedValue, equals('32.68'));
+
+      final items = receipt.positions;
+
+      expect(items.length, equals(22));
+      expect(items[8].product.text, equals('PFAND 0,25 EURO'));
+      expect(items[8].price.value, equals(0.25));
+      expect(items[10].product.text, equals('PFAND 0,25 EURO'));
+      expect(items[10].price.value, equals(0.25));
+    });
 
     tearDown(() {
       ReceiptTextProcessor.debugRunSynchronouslyForTests = false;

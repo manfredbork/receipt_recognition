@@ -33,17 +33,13 @@ export 'src/models/index.dart'
         RecognizedScanProgress,
         ReceiptValidationResult,
         ReceiptCompleteness;
-
 /// High-level recognizer (public entry point)
 export 'src/services/ocr/receipt_recognizer.dart' show ReceiptRecognizer;
-
 /// Background isolate text processor
 export 'src/services/ocr/receipt_text_processor.dart' show ReceiptTextProcessor;
-
 /// ── Public services ──
 export 'src/services/optimizer/receipt_optimizer.dart'
     show Optimizer, ReceiptOptimizer;
-
 /// ── Configuration & runtime ──
 /// Options + tuning + merge semantics + default baseline
 export 'src/utils/configuration/index.dart'
@@ -53,6 +49,5 @@ export 'src/utils/configuration/index.dart'
         MergePolicy,
         kReceiptDefaultOptions,
         ReceiptRuntime;
-
 /// ── Logger + debug output ──
 export 'src/utils/logging/index.dart' show ReceiptLogger;
