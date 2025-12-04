@@ -360,6 +360,9 @@ final class ReceiptParser {
     if (unitQuantity == null && unitPrice == null) return false;
     final qTokens = line.text.split(_quantity);
     final aTokens = line.text.split(_amount);
+    final qLen = qTokens.join().length;
+    final aLen = aTokens.join().length;
+    final minLen = qLen < aLen ? qLen : aLen;
 
     String text = line.text;
     if (qTokens.length > 1 && aTokens.length > 1) {
@@ -373,7 +376,7 @@ final class ReceiptParser {
       text = aTokens.first;
     }
 
-    if (text.length / line.text.length >= 0.5) {
+    if (minLen / line.text.length >= 0.5) {
       final modified = ReceiptTextLine.fromLine(line).copyWith(text: text);
       _tryParseUnknown(modified, parsed, rightBound);
     }

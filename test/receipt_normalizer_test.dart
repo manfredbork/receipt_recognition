@@ -129,13 +129,19 @@ void main() {
       test(
         'merges truncated leading-token alternatives into longer variant',
         () {
-          final values = ['Red Carpet', 'Red', 'Rod Capet', 'Rod Pet'];
+          final values = [
+            'Red Carpet',
+            'Red Carpet',
+            'Red',
+            'Rod Capet',
+            'Rod Pet',
+          ];
           final result = ReceiptNormalizer.calculateTruncatedFrequency(values);
 
           expect(result.length, 3);
-          expect(result['Red Carpet'], equals(50));
-          expect(result['Rod Capet'], equals(25));
-          expect(result['Rod Pet'], equals(25));
+          expect(result['Red Carpet'], equals(60));
+          expect(result['Rod Capet'], equals(20));
+          expect(result['Rod Pet'], equals(20));
           expect(result.containsKey('Red'), isFalse);
         },
       );
