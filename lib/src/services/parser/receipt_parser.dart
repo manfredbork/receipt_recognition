@@ -121,9 +121,9 @@ final class ReceiptParser {
     r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
   );
 
-  /// Matches quantity expressions like "2x Item", "3 × Item", "2 kg × Another", and "2 Stk x".
+  /// Matches quantity expressions like "3", "2x Item", "3 × Item", "2 kg × Another", and "2 Stk x".
   static final RegExp _quantity = RegExp(
-    r'\s*(\d+)\s*(\S{1,3})?\s*[xX×]\s*(.*)',
+    r'^\s*(\d+)(?:\s*(\S{1,3})?\s*[xX×]\s*(.*))?\s*$',
   );
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
@@ -165,9 +165,9 @@ final class ReceiptParser {
     final bounds = _findBounds(parsed);
     if (bounds == null) return parsed;
 
-    final quarter = (1 / 4) * (_rightL(bounds.line) - _leftL(bounds.line));
-    final leftBound = _leftL(bounds.line) + quarter;
-    final rightBound = _rightL(bounds.line) - quarter;
+    final fifth = (1 / 5) * (_rightL(bounds.line) - _leftL(bounds.line));
+    final leftBound = _leftL(bounds.line) + fifth;
+    final rightBound = _rightL(bounds.line) - fifth;
 
     for (final line in lines) {
       if (_tryIdentifyTotal(line, parsed, rightBound)) continue;
@@ -311,7 +311,7 @@ final class ReceiptParser {
     if (_rightL(line) <= rightBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value = double.tryParse(_convertToAmount(amount));
+    final value = _convertToDouble(amount);
     if (value == null || value == 0) return false;
     parsed.add(RecognizedAmount(line: line, value: value.toDouble()));
     return true;
@@ -329,20 +329,23 @@ final class ReceiptParser {
 
     int? unitQuantity;
     if (quantity != null) {
-      unitQuantity = int.tryParse(_convertToInteger(quantity));
-      if (unitQuantity != null) {
-        parsed.add(RecognizedUnitQuantity(line: line, value: unitQuantity));
-      }
+      unitQuantity = _convertToInteger(quantity);
     }
 
     double? unitPrice;
     if (amount != null) {
-      unitPrice = double.tryParse(_convertToAmount(amount));
-      if (unitPrice != null) {
-        parsed.add(RecognizedUnitPrice(line: line, value: unitPrice));
-      }
+      unitPrice = _convertToDouble(amount);
     }
+
     if (unitQuantity == null && unitPrice == null) return false;
+
+    if (unitQuantity != null) {
+      parsed.add(RecognizedUnitQuantity(line: line, value: unitQuantity));
+    }
+
+    if (unitPrice != null) {
+      parsed.add(RecognizedUnitPrice(line: line, value: unitPrice));
+    }
 
     final qTokens = line.text.split(_quantity);
     final aTokens = line.text.split(_amount);
@@ -387,7 +390,7 @@ final class ReceiptParser {
   ) {
     if (_leftL(line) > leftBound) return false;
     final unknown = line.text;
-    final numeric = _convertToAmount(unknown);
+    final numeric = _convertToDouble(unknown)?.toString() ?? '';
     if (numeric.length / unknown.length < 0.5) {
       parsed.add(RecognizedUnknown(line: line, value: unknown));
       return true;
@@ -407,18 +410,19 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Returns a string containing only the digits from the input.
-  static String _convertToInteger(String input) {
+  /// Extracts digits from a string and returns them as an integer, or null if no valid integer can be formed.
+  static int? _convertToInteger(String input) {
+    if (RegExp(r'\d[.,]\d').hasMatch(input)) return null;
     final norm = input.replaceAll(RegExp(r'[^0-9]'), '');
-    return norm;
+    return int.tryParse(norm);
   }
 
-  /// Normalizes dash and decimal characters and strips all non-numeric symbols from an amount string.
-  static String _convertToAmount(String input) {
+  /// Converts a string to a double by normalizing minus signs and decimal separators.
+  static double? _convertToDouble(String input) {
     final norm1 = input.replaceAll(RegExp('[-−–—]'), '-');
     final norm2 = norm1.replaceAll(RegExp('[.,‚،٫·]'), '.');
     final norm3 = norm2.replaceAll(RegExp('[^-0-9.]'), '');
-    return norm3;
+    return double.tryParse(norm3);
   }
 
   /// Replaces elements in [list] that satisfy [test] by applying [replace] to them.
@@ -625,28 +629,34 @@ final class ReceiptParser {
     if (yUnitQuantity != null) yUnitQuantities.remove(yUnitQuantity);
 
     if (unitPrice != defaultPrice && unitQuantity != defaultQuantity) {
-      final test = unitPrice * unitQuantity - defaultPrice < tolerance;
+      final test = _isClose(unitPrice * unitQuantity, defaultPrice, tolerance);
       if (test) {
         return RecognizedUnit.fromNumbers(unitQuantity, unitPrice, defaultLine);
       }
-    } else if (unitPrice != defaultPrice) {
-      final quantity = (defaultPrice / unitPrice).abs().round();
-      final test = defaultPrice % quantity == 0;
-      if (test) {
-        return RecognizedUnit.fromNumbers(
-          quantity,
-          defaultPrice / quantity,
-          defaultLine,
-        );
+    }
+
+    if (unitPrice != defaultPrice) {
+      final quantity = (defaultPrice / unitPrice).round();
+      if (quantity > 0) {
+        final test = _isClose(quantity * unitPrice, defaultPrice, tolerance);
+        if (test) {
+          return RecognizedUnit.fromNumbers(quantity, unitPrice, defaultLine);
+        }
       }
-    } else if (unitQuantity != defaultQuantity) {
-      final test = defaultPrice % unitQuantity == 0;
-      if (test) {
-        return RecognizedUnit.fromNumbers(
-          unitQuantity,
-          defaultPrice / unitQuantity,
-          defaultLine,
-        );
+    }
+
+    if (unitQuantity != defaultQuantity) {
+      final price = (defaultPrice / unitQuantity * 100).round() / 100;
+      if (price != 0) {
+        final test = _isClose(unitQuantity * price, defaultPrice, tolerance);
+        if (test) {
+          final unitPriceFromTotal = defaultPrice / unitQuantity;
+          return RecognizedUnit.fromNumbers(
+            unitQuantity,
+            unitPriceFromTotal,
+            defaultLine,
+          );
+        }
       }
     }
 
@@ -656,6 +666,10 @@ final class ReceiptParser {
       defaultLine,
     );
   }
+
+  /// Returns true if two numbers differ by less than the given tolerance.
+  static bool _isClose(double a, double b, double tolerance) =>
+      (a - b).abs() < tolerance;
 
   /// Assigns each unit to the closest position.
   static void _assignUnitToPositions(
@@ -780,7 +794,7 @@ final class ReceiptParser {
     RecognizedTotalLabel totalLabel,
     List<RecognizedAmount> amounts,
   ) {
-    final entity = _findClosestEntity(totalLabel, amounts);
+    final entity = _findClosestEntity(totalLabel, amounts, lineBelow: true);
     return entity != null ? entity as RecognizedAmount : null;
   }
 
@@ -794,8 +808,8 @@ final class ReceiptParser {
     if (identical(sourceLine, targetLine)) return double.infinity;
 
     final tol = max(_heightL(sourceLine), _heightL(targetLine));
-    final srcTop = _topL(sourceLine) - (lineAbove ? tol * pi : tol / 2);
-    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol * pi : tol / 2);
+    final srcTop = _topL(sourceLine) - (lineAbove ? tol * pi : 0);
+    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol * pi : 0);
 
     final targetCy = _cyL(targetLine);
     final isSameLine = targetCy >= srcTop && targetCy <= srcBottom;
