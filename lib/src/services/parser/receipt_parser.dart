@@ -121,9 +121,9 @@ final class ReceiptParser {
     r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
   );
 
-  /// Matches quantity expressions like "3", "2x Item", "3 × Item", "2 kg × Another", and "2 Stk x".
+  /// Matches quantity expressions like "3", "2x Item", "3 * Item", "2 kg × Another", and "2 Stk x".
   static final RegExp _quantity = RegExp(
-    r'^\s*(\d+)(?:\s*(\S{1,3})?\s*[xX×]\s*(.*))?\s*$',
+    r'^\s*(\d+)(?:\s*(\S{1,3})?\s*[xX×*]\s*(.*))?\s*$',
   );
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
