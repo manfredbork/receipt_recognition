@@ -588,7 +588,9 @@ final class ReceiptParser {
   ) {
     final amounts = entities.whereType<RecognizedAmount>().toList();
     for (final amount in amounts) {
-      _createPositionForAmount(amount, yUnknowns, receipt);
+      if (!_createPositionForAmount(amount, yUnknowns, receipt)) {
+        _createPositionForAmount(amount, yUnknowns, receipt, strict: false);
+      }
     }
     _assignUnitToPositions(yUnitPrices, yUnitQuantities, receipt);
   }
@@ -696,12 +698,16 @@ final class ReceiptParser {
   static bool _createPositionForAmount(
     RecognizedAmount amount,
     List<RecognizedUnknown> yUnknowns,
-    RecognizedReceipt receipt,
-  ) {
+    RecognizedReceipt receipt, {
+    strict = true,
+  }) {
     _sortByDistance(amount.line.boundingBox, yUnknowns);
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(amount, yUnknown) &&
-          identical(_findClosestEntity(amount, yUnknowns), yUnknown)) {
+      if (_isMatchingUnknown(amount, yUnknown, strict: strict) &&
+          identical(
+            _findClosestEntity(amount, yUnknowns, lineAbove: !strict),
+            yUnknown,
+          )) {
         final position = _createPosition(yUnknown, amount, receipt.timestamp);
         receipt.positions.add(position);
         yUnknowns.removeWhere((e) => identical(e, yUnknown));
@@ -714,8 +720,9 @@ final class ReceiptParser {
   /// Returns true if [unknown] is left of [amount] and vertically aligned.
   static bool _isMatchingUnknown(
     RecognizedAmount amount,
-    RecognizedUnknown unknown,
-  ) {
+    RecognizedUnknown unknown, {
+    strict = true,
+  }) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
     final isLikelyLabel = _isTotalLabelLike(unknownText);
     if (isLikelyLabel) return false;
@@ -724,7 +731,7 @@ final class ReceiptParser {
     final alignedVertically =
         _dy(amount.line, unknown.line).abs() <= _heightL(amount.line);
 
-    return isLeftOfAmount && alignedVertically;
+    return isLeftOfAmount && (alignedVertically || !strict);
   }
 
   /// Constructs a position from matched product text and amount.
