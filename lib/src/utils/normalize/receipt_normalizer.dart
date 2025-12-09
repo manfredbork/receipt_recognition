@@ -67,15 +67,18 @@ final class ReceiptNormalizer {
     return bestResult;
   }
 
-  /// Like [calculateFrequency], but merges truncated leading-token alternatives
-  /// into their longer counterparts before counting.
+  /// Like [calculateFrequency], but merges:
+  ///  - truncated leading-token alternatives, and
+  ///  - single-space-variant alternatives (e.g. "Hello wor ld" -> "Hello world")
+  /// into their more frequent counterparts before counting.
   static Map<String, int> calculateTruncatedFrequency(List<String> values) {
     if (values.isEmpty) return const {};
 
     final normalized = values.map((s) => _normalizeSpaces(s)).toList();
+    final trimmed = normalized.map((s) => s.trim()).toList();
 
     final initialCounts = <String, int>{};
-    for (final s in normalized) {
+    for (final s in trimmed) {
       initialCounts[s] = (initialCounts[s] ?? 0) + 1;
     }
 
@@ -83,27 +86,49 @@ final class ReceiptNormalizer {
 
     for (var i = 0; i < normalized.length; i++) {
       var representative = i;
-      final candidate = normalized[i];
+
+      final candidateTrimmed = trimmed[i];
+      final candidateCount = initialCounts[candidateTrimmed] ?? 0;
 
       for (var j = 0; j < normalized.length; j++) {
         if (i == j) continue;
-        final other = normalized[j];
 
-        if (other.length > candidate.length) {
-          final candidateTrimmed = candidate.trim();
-          final otherTrimmed = other.trim();
-          if (otherTrimmed.startsWith(candidateTrimmed) &&
-              otherTrimmed.length > candidateTrimmed.length) {
-            final nextChar = otherTrimmed[candidateTrimmed.length];
-            if (nextChar == ' ') {
-              final candidateCount = initialCounts[candidateTrimmed] ?? 0;
-              final otherCount = initialCounts[otherTrimmed] ?? 0;
-              if (candidateCount < otherCount) {
-                representative = j;
-                break;
+        final otherTrimmed = trimmed[j];
+        final otherCount = initialCounts[otherTrimmed] ?? 0;
+
+        if (candidateCount >= otherCount) continue;
+
+        bool isPrefixMerge = false;
+        bool isSingleSpaceMerge = false;
+
+        if (otherTrimmed.length > candidateTrimmed.length &&
+            otherTrimmed.startsWith(candidateTrimmed) &&
+            otherTrimmed.length > candidateTrimmed.length) {
+          final nextChar = otherTrimmed[candidateTrimmed.length];
+          if (nextChar == ' ') {
+            isPrefixMerge = true;
+          }
+        }
+
+        if (!isPrefixMerge) {
+          if (candidateTrimmed.length == otherTrimmed.length + 1) {
+            for (var k = 0; k < candidateTrimmed.length; k++) {
+              if (candidateTrimmed[k] == ' ') {
+                final merged =
+                    candidateTrimmed.substring(0, k) +
+                    candidateTrimmed.substring(k + 1);
+                if (merged == otherTrimmed) {
+                  isSingleSpaceMerge = true;
+                  break;
+                }
               }
             }
           }
+        }
+
+        if (isPrefixMerge || isSingleSpaceMerge) {
+          representative = j;
+          break;
         }
       }
 
