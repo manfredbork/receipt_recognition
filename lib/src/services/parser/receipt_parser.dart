@@ -248,7 +248,9 @@ final class ReceiptParser {
     int bestScore = 0;
     for (final label in _options.totalLabels.mapping.keys) {
       final normText = ReceiptNormalizer.normalizeKey(text).toLowerCase();
-      if (normText.startsWith(label)) return label;
+      if (normText.startsWith(label) && normText.length < label.length << 1) {
+        return label;
+      }
 
       final s = ratio(normText, label);
       if (s > bestScore && normText.length >= label.length) {
