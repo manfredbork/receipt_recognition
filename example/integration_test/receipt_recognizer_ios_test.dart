@@ -26,21 +26,42 @@ Future<InputImage> _inputImageFromAssetAsPng(String assetKey) async {
   return InputImage.fromFilePath(pngFile.path);
 }
 
-Future<RecognizedReceipt> _processImage(String file) async {
+Future<RecognizedReceipt> _processImage(String fileName) async {
   InputImage img = await _inputImageFromAssetAsPng(
-    'integration_test/assets/$file',
+    'integration_test/assets/$fileName',
   );
-  final rr = ReceiptRecognizer(singleScan: true);
+  final rr = ReceiptRecognizer(
+    singleScan: true,
+    script: _scriptLanguage(fileName),
+  );
   try {
     final receipt = await rr.processImage(img);
     debugPrint(
-      '\n############### Integration test where receipt is recognized from image "$file" ###############',
+      '\n############### Integration test where receipt is recognized from image "$fileName" ###############',
     );
     ReceiptLogger.logReceipt(receipt);
     return receipt;
   } finally {
     await rr.close();
   }
+}
+
+TextRecognitionScript _scriptLanguage(String fileName) {
+  final langCode = _extractLangCode(fileName);
+  if (langCode == 'zh') {
+    return TextRecognitionScript.chinese;
+  } else if (langCode == 'ja') {
+    return TextRecognitionScript.japanese;
+  } else if (langCode == 'ko') {
+    return TextRecognitionScript.korean;
+  }
+  return TextRecognitionScript.latin;
+}
+
+String? _extractLangCode(String fileName) {
+  final regex = RegExp(r'-([a-z]{2})\.[^.]+$');
+  final match = regex.firstMatch(fileName);
+  return match?.group(1);
 }
 
 void main() {
