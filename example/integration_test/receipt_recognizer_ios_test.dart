@@ -32,7 +32,7 @@ Future<RecognizedReceipt> _processImage(String fileName) async {
   );
   final rr = ReceiptRecognizer(
     singleScan: true,
-    script: _scriptLanguage(fileName),
+    script: _extractScriptLanguage(fileName),
   );
   try {
     final receipt = await rr.processImage(img);
@@ -46,7 +46,7 @@ Future<RecognizedReceipt> _processImage(String fileName) async {
   }
 }
 
-TextRecognitionScript _scriptLanguage(String fileName) {
+TextRecognitionScript _extractScriptLanguage(String fileName) {
   final langCode = _extractLangCode(fileName);
   if (langCode == 'zh') {
     return TextRecognitionScript.chinese;
