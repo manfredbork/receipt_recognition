@@ -589,17 +589,25 @@ final class ReceiptParser {
     List<RecognizedUnitQuantity> yUnitQuantities,
     RecognizedReceipt receipt,
   ) {
+    final timestamp = receipt.timestamp;
     final amounts = entities.whereType<RecognizedAmount>().toList();
-    final created = <bool>[];
+    final positions = <RecognizedPosition?>[];
     for (final amount in amounts) {
-      created.add(_createPositionForAmount(amount, yUnknowns, receipt));
+      positions.add(_createPositionForAmount(amount, yUnknowns, timestamp));
     }
     int idx = 0;
     for (final amount in amounts) {
-      if (!created[idx++]) {
-        _createPositionForAmount(amount, yUnknowns, receipt, strict: false);
+      if (positions[idx] == null) {
+        positions[idx] = _createPositionForAmount(
+          amount,
+          yUnknowns,
+          timestamp,
+          strict: false,
+        );
       }
+      idx++;
     }
+    receipt.positions.addAll(positions.whereType<RecognizedPosition>());
     _assignUnitToPositions(yUnitPrices, yUnitQuantities, receipt);
   }
 
@@ -702,11 +710,11 @@ final class ReceiptParser {
     }
   }
 
-  /// Returns true if a position for an amount and unknown is created.
-  static bool _createPositionForAmount(
+  /// Returns position if a position for an amount and unknown could be created.
+  static RecognizedPosition? _createPositionForAmount(
     RecognizedAmount amount,
     List<RecognizedUnknown> yUnknowns,
-    RecognizedReceipt receipt, {
+    DateTime timestamp, {
     strict = true,
   }) {
     _sortByDistance(amount.line.boundingBox, yUnknowns);
@@ -716,13 +724,12 @@ final class ReceiptParser {
             _findClosestEntity(amount, yUnknowns, lineAbove: !strict),
             yUnknown,
           )) {
-        final position = _createPosition(yUnknown, amount, receipt.timestamp);
-        receipt.positions.add(position);
+        final position = _createPosition(yUnknown, amount, timestamp);
         yUnknowns.removeWhere((e) => identical(e, yUnknown));
-        return true;
+        return position;
       }
     }
-    return false;
+    return null;
   }
 
   /// Returns true if [unknown] is left of [amount] and vertically aligned.
