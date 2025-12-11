@@ -590,8 +590,13 @@ final class ReceiptParser {
     RecognizedReceipt receipt,
   ) {
     final amounts = entities.whereType<RecognizedAmount>().toList();
+    final created = <bool>[];
     for (final amount in amounts) {
-      if (!_createPositionForAmount(amount, yUnknowns, receipt)) {
+      created.add(_createPositionForAmount(amount, yUnknowns, receipt));
+    }
+    int idx = 0;
+    for (final amount in amounts) {
+      if (!created[idx++]) {
         _createPositionForAmount(amount, yUnknowns, receipt, strict: false);
       }
     }
