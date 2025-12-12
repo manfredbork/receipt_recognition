@@ -10,11 +10,13 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
     'Penny': 'Penny',
     'Rewe': 'Rewe',
     'Spar': 'Spar',
+    'DM': 'DM',
   },
   'totalLabels': {
     'Zu zahlen': 'Zu zahlen',
     'Gesamt': 'Gesamt',
     'Summe': 'Summe',
+    'Subtotal': 'Subtotal',
     'Total': 'Total',
     'Sum': 'Sum',
   },

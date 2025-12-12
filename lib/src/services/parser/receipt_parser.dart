@@ -116,14 +116,18 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  /// Pattern to match monetary values (e.g., 1,99 or -5.00).
+  /// Pattern to match monetary values (e.g., 1,99 or -$4.00 or "$ 7,00").
+  /// - optional sign: -, −, –, —
+  /// - optional currency symbol (single char) after the sign (if any)
+  /// - optional spaces around sign / currency / separators
   static final RegExp _amount = RegExp(
-    r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
+    r'(?:[-−–—]\s*)?(?:[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡]\s*)?\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
   );
 
-  /// Matches quantity expressions like "3", "2x Item", "3 * Item", "2 kg × Another", and "2 Stk x".
+  /// Quantity as substring, must have x/×/*, and must NOT be part of a decimal like 0,25 / 3.25.
+  /// Matches: "2 x", "3 X", "4 ×", "5 *", "2kg × Another", "2 Stk x", etc.
   static final RegExp _quantity = RegExp(
-    r'^\s*(\d+)(?:\s*(\S{1,3})?\s*[xX×*]\s*(.*))?\s*$',
+    r'(?<![\d.,‚،٫·])(\d+)(?!\s*[.,‚،٫·]\s*\d)\s*(\S{1,3})?\s*[xX×*](?=\s|$)\s*([^\n\r]*?)(?=\s{2,}|$)',
   );
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
@@ -166,27 +170,33 @@ final class ReceiptParser {
     if (bounds == null) return parsed;
 
     final fifth = (1 / 5) * (_rightL(bounds.line) - _leftL(bounds.line));
-    final leftBound = _leftL(bounds.line) + fifth;
     final rightBound = _rightL(bounds.line) - fifth;
 
     for (final line in lines) {
       if (_tryIdentifyTotal(line, parsed, rightBound)) continue;
       if (_shouldStopIfTotalConfirmed(line, parsed)) break;
       if (_shouldStopIfStopWord(line)) break;
-      if (_shouldIgnoreLine(line)) continue;
-      if (_tryParseTotalLabel(line, parsed, leftBound)) continue;
+      if (_shouldIgnoreLine(line, parsed)) continue;
+      if (_tryParseTotalLabel(line, parsed, rightBound)) continue;
       if (_tryParseStore(line, parsed)) continue;
       if (_tryParseAmount(line, parsed, rightBound)) continue;
       if (_tryParseUnit(line, parsed, rightBound)) continue;
-      if (_tryParseUnknown(line, parsed, leftBound)) continue;
+      if (_tryParseUnknown(line, parsed, rightBound)) continue;
     }
 
     return parsed;
   }
 
-  /// Returns true if the line matches ignore keywords.
-  static bool _shouldIgnoreLine(TextLine line) =>
-      _options.ignoreKeywords.hasMatch(line.text);
+  /// Returns true if the line matches ignore keywords, purchase date or bounds.
+  static bool _shouldIgnoreLine(TextLine line, List<RecognizedEntity> parsed) {
+    final purchaseDateLine = _findPurchaseDate(parsed)?.line ?? '';
+    if (identical(purchaseDateLine, line)) return true;
+
+    final boundsLine = _findBounds(parsed)?.line ?? '';
+    if (identical(boundsLine, line)) return true;
+
+    return _options.ignoreKeywords.hasMatch(line.text);
+  }
 
   /// Stops parsing once the running sum of detected amounts equals the confirmed total.
   ///
@@ -222,15 +232,16 @@ final class ReceiptParser {
   static bool _tryParseTotalLabel(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double leftBound,
+    double rightBound,
   ) {
-    if (_leftL(line) > leftBound) return false;
+    if (_rightL(line) > rightBound) return false;
 
     if (_options.totalLabels.mapping.isEmpty) return false;
 
     final label = _findTotalLabelLike(line.text);
     final canonical = _options.totalLabels.mapping[label] ?? label;
     if (canonical != null) {
+      parsed.removeWhere((e) => e is RecognizedTotalLabel);
       parsed.add(RecognizedTotalLabel(line: line, value: canonical));
       return true;
     }
@@ -244,6 +255,7 @@ final class ReceiptParser {
 
   /// Best-match total label key for [text] using normalized similarity + adaptive threshold, or null if none.
   static String? _findTotalLabelLike(String text) {
+    if (text.isEmpty) return null;
     String? bestLabel;
     int bestScore = 0;
     for (final label in _options.totalLabels.mapping.keys) {
@@ -350,37 +362,37 @@ final class ReceiptParser {
       parsed.add(RecognizedUnitPrice(line: line, value: unitPrice));
     }
 
-    final qTokens = line.text.split(_quantity);
-    final aTokens = line.text.split(_amount);
-    final qLen = qTokens.join().length;
-    final aLen = aTokens.join().length;
-    final minLen = qLen < aLen ? qLen : aLen;
+    final qMatch = _quantity.firstMatch(line.text);
+    final aMatch = _amount.firstMatch(line.text);
 
-    String text = line.text;
-    if (qTokens.length > 1 && aTokens.length > 1) {
-      text =
-          qTokens.first.length < aTokens.first.length
-              ? qTokens.first
-              : aTokens.first;
-    } else if (qTokens.length > 1) {
-      text = qTokens.first;
-    } else if (aTokens.length > 1) {
-      text = aTokens.first;
+    int? start;
+    int? end;
+    if (qMatch != null && aMatch != null) {
+      start = min(qMatch.start, aMatch.start);
+      end = max(qMatch.end, aMatch.end);
+    } else if (qMatch != null) {
+      start = qMatch.start;
+      end = qMatch.end;
+    } else if (aMatch != null) {
+      start = aMatch.start;
+      end = aMatch.end;
     }
 
-    final minLenSatisfied1 = minLen / line.text.length >= 0.5;
-    final minLenSatisfied2 = text.length / line.text.length >= 0.5;
+    final leadingPart =
+        start == 0 && end != null
+            ? line.text.substring(end)
+            : line.text.substring(0, start);
+    final minLen = unitPrice.toString().length;
+    final isAmountBetween =
+        start != 0 &&
+        aMatch != null &&
+        line.text.substring(0, aMatch.start).trim().length >= minLen &&
+        line.text.substring(aMatch.end).trim().length >= minLen;
 
-    final looksLikeExtension = minLenSatisfied1 && minLenSatisfied2;
-    if (looksLikeExtension) {
-      final modified = ReceiptTextLine.fromLine(line).copyWith(text: text);
-      _tryParseUnknown(modified, parsed, rightBound);
-    }
-
-    final looksLikeInsideProduct = minLenSatisfied1 && !minLenSatisfied2;
-    if (looksLikeInsideProduct) {
-      _tryParseUnknown(line, parsed, rightBound);
-    }
+    final modified = ReceiptTextLine.fromLine(
+      line,
+    ).copyWith(text: isAmountBetween ? line.text : leadingPart);
+    _tryParseUnknown(modified, parsed, rightBound);
 
     return true;
   }
@@ -389,9 +401,9 @@ final class ReceiptParser {
   static bool _tryParseUnknown(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double leftBound,
+    double rightBound,
   ) {
-    if (_leftL(line) > leftBound) return false;
+    if (_rightL(line) > rightBound) return false;
     final unknown = line.text;
     final numeric = _convertToDouble(unknown)?.toString() ?? '';
     if (numeric.length / unknown.length < 0.5) {
@@ -420,12 +432,13 @@ final class ReceiptParser {
     return int.tryParse(norm);
   }
 
-  /// Converts a string to a double by normalizing minus signs and decimal separators.
+  /// Converts a string to a double by normalizing minus signs, decimal separators and currencies.
   static double? _convertToDouble(String input) {
-    final norm1 = input.replaceAll(RegExp('[-−–—]'), '-');
-    final norm2 = norm1.replaceAll(RegExp('[.,‚،٫·]'), '.');
-    final norm3 = norm2.replaceAll(RegExp('[^-0-9.]'), '');
-    return double.tryParse(norm3);
+    final norm1 = input.replaceAll(RegExp(r'[-−–—]'), '-');
+    final norm2 = norm1.replaceAll(RegExp(r'[.,‚،٫·]'), '.');
+    final norm3 = norm2.replaceAll(RegExp(r'[^-0-9.]'), '');
+    final norm4 = norm3.replaceAll(RegExp(r'[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡]'), '');
+    return double.tryParse(norm4.trim());
   }
 
   /// Replaces elements in [list] that satisfy [test] by applying [replace] to them.
@@ -607,6 +620,7 @@ final class ReceiptParser {
       }
       idx++;
     }
+    positions.removeWhere((p) => _isTotalLabelLike(p?.product.line.text ?? ''));
     receipt.positions.addAll(positions.whereType<RecognizedPosition>());
     _assignUnitToPositions(yUnitPrices, yUnitQuantities, receipt);
   }
@@ -830,8 +844,8 @@ final class ReceiptParser {
     if (identical(sourceLine, targetLine)) return double.infinity;
 
     final tol = max(_heightL(sourceLine), _heightL(targetLine));
-    final srcTop = _topL(sourceLine) - (lineAbove ? tol * pi : 0);
-    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol * pi : 0);
+    final srcTop = _topL(sourceLine) - (lineAbove ? tol : 0);
+    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol : 0);
 
     final targetCy = _cyL(targetLine);
     final isSameLine = targetCy >= srcTop && targetCy <= srcBottom;

@@ -305,7 +305,7 @@ void main() {
         expect(items[10].price.value, equals(0.50));
         expect(items[10].product.unit.quantity.value, equals(2));
         expect(items[10].product.unit.price.value, equals(0.25));
-        expect(items[11].product.text, equals('Lindt Pralines 2 *'));
+        expect(items[11].product.text, equals('Lindt Pralines'));
         expect(items[11].price.value, equals(9.98));
         expect(items[11].product.unit.quantity.value, equals(2));
         expect(items[11].product.unit.price.value, equals(4.99));
@@ -381,6 +381,52 @@ void main() {
         expect(items[10].price.value, equals(11.96));
         expect(items[10].product.unit.quantity.value, equals(4));
         expect(items[10].product.unit.price.value, equals(2.99));
+      },
+    );
+
+    testWidgets(
+      'DM check store + total + purchase date + positions length + positions',
+      (tester) async {
+        final receipt = await _processImage('09-dm-de.png');
+
+        expect(receipt.store?.formattedValue, equals('DM'));
+        expect(receipt.totalLabel?.formattedValue, equals('SUMME'));
+        expect(receipt.calculatedTotal.formattedValue, equals('33.80'));
+        expect(receipt.total?.formattedValue, equals('33.80'));
+        expect(
+          receipt.purchaseDate?.formattedValue,
+          equals('2025-12-12T00:00:00.000Z'),
+        );
+
+        final items = receipt.positions;
+
+        expect(items.length, equals(13));
+        expect(items[0].product.text, equals('Profissimo Tortenunter lagen'));
+        expect(items[0].price.value, equals(0.95));
+        expect(items[1].product.text, equals('I-eukal Gum Euka 90g'));
+        expect(items[1].price.value, equals(1.85));
+        expect(items[2].product.text, equals('Em-eukal Hustenmischung'));
+        expect(items[2].price.value, equals(1.85));
+        expect(items[3].product.text, equals('Kamill Hand&Nage lcreme Balsam'));
+        expect(items[3].price.value, equals(1.55));
+        expect(items[4].product.text, equals('Balea Fußbutter Pfirsich'));
+        expect(items[4].price.value, equals(2.45));
+        expect(items[5].product.text, equals('Balea Fußcreme Totes Meer'));
+        expect(items[5].price.value, equals(2.45));
+        expect(items[6].product.text, equals('Neutrogena Fuß Fußcreme trock'));
+        expect(items[6].price.value, equals(3.95));
+        expect(items[7].product.text, equals('Balea FuB Vitalbad'));
+        expect(items[7].price.value, equals(1.65));
+        expect(items[8].product.text, equals('Balea Fuß Bimsschwamn 1St'));
+        expect(items[8].price.value, equals(0.95));
+        expect(items[9].product.text, equals('Balea Hornhaut Keramikfeile'));
+        expect(items[9].price.value, equals(3.45));
+        expect(items[10].product.text, equals('Credo Fußfeile+Feilenbl.'));
+        expect(items[10].price.value, equals(2.95));
+        expect(items[11].product.text, equals('Girlande 88cm Zapfen 2f'));
+        expect(items[11].price.value, equals(4.25));
+        expect(items[12].product.text, equals('Unrecognized items'));
+        expect(items[12].price.value, equals(5.50));
       },
     );
 
