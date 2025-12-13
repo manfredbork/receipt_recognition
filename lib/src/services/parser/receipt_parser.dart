@@ -339,8 +339,9 @@ final class ReceiptParser {
     double rightBound,
   ) {
     if (_rightL(line) > rightBound) return false;
-    final quantity = _quantity.stringMatch(line.text);
-    final amount = _amount.stringMatch(line.text);
+    final text = line.text;
+    final quantity = _quantity.stringMatch(text);
+    final amount = _amount.stringMatch(text);
 
     int? unitQuantity;
     if (quantity != null) {
@@ -362,36 +363,25 @@ final class ReceiptParser {
       parsed.add(RecognizedUnitPrice(line: line, value: unitPrice));
     }
 
-    final qMatch = _quantity.firstMatch(line.text);
-    final aMatch = _amount.firstMatch(line.text);
-
-    int? start;
-    int? end;
-    if (qMatch != null && aMatch != null) {
-      start = min(qMatch.start, aMatch.start);
-      end = max(qMatch.end, aMatch.end);
-    } else if (qMatch != null) {
-      start = qMatch.start;
-      end = qMatch.end;
-    } else if (aMatch != null) {
-      start = aMatch.start;
-      end = aMatch.end;
-    }
+    final qMatch = _quantity.firstMatch(text);
+    final aMatch = _amount.firstMatch(text);
 
     final leadingPart =
-        start == 0 && end != null
-            ? line.text.substring(end)
-            : line.text.substring(0, start);
+        qMatch?.start == 0 && aMatch != null
+            ? text.substring(aMatch.end)
+            : text.substring(
+              0,
+              min(qMatch?.start ?? text.length, aMatch?.start ?? text.length),
+            );
     final minLen = unitPrice.toString().length;
     final isAmountBetween =
-        start != 0 &&
         aMatch != null &&
-        line.text.substring(0, aMatch.start).trim().length >= minLen &&
-        line.text.substring(aMatch.end).trim().length >= minLen;
+        text.substring(0, aMatch.start).trim().length >= minLen &&
+        text.substring(aMatch.end).trim().length >= minLen;
 
     final modified = ReceiptTextLine.fromLine(
       line,
-    ).copyWith(text: isAmountBetween ? line.text : leadingPart);
+    ).copyWith(text: isAmountBetween ? text : leadingPart);
     _tryParseUnknown(modified, parsed, rightBound);
 
     return true;
@@ -437,8 +427,7 @@ final class ReceiptParser {
     final norm1 = input.replaceAll(RegExp(r'[-−–—]'), '-');
     final norm2 = norm1.replaceAll(RegExp(r'[.,‚،٫·]'), '.');
     final norm3 = norm2.replaceAll(RegExp(r'[^-0-9.]'), '');
-    final norm4 = norm3.replaceAll(RegExp(r'[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡]'), '');
-    return double.tryParse(norm4.trim());
+    return double.tryParse(norm3.trim());
   }
 
   /// Replaces elements in [list] that satisfy [test] by applying [replace] to them.
