@@ -116,14 +116,18 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  /// Pattern to match monetary values (e.g., 1,99 or -5.00).
+  /// Pattern to match monetary values (e.g., 1,99 or -$4.00 or "$ 7,00").
+  /// - optional sign: -, −, –, —
+  /// - optional currency symbol (single char) after the sign (if any)
+  /// - optional spaces around sign / currency / separators
   static final RegExp _amount = RegExp(
-    r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
+    r'(?:[-−–—]\s*)?(?:[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡]\s*)?\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
   );
 
-  /// Matches quantity expressions like "2x Item", "3 × Item", "2 kg × Another", and "2 Stk x".
+  /// Quantity as substring, must have x/×/*, and must NOT be part of a decimal like 0,25 / 3.25.
+  /// Matches: "2 x", "3 X", "4 ×", "5 *", "2kg × Another", "2 Stk x", etc.
   static final RegExp _quantity = RegExp(
-    r'\s*(\d+)\s*(\S{1,3})?\s*[xX×]\s*(.*)',
+    r'(?<![\d.,‚،٫·])(\d+)(?!\s*[.,‚،٫·]\s*\d)\s*(\S{1,3})?\s*[xX×*](?=\s|$)\s*([^\n\r]*?)(?=\s{2,}|$)',
   );
 
   /// Shorthand for the active options provided by [ReceiptRuntime].
@@ -165,28 +169,34 @@ final class ReceiptParser {
     final bounds = _findBounds(parsed);
     if (bounds == null) return parsed;
 
-    final quarter = (1 / 4) * (_rightL(bounds.line) - _leftL(bounds.line));
-    final leftBound = _leftL(bounds.line) + quarter;
-    final rightBound = _rightL(bounds.line) - quarter;
+    final fifth = (1 / 5) * (_rightL(bounds.line) - _leftL(bounds.line));
+    final rightBound = _rightL(bounds.line) - fifth;
 
     for (final line in lines) {
       if (_tryIdentifyTotal(line, parsed, rightBound)) continue;
       if (_shouldStopIfTotalConfirmed(line, parsed)) break;
       if (_shouldStopIfStopWord(line)) break;
-      if (_shouldIgnoreLine(line)) continue;
-      if (_tryParseTotalLabel(line, parsed, leftBound)) continue;
+      if (_shouldIgnoreLine(line, parsed)) continue;
+      if (_tryParseTotalLabel(line, parsed, rightBound)) continue;
       if (_tryParseStore(line, parsed)) continue;
       if (_tryParseAmount(line, parsed, rightBound)) continue;
       if (_tryParseUnit(line, parsed, rightBound)) continue;
-      if (_tryParseUnknown(line, parsed, leftBound)) continue;
+      if (_tryParseUnknown(line, parsed, rightBound)) continue;
     }
 
     return parsed;
   }
 
-  /// Returns true if the line matches ignore keywords.
-  static bool _shouldIgnoreLine(TextLine line) =>
-      _options.ignoreKeywords.hasMatch(line.text);
+  /// Returns true if the line matches ignore keywords, purchase date or bounds.
+  static bool _shouldIgnoreLine(TextLine line, List<RecognizedEntity> parsed) {
+    final purchaseDateLine = _findPurchaseDate(parsed)?.line ?? '';
+    if (identical(purchaseDateLine, line)) return true;
+
+    final boundsLine = _findBounds(parsed)?.line ?? '';
+    if (identical(boundsLine, line)) return true;
+
+    return _options.ignoreKeywords.hasMatch(line.text);
+  }
 
   /// Stops parsing once the running sum of detected amounts equals the confirmed total.
   ///
@@ -222,15 +232,16 @@ final class ReceiptParser {
   static bool _tryParseTotalLabel(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double leftBound,
+    double rightBound,
   ) {
-    if (_leftL(line) > leftBound) return false;
+    if (_rightL(line) > rightBound) return false;
 
     if (_options.totalLabels.mapping.isEmpty) return false;
 
     final label = _findTotalLabelLike(line.text);
     final canonical = _options.totalLabels.mapping[label] ?? label;
     if (canonical != null) {
+      parsed.removeWhere((e) => e is RecognizedTotalLabel);
       parsed.add(RecognizedTotalLabel(line: line, value: canonical));
       return true;
     }
@@ -244,11 +255,15 @@ final class ReceiptParser {
 
   /// Best-match total label key for [text] using normalized similarity + adaptive threshold, or null if none.
   static String? _findTotalLabelLike(String text) {
+    if (text.isEmpty) return null;
     String? bestLabel;
     int bestScore = 0;
     for (final label in _options.totalLabels.mapping.keys) {
       final normText = ReceiptNormalizer.normalizeKey(text).toLowerCase();
-      if (normText.startsWith(label)) return label;
+      if (normText.startsWith(label) &&
+          (label.length > 5 || normText.length < label.length << 1)) {
+        return label;
+      }
 
       final s = ratio(normText, label);
       if (s > bestScore && normText.length >= label.length) {
@@ -311,7 +326,7 @@ final class ReceiptParser {
     if (_rightL(line) <= rightBound) return false;
     final amount = _amount.stringMatch(line.text);
     if (amount == null) return false;
-    final value = double.tryParse(_convertToAmount(amount));
+    final value = _convertToDouble(amount);
     if (value == null || value == 0) return false;
     parsed.add(RecognizedAmount(line: line, value: value.toDouble()));
     return true;
@@ -324,57 +339,55 @@ final class ReceiptParser {
     double rightBound,
   ) {
     if (_rightL(line) > rightBound) return false;
-    final quantity = _quantity.stringMatch(line.text);
-    final amount = _amount.stringMatch(line.text);
+    final text = line.text;
+    final quantity = _quantity.stringMatch(text);
+    final amount = _amount.stringMatch(text);
 
     int? unitQuantity;
     if (quantity != null) {
-      unitQuantity = int.tryParse(_convertToInteger(quantity));
-      if (unitQuantity != null) {
-        parsed.add(RecognizedUnitQuantity(line: line, value: unitQuantity));
-      }
+      unitQuantity = _convertToInteger(quantity);
     }
 
     double? unitPrice;
     if (amount != null) {
-      unitPrice = double.tryParse(_convertToAmount(amount));
-      if (unitPrice != null) {
-        parsed.add(RecognizedUnitPrice(line: line, value: unitPrice));
-      }
+      unitPrice = _convertToDouble(amount);
     }
+
     if (unitQuantity == null && unitPrice == null) return false;
 
-    final qTokens = line.text.split(_quantity);
-    final aTokens = line.text.split(_amount);
-    final qLen = qTokens.join().length;
-    final aLen = aTokens.join().length;
-    final minLen = qLen < aLen ? qLen : aLen;
-
-    String text = line.text;
-    if (qTokens.length > 1 && aTokens.length > 1) {
-      text =
-          qTokens.first.length < aTokens.first.length
-              ? qTokens.first
-              : aTokens.first;
-    } else if (qTokens.length > 1) {
-      text = qTokens.first;
-    } else if (aTokens.length > 1) {
-      text = aTokens.first;
+    if (unitQuantity != null) {
+      parsed.add(RecognizedUnitQuantity(line: line, value: unitQuantity));
     }
 
-    final minLenSatisfied1 = minLen / line.text.length >= 0.5;
-    final minLenSatisfied2 = text.length / line.text.length >= 0.5;
-
-    final looksLikeExtension = minLenSatisfied1 && minLenSatisfied2;
-    if (looksLikeExtension) {
-      final modified = ReceiptTextLine.fromLine(line).copyWith(text: text);
-      _tryParseUnknown(modified, parsed, rightBound);
+    if (unitPrice != null) {
+      parsed.add(RecognizedUnitPrice(line: line, value: unitPrice));
     }
 
-    final looksLikeInsideProduct = minLenSatisfied1 && !minLenSatisfied2;
-    if (looksLikeInsideProduct) {
-      _tryParseUnknown(line, parsed, rightBound);
-    }
+    final qMatch = _quantity.firstMatch(text);
+    final aMatch = _amount.firstMatch(text);
+
+    final leadingPart =
+        qMatch?.start == 0 && aMatch != null
+            ? text.substring(aMatch.end).trim()
+            : text
+                .substring(
+                  0,
+                  min(
+                    qMatch?.start ?? text.length,
+                    aMatch?.start ?? text.length,
+                  ),
+                )
+                .trim();
+    final minLen = unitPrice.toString().length;
+    final isAmountBetween =
+        aMatch != null &&
+        text.substring(0, aMatch.start).trim().length >= minLen &&
+        text.substring(aMatch.end).trim().length >= minLen;
+
+    final modified = ReceiptTextLine.fromLine(
+      line,
+    ).copyWith(text: isAmountBetween ? text : leadingPart);
+    _tryParseUnknown(modified, parsed, rightBound);
 
     return true;
   }
@@ -383,11 +396,11 @@ final class ReceiptParser {
   static bool _tryParseUnknown(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double leftBound,
+    double rightBound,
   ) {
-    if (_leftL(line) > leftBound) return false;
+    if (_rightL(line) > rightBound) return false;
     final unknown = line.text;
-    final numeric = _convertToAmount(unknown);
+    final numeric = _convertToDouble(unknown)?.toString() ?? '';
     if (numeric.length / unknown.length < 0.5) {
       parsed.add(RecognizedUnknown(line: line, value: unknown));
       return true;
@@ -407,18 +420,19 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Returns a string containing only the digits from the input.
-  static String _convertToInteger(String input) {
+  /// Extracts digits from a string and returns them as an integer, or null if no valid integer can be formed.
+  static int? _convertToInteger(String input) {
+    if (RegExp(r'\d[.,]\d').hasMatch(input)) return null;
     final norm = input.replaceAll(RegExp(r'[^0-9]'), '');
-    return norm;
+    return int.tryParse(norm);
   }
 
-  /// Normalizes dash and decimal characters and strips all non-numeric symbols from an amount string.
-  static String _convertToAmount(String input) {
-    final norm1 = input.replaceAll(RegExp('[-−–—]'), '-');
-    final norm2 = norm1.replaceAll(RegExp('[.,‚،٫·]'), '.');
-    final norm3 = norm2.replaceAll(RegExp('[^-0-9.]'), '');
-    return norm3;
+  /// Converts a string to a double by normalizing minus signs, decimal separators and currencies.
+  static double? _convertToDouble(String input) {
+    final norm1 = input.replaceAll(RegExp(r'[-−–—]'), '-');
+    final norm2 = norm1.replaceAll(RegExp(r'[.,‚،٫·]'), '.');
+    final norm3 = norm2.replaceAll(RegExp(r'[^-0-9.]'), '');
+    return double.tryParse(norm3.trim());
   }
 
   /// Replaces elements in [list] that satisfy [test] by applying [replace] to them.
@@ -582,10 +596,26 @@ final class ReceiptParser {
     List<RecognizedUnitQuantity> yUnitQuantities,
     RecognizedReceipt receipt,
   ) {
+    final timestamp = receipt.timestamp;
     final amounts = entities.whereType<RecognizedAmount>().toList();
+    final positions = <RecognizedPosition?>[];
     for (final amount in amounts) {
-      _createPositionForAmount(amount, yUnknowns, receipt);
+      positions.add(_createPositionForAmount(amount, yUnknowns, timestamp));
     }
+    int idx = 0;
+    for (final amount in amounts) {
+      if (positions[idx] == null) {
+        positions[idx] = _createPositionForAmount(
+          amount,
+          yUnknowns,
+          timestamp,
+          strict: false,
+        );
+      }
+      idx++;
+    }
+    positions.removeWhere((p) => _isTotalLabelLike(p?.product.line.text ?? ''));
+    receipt.positions.addAll(positions.whereType<RecognizedPosition>());
     _assignUnitToPositions(yUnitPrices, yUnitQuantities, receipt);
   }
 
@@ -625,28 +655,34 @@ final class ReceiptParser {
     if (yUnitQuantity != null) yUnitQuantities.remove(yUnitQuantity);
 
     if (unitPrice != defaultPrice && unitQuantity != defaultQuantity) {
-      final test = unitPrice * unitQuantity - defaultPrice < tolerance;
+      final test = _isClose(unitPrice * unitQuantity, defaultPrice, tolerance);
       if (test) {
         return RecognizedUnit.fromNumbers(unitQuantity, unitPrice, defaultLine);
       }
-    } else if (unitPrice != defaultPrice) {
-      final quantity = (defaultPrice / unitPrice).abs().round();
-      final test = defaultPrice % quantity == 0;
-      if (test) {
-        return RecognizedUnit.fromNumbers(
-          quantity,
-          defaultPrice / quantity,
-          defaultLine,
-        );
+    }
+
+    if (unitPrice != defaultPrice) {
+      final quantity = (defaultPrice / unitPrice).round();
+      if (quantity > 0) {
+        final test = _isClose(quantity * unitPrice, defaultPrice, tolerance);
+        if (test) {
+          return RecognizedUnit.fromNumbers(quantity, unitPrice, defaultLine);
+        }
       }
-    } else if (unitQuantity != defaultQuantity) {
-      final test = defaultPrice % unitQuantity == 0;
-      if (test) {
-        return RecognizedUnit.fromNumbers(
-          unitQuantity,
-          defaultPrice / unitQuantity,
-          defaultLine,
-        );
+    }
+
+    if (unitQuantity != defaultQuantity) {
+      final price = (defaultPrice / unitQuantity * 100).round() / 100;
+      if (price != 0) {
+        final test = _isClose(unitQuantity * price, defaultPrice, tolerance);
+        if (test) {
+          final unitPriceFromTotal = defaultPrice / unitQuantity;
+          return RecognizedUnit.fromNumbers(
+            unitQuantity,
+            unitPriceFromTotal,
+            defaultLine,
+          );
+        }
       }
     }
 
@@ -656,6 +692,10 @@ final class ReceiptParser {
       defaultLine,
     );
   }
+
+  /// Returns true if two numbers differ by less than the given tolerance.
+  static bool _isClose(double a, double b, double tolerance) =>
+      (a - b).abs() < tolerance;
 
   /// Assigns each unit to the closest position.
   static void _assignUnitToPositions(
@@ -678,30 +718,34 @@ final class ReceiptParser {
     }
   }
 
-  /// Returns true if a position for an amount and unknown is created.
-  static bool _createPositionForAmount(
+  /// Returns position if a position for an amount and unknown could be created.
+  static RecognizedPosition? _createPositionForAmount(
     RecognizedAmount amount,
     List<RecognizedUnknown> yUnknowns,
-    RecognizedReceipt receipt,
-  ) {
+    DateTime timestamp, {
+    strict = true,
+  }) {
     _sortByDistance(amount.line.boundingBox, yUnknowns);
     for (final yUnknown in yUnknowns) {
-      if (_isMatchingUnknown(amount, yUnknown) &&
-          identical(_findClosestEntity(amount, yUnknowns), yUnknown)) {
-        final position = _createPosition(yUnknown, amount, receipt.timestamp);
-        receipt.positions.add(position);
+      if (_isMatchingUnknown(amount, yUnknown, strict: strict) &&
+          identical(
+            _findClosestEntity(amount, yUnknowns, lineAbove: !strict),
+            yUnknown,
+          )) {
+        final position = _createPosition(yUnknown, amount, timestamp);
         yUnknowns.removeWhere((e) => identical(e, yUnknown));
-        return true;
+        return position;
       }
     }
-    return false;
+    return null;
   }
 
   /// Returns true if [unknown] is left of [amount] and vertically aligned.
   static bool _isMatchingUnknown(
     RecognizedAmount amount,
-    RecognizedUnknown unknown,
-  ) {
+    RecognizedUnknown unknown, {
+    strict = true,
+  }) {
     final unknownText = ReceiptFormatter.trim(unknown.value);
     final isLikelyLabel = _isTotalLabelLike(unknownText);
     if (isLikelyLabel) return false;
@@ -710,7 +754,7 @@ final class ReceiptParser {
     final alignedVertically =
         _dy(amount.line, unknown.line).abs() <= _heightL(amount.line);
 
-    return isLeftOfAmount && alignedVertically;
+    return isLeftOfAmount && (alignedVertically || !strict);
   }
 
   /// Constructs a position from matched product text and amount.
@@ -780,7 +824,7 @@ final class ReceiptParser {
     RecognizedTotalLabel totalLabel,
     List<RecognizedAmount> amounts,
   ) {
-    final entity = _findClosestEntity(totalLabel, amounts);
+    final entity = _findClosestEntity(totalLabel, amounts, lineBelow: true);
     return entity != null ? entity as RecognizedAmount : null;
   }
 
@@ -794,8 +838,8 @@ final class ReceiptParser {
     if (identical(sourceLine, targetLine)) return double.infinity;
 
     final tol = max(_heightL(sourceLine), _heightL(targetLine));
-    final srcTop = _topL(sourceLine) - (lineAbove ? tol * pi : tol / 2);
-    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol * pi : tol / 2);
+    final srcTop = _topL(sourceLine) - (lineAbove ? tol : 0);
+    final srcBottom = _bottomL(sourceLine) + (lineBelow ? tol : 0);
 
     final targetCy = _cyL(targetLine);
     final isSameLine = targetCy >= srcTop && targetCy <= srcBottom;

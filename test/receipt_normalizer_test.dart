@@ -158,6 +158,36 @@ void main() {
         final result = ReceiptNormalizer.calculateTruncatedFrequency([]);
         expect(result, isEmpty);
       });
+
+      test(
+        'merges single-space variants into the more frequent counterpart',
+        () {
+          final values = [
+            'Hello world',
+            'Hello world',
+            'Hello wor ld',
+            'Other',
+          ];
+
+          final result = ReceiptNormalizer.calculateTruncatedFrequency(values);
+
+          expect(result.length, 2);
+          expect(result['Hello world'], equals(75));
+          expect(result['Other'], equals(25));
+          expect(result.containsKey('Hello wor ld'), isFalse);
+        },
+      );
+
+      test('does not merge when single-space variant is more frequent', () {
+        final values = ['Hello world', 'Hello wor ld', 'Hello wor ld', 'Other'];
+
+        final result = ReceiptNormalizer.calculateTruncatedFrequency(values);
+
+        expect(result.length, 3);
+        expect(result['Hello world'], equals(25));
+        expect(result['Hello wor ld'], equals(50));
+        expect(result['Other'], equals(25));
+      });
     });
 
     group('calculateFrequency', () {
