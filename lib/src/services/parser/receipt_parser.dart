@@ -368,11 +368,16 @@ final class ReceiptParser {
 
     final leadingPart =
         qMatch?.start == 0 && aMatch != null
-            ? text.substring(aMatch.end)
-            : text.substring(
-              0,
-              min(qMatch?.start ?? text.length, aMatch?.start ?? text.length),
-            );
+            ? text.substring(aMatch.end).trim()
+            : text
+                .substring(
+                  0,
+                  min(
+                    qMatch?.start ?? text.length,
+                    aMatch?.start ?? text.length,
+                  ),
+                )
+                .trim();
     final minLen = unitPrice.toString().length;
     final isAmountBetween =
         aMatch != null &&
