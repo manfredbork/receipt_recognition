@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] – 2025-12-14
+
+### ✨ Added
+- **New store support**: Added **Kaufland** and **dm** store support (including improved/real-world handling).
+- **Parsing support**: Added handling for **asterisk-marked** receipt lines.
+
+### 🛠️ Changed
+- **Normalization**: Normalize spaces more consistently to improve matching under OCR spacing glitches.
+- **Total-label handling**: Refined label-related conditions to improve robustness.
+- **Position creation**:
+  - Prefer creating positions from the **same row** when possible.
+  - Apply **non-strict** position creation only for **unused amounts** to avoid accidental matches.
+- **Build/CI hygiene**: Ignore other build paths to reduce noise and avoid unintended file interactions.
+- **Internal**: Dynamic script language adjustments and minor method renaming/cleanup.
+
+### ✅ Tests
+- Added and reorganized tests, including expanded integration test assertions (e.g., more unit/quantity/price checks).
+
+---
+
 ## [0.2.4] – 2025-12-04
 
 ### ✨ Added
