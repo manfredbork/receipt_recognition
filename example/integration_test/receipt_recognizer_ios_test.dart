@@ -430,6 +430,28 @@ void main() {
       },
     );
 
+    testWidgets(
+      'ALDI #2 check store + total + purchase date + positions length + units',
+      (tester) async {
+        final receipt = await _processImage('10-aldi-de.png');
+
+        expect(receipt.store?.formattedValue, equals('ALDI'));
+        expect(receipt.totalLabel?.formattedValue, equals('ZU ZAHLEN'));
+        expect(receipt.calculatedTotal.formattedValue, equals('34.05'));
+        expect(receipt.total?.formattedValue, equals('34.05'));
+        expect(
+          receipt.purchaseDate?.formattedValue,
+          equals('2025-12-18T00:00:00.000Z'),
+        );
+
+        final items = receipt.positions;
+
+        expect(items.length, equals(19));
+        expect(items[0].product.unit.quantity.value, equals(6));
+        expect(items[0].product.unit.price.value, equals(0.99));
+      },
+    );
+
     tearDown(() {
       ReceiptTextProcessor.debugRunSynchronouslyForTests = false;
     });
