@@ -167,8 +167,11 @@ final class ReceiptParser {
     final bounds = _findBounds(parsed);
     if (bounds == null) return parsed;
 
-    final fifth = (1 / 5) * (_rightL(bounds.line) - _leftL(bounds.line));
-    final rightBound = _rightL(bounds.line) - fifth;
+    final left = _leftL(bounds.line);
+    final right = _rightL(bounds.line);
+    final diff = right - left;
+    final rightBound = left + (3 / 4) * diff;
+    final centerBound = left + (1 / 2) * diff;
 
     for (final line in lines) {
       if (_tryIdentifyTotal(line, parsed, rightBound)) continue;
@@ -179,7 +182,7 @@ final class ReceiptParser {
       if (_tryParseStore(line, parsed)) continue;
       if (_tryParseAmount(line, parsed, rightBound)) continue;
       if (_tryParseUnit(line, parsed, rightBound)) continue;
-      if (_tryParseUnknown(line, parsed, rightBound)) continue;
+      if (_tryParseUnknown(line, parsed, centerBound)) continue;
     }
 
     return parsed;
@@ -394,9 +397,9 @@ final class ReceiptParser {
   static bool _tryParseUnknown(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double rightBound,
+    double centerBound,
   ) {
-    if (_rightL(line) > rightBound) return false;
+    if (_cxL(line) > centerBound) return false;
     final unknown = line.text;
     final numeric = _convertToDouble(unknown)?.toString() ?? '';
     if (numeric.length / unknown.length < 0.5) {
