@@ -116,16 +116,14 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  /// Pattern to match monetary values (e.g., 1,99 or -$4.00 or "$ 7,00").
-  /// - optional sign: -, −, –, —
-  /// - optional currency symbol (single char) after the sign (if any)
-  /// - optional spaces around sign / currency / separators
+  /// Matches a monetary amount with two decimals (e.g. "1,99", "-€4.00", "0,49 €").
+  /// Supports optional sign, optional currency before or after the number.
   static final RegExp _amount = RegExp(
-    r'(?:[-−–—]\s*)?(?:[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡]\s*)?\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
+    r'(?:[-−–—]\s*)?(?:[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡]\s*)?\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)\s*(?:[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡])?',
   );
 
-  /// Quantity as substring, must have x/×/*, and must NOT be part of a decimal like 0,25 / 3.25.
-  /// Matches: "2 x", "3 X", "4 ×", "5 *", "2kg × Another", "2 Stk x", etc.
+  /// Matches a quantity expression like "3 x 0,49 €" or "2kg × item".
+  /// Ensures the number is not part of a decimal and captures the rest of the line as content.
   static final RegExp _quantity = RegExp(
     r'(?<![\d.,‚،٫·])(\d+)(?!\s*[.,‚،٫·]\s*\d)\s*(\S{1,3})?\s*[xX×*](?=\s|$)\s*([^\n\r]*?)(?=\s{2,}|$)',
   );
@@ -169,8 +167,11 @@ final class ReceiptParser {
     final bounds = _findBounds(parsed);
     if (bounds == null) return parsed;
 
-    final fifth = (1 / 5) * (_rightL(bounds.line) - _leftL(bounds.line));
-    final rightBound = _rightL(bounds.line) - fifth;
+    final left = _leftL(bounds.line);
+    final right = _rightL(bounds.line);
+    final diff = right - left;
+    final rightBound = left + (3 / 4) * diff;
+    final centerBound = left + (1 / 2) * diff;
 
     for (final line in lines) {
       if (_tryIdentifyTotal(line, parsed, rightBound)) continue;
@@ -180,8 +181,8 @@ final class ReceiptParser {
       if (_tryParseTotalLabel(line, parsed, rightBound)) continue;
       if (_tryParseStore(line, parsed)) continue;
       if (_tryParseAmount(line, parsed, rightBound)) continue;
-      if (_tryParseUnit(line, parsed, rightBound)) continue;
-      if (_tryParseUnknown(line, parsed, rightBound)) continue;
+      if (_tryParseUnit(line, parsed, rightBound, centerBound)) continue;
+      if (_tryParseUnknown(line, parsed, centerBound)) continue;
     }
 
     return parsed;
@@ -337,6 +338,7 @@ final class ReceiptParser {
     TextLine line,
     List<RecognizedEntity> parsed,
     double rightBound,
+    double centerBound,
   ) {
     if (_rightL(line) > rightBound) return false;
     final text = line.text;
@@ -387,7 +389,7 @@ final class ReceiptParser {
     final modified = ReceiptTextLine.fromLine(
       line,
     ).copyWith(text: isAmountBetween ? text : leadingPart);
-    _tryParseUnknown(modified, parsed, rightBound);
+    _tryParseUnknown(modified, parsed, centerBound);
 
     return true;
   }
@@ -396,9 +398,9 @@ final class ReceiptParser {
   static bool _tryParseUnknown(
     TextLine line,
     List<RecognizedEntity> parsed,
-    double rightBound,
+    double centerBound,
   ) {
-    if (_rightL(line) > rightBound) return false;
+    if (_cxL(line) > centerBound) return false;
     final unknown = line.text;
     final numeric = _convertToDouble(unknown)?.toString() ?? '';
     if (numeric.length / unknown.length < 0.5) {
@@ -420,11 +422,10 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Extracts digits from a string and returns them as an integer, or null if no valid integer can be formed.
+  /// Extracts and parses the first integer not part of a decimal (e.g., "3 x 0,49 €" -> 3), or null if none.
   static int? _convertToInteger(String input) {
-    if (RegExp(r'\d[.,]\d').hasMatch(input)) return null;
-    final norm = input.replaceAll(RegExp(r'[^0-9]'), '');
-    return int.tryParse(norm);
+    final m = RegExp(r'(?<![\d.,])\d+(?!\s*[.,]\s*\d)').firstMatch(input);
+    return m == null ? null : int.tryParse(m.group(0)!);
   }
 
   /// Converts a string to a double by normalizing minus signs, decimal separators and currencies.
@@ -624,21 +625,25 @@ final class ReceiptParser {
     RecognizedProduct product,
     List<RecognizedProduct> products,
     List<RecognizedUnitPrice> yUnitPrices,
-    List<RecognizedUnitQuantity> yUnitQuantities,
-  ) {
+    List<RecognizedUnitQuantity> yUnitQuantities, {
+    lineAbove = false,
+    lineBelow = true,
+  }) {
     if (product.position == null) return null;
 
     final yUnitPrice = _findClosestEntity(
       product,
       yUnitPrices,
-      lineBelow: true,
+      lineAbove: lineAbove,
+      lineBelow: lineBelow,
       crossCheckEntities: products,
     );
 
     final yUnitQuantity = _findClosestEntity(
       product,
       yUnitQuantities,
-      lineBelow: true,
+      lineAbove: lineAbove,
+      lineBelow: lineBelow,
       crossCheckEntities: products,
     );
 
@@ -704,6 +709,20 @@ final class ReceiptParser {
     RecognizedReceipt receipt,
   ) {
     final positions = receipt.positions;
+    final unitCountAbove = _unitCount(
+      positions,
+      yUnitPrices,
+      yUnitQuantities,
+      lineAbove: true,
+      lineBelow: false,
+    );
+    final unitCountBelow = _unitCount(
+      positions,
+      yUnitPrices,
+      yUnitQuantities,
+      lineAbove: false,
+      lineBelow: true,
+    );
     final products = positions.map((p) => p.product).toList();
     for (final position in positions) {
       final unit = _processUnit(
@@ -711,11 +730,40 @@ final class ReceiptParser {
         products,
         yUnitPrices,
         yUnitQuantities,
+        lineAbove: unitCountAbove > unitCountBelow,
+        lineBelow: unitCountAbove <= unitCountBelow,
       );
       if (unit != null) {
         position.unit = unit;
       }
     }
+  }
+
+  /// Counts positions that have a detected unit quantity greater than 1
+  /// by resolving unit information from surrounding lines (above/below).
+  static int _unitCount(
+    List<RecognizedPosition> positions,
+    List<RecognizedUnitPrice> yUnitPrices,
+    List<RecognizedUnitQuantity> yUnitQuantities, {
+    lineAbove = false,
+    lineBelow = false,
+  }) {
+    final products = positions.map((p) => p.product).toList();
+    final unitPrices = List<RecognizedUnitPrice>.from(yUnitPrices);
+    final unitQuantities = List<RecognizedUnitQuantity>.from(yUnitQuantities);
+    int count = 0;
+    for (final position in positions) {
+      final unit = _processUnit(
+        position.product,
+        products,
+        unitPrices,
+        unitQuantities,
+        lineAbove: lineAbove,
+        lineBelow: lineBelow,
+      );
+      if (unit != null && unit.quantity.value > 1) count++;
+    }
+    return count;
   }
 
   /// Returns position if a position for an amount and unknown could be created.

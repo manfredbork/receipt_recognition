@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.6] – 2025-12-27
+
+### ✨ Added
+- **Aldi-style unit support**: Added logic to detect and parse unit information (quantity/price) when printed on the line **above** the product name (common on Aldi receipts).
+- **Expanded Currency Support**: Improved monetary regex to handle currency symbols appearing after the amount (e.g., `0,49 €`).
+
+### 🛠️ Changed
+- **Skew Angle Optimization**: Implemented a more robust, weighted-median approach for skew estimation across multiple frames, significantly improving alignment stability during video scans.
+- **Parsing Bounds**: Refined `rightBound` and `centerBound` calculations (3/4 and 1/2 of receipt width respectively) to better distinguish between item amounts and unknown metadata.
+- **Unit Detection**: Enhanced `_tryParseUnit` and `_tryParseUnknown` to use more precise horizontal center-bounds, preventing misclassification of product text as unknown entities.
+- **Integer Parsing**: Improved integer extraction logic to ensure quantity detection doesn't accidentally pick up parts of decimal numbers.
+
+### ✅ Tests
+- **ALDI Integration**: Added comprehensive integration tests for ALDI receipts, validating store name, total, purchase date, and multi-line unit/quantity parsing.
+
+---
+
 ## [0.2.5] – 2025-12-14
 
 ### ✨ Added

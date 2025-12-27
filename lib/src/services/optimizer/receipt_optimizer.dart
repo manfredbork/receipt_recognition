@@ -562,37 +562,106 @@ final class ReceiptOptimizer implements Optimizer {
     return filtered;
   }
 
-  /// Estimates and writes the receipt’s skew angle (radians) from product-column left edges.
+  /// Estimates the receipt skew angle from product-column left edges.
+  /// Computes a robust skew per frame (timestamp) and aggregates across frames.
+  /// Stores the final skew in degrees in receipt.bounds.skewAngle.
   void _applySkewAngle(RecognizedReceipt receipt) {
     final pos = receipt.positions;
     if (pos.length < 2) return;
 
-    final pts = <Point<double>>[];
+    final byTs = <int, List<RecognizedPosition>>{};
     for (final p in pos) {
-      final a = p.product.line.boundingBox;
-      final yCenter = a.center.dy;
-      final xCenter = a.left;
-
-      pts.add(Point<double>(yCenter, xCenter));
+      final ts = p.timestamp.millisecondsSinceEpoch;
+      (byTs[ts] ??= []).add(p);
     }
-    if (pts.length < 2) return;
 
-    final filteredPts = _filterColumnOutliers(pts);
-    if (filteredPts.length < 2) return;
+    final skews = <double>[];
+    final weights = <double>[];
 
-    final slope = _theilSenSlopeXvsY(filteredPts);
-    final skewRad = _wrapAngle(atan(slope));
+    for (final entry in byTs.entries) {
+      final ps = entry.value;
+      if (ps.length < 2) continue;
+
+      final pts = <Point<double>>[];
+      for (final p in ps) {
+        final a = p.product.line.boundingBox;
+        final yCenter = a.center.dy;
+        final xLeft = a.left;
+        pts.add(Point<double>(yCenter, xLeft));
+      }
+
+      if (pts.length < 2) continue;
+
+      final filtered = _filterColumnOutliers(pts);
+      if (filtered.length < 2) continue;
+
+      final slope = _theilSenSlopeXvsY(filtered);
+      final skewRad = _wrapAngle(atan(slope));
+      final skewDeg = skewRad * 180 / pi;
+
+      if (!skewDeg.isFinite) continue;
+      if (skewDeg.abs() > 25.0) continue;
+
+      skews.add(skewDeg);
+      weights.add(filtered.length.toDouble());
+    }
+
+    if (skews.isEmpty) return;
+
+    double finalSkewDeg;
+    if (skews.length == 1) {
+      finalSkewDeg = skews.first;
+    } else {
+      finalSkewDeg = _weightedMedian(skews, weights);
+    }
 
     if (receipt.bounds != null) {
-      receipt.bounds = receipt.bounds!.copyWith(skewAngle: skewRad * 180 / pi);
+      receipt.bounds = receipt.bounds!.copyWith(skewAngle: finalSkewDeg);
     }
 
-    ReceiptLogger.log('bounds.skew.leftEdge', {
-      'n': filteredPts.length,
-      'slope': slope,
-      'skewRad': skewRad,
-      'skewDeg': skewRad * 180 / pi,
+    ReceiptLogger.log('bounds.skew.per_frame', {
+      'frames': skews.length,
+      'skewDeg': finalSkewDeg,
+      'minDeg': skews.reduce(min),
+      'maxDeg': skews.reduce(max),
+      'medAbs': _median(skews.map((e) => e.abs()).toList()),
     });
+  }
+
+  /// Returns the weighted median of values using the given weights.
+  static double _weightedMedian(List<double> values, List<double> weights) {
+    if (values.isEmpty) return 0.0;
+
+    if (values.length != weights.length) {
+      final sorted = [...values]..sort();
+      return sorted[sorted.length >> 1];
+    }
+
+    final pairs = List.generate(values.length, (i) => (values[i], weights[i]));
+    pairs.sort((a, b) => a.$1.compareTo(b.$1));
+
+    double total = 0.0;
+    for (final p in pairs) {
+      final w = p.$2;
+      if (w.isFinite && w > 0) total += w;
+    }
+
+    if (total <= 0.0) {
+      final sorted = [...values]..sort();
+      return sorted[sorted.length >> 1];
+    }
+
+    final half = total * 0.5;
+    double acc = 0.0;
+
+    for (final p in pairs) {
+      final w = p.$2;
+      if (!(w.isFinite && w > 0)) continue;
+      acc += w;
+      if (acc >= half) return p.$1;
+    }
+
+    return pairs.last.$1;
   }
 
   /// Theil–Sen slope (median of all pairwise slopes) for x vs y, using all pairs.
