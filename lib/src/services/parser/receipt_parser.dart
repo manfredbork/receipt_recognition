@@ -181,7 +181,7 @@ final class ReceiptParser {
       if (_tryParseTotalLabel(line, parsed, rightBound)) continue;
       if (_tryParseStore(line, parsed)) continue;
       if (_tryParseAmount(line, parsed, rightBound)) continue;
-      if (_tryParseUnit(line, parsed, rightBound)) continue;
+      if (_tryParseUnit(line, parsed, rightBound, centerBound)) continue;
       if (_tryParseUnknown(line, parsed, centerBound)) continue;
     }
 
@@ -338,6 +338,7 @@ final class ReceiptParser {
     TextLine line,
     List<RecognizedEntity> parsed,
     double rightBound,
+    double centerBound,
   ) {
     if (_rightL(line) > rightBound) return false;
     final text = line.text;
@@ -388,7 +389,7 @@ final class ReceiptParser {
     final modified = ReceiptTextLine.fromLine(
       line,
     ).copyWith(text: isAmountBetween ? text : leadingPart);
-    _tryParseUnknown(modified, parsed, rightBound);
+    _tryParseUnknown(modified, parsed, centerBound);
 
     return true;
   }
