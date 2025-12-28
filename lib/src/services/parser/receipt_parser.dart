@@ -417,6 +417,7 @@ final class ReceiptParser {
   ) {
     final line = ReceiptTextLine().copyWith(
       boundingBox: _extractRectFromLines(lines),
+      angle: 0.0,
     );
     parsed.add(RecognizedBounds(line: line, value: line.boundingBox));
     return true;

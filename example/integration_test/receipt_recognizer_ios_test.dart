@@ -385,7 +385,7 @@ void main() {
     );
 
     testWidgets(
-      'DM check store + total + purchase date + positions length + positions',
+      'DM check store + total + purchase date + positions length + positions + unit',
       (tester) async {
         final receipt = await _processImage('09-dm-de.png');
 
@@ -403,6 +403,8 @@ void main() {
         expect(items.length, equals(13));
         expect(items[0].product.text, equals('Prof .Tücher Mikrofeinf'));
         expect(items[0].price.value, equals(5.50));
+        expect(items[0].product.unit.quantity.value, equals(2));
+        expect(items[0].product.unit.price.value, equals(2.75));
         expect(items[1].product.text, equals('Profissimo Tortenunter lagen'));
         expect(items[1].price.value, equals(0.95));
         expect(items[2].product.text, equals('I-eukal Gum Euka 90g'));
