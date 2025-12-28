@@ -2,39 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.7] – 2025-12-28
+
+### 🛠️ Changed
+
+- **Bounding Box Stability**: Added a default zero-degree angle to bounding boxes generated from multi-line entities,
+  ensuring more consistent geometry during receipt reconstruction.
+
+### ✅ Tests
+
+- **DM Integration**: Expanded assertions for dm-drogerie markt receipts to include detailed validation of unit
+  quantities and unit prices for line items.
+
+---
+
 ## [0.2.6] – 2025-12-27
 
 ### ✨ Added
-- **Aldi-style unit support**: Added logic to detect and parse unit information (quantity/price) when printed on the line **above** the product name (common on Aldi receipts).
-- **Expanded Currency Support**: Improved monetary regex to handle currency symbols appearing after the amount (e.g., `0,49 €`).
+
+- **Aldi-style unit support**: Added logic to detect and parse unit information (quantity/price) when printed on the
+  line **above** the product name (common on Aldi receipts).
+- **Expanded Currency Support**: Improved monetary regex to handle currency symbols appearing after the amount (e.g.,
+  `0,49 €`).
 
 ### 🛠️ Changed
-- **Skew Angle Optimization**: Implemented a more robust, weighted-median approach for skew estimation across multiple frames, significantly improving alignment stability during video scans.
-- **Parsing Bounds**: Refined `rightBound` and `centerBound` calculations (3/4 and 1/2 of receipt width respectively) to better distinguish between item amounts and unknown metadata.
-- **Unit Detection**: Enhanced `_tryParseUnit` and `_tryParseUnknown` to use more precise horizontal center-bounds, preventing misclassification of product text as unknown entities.
-- **Integer Parsing**: Improved integer extraction logic to ensure quantity detection doesn't accidentally pick up parts of decimal numbers.
+
+- **Skew Angle Optimization**: Implemented a more robust, weighted-median approach for skew estimation across multiple
+  frames, significantly improving alignment stability during video scans.
+- **Parsing Bounds**: Refined `rightBound` and `centerBound` calculations (3/4 and 1/2 of receipt width respectively) to
+  better distinguish between item amounts and unknown metadata.
+- **Unit Detection**: Enhanced `_tryParseUnit` and `_tryParseUnknown` to use more precise horizontal center-bounds,
+  preventing misclassification of product text as unknown entities.
+- **Integer Parsing**: Improved integer extraction logic to ensure quantity detection doesn't accidentally pick up parts
+  of decimal numbers.
 
 ### ✅ Tests
-- **ALDI Integration**: Added comprehensive integration tests for ALDI receipts, validating store name, total, purchase date, and multi-line unit/quantity parsing.
+
+- **ALDI Integration**: Added comprehensive integration tests for ALDI receipts, validating store name, total, purchase
+  date, and multi-line unit/quantity parsing.
 
 ---
 
 ## [0.2.5] – 2025-12-14
 
 ### ✨ Added
+
 - **New store support**: Added **Kaufland** and **dm** store support (including improved/real-world handling).
 - **Parsing support**: Added handling for **asterisk-marked** receipt lines.
 
 ### 🛠️ Changed
+
 - **Normalization**: Normalize spaces more consistently to improve matching under OCR spacing glitches.
 - **Total-label handling**: Refined label-related conditions to improve robustness.
 - **Position creation**:
-  - Prefer creating positions from the **same row** when possible.
-  - Apply **non-strict** position creation only for **unused amounts** to avoid accidental matches.
+    - Prefer creating positions from the **same row** when possible.
+    - Apply **non-strict** position creation only for **unused amounts** to avoid accidental matches.
 - **Build/CI hygiene**: Ignore other build paths to reduce noise and avoid unintended file interactions.
 - **Internal**: Dynamic script language adjustments and minor method renaming/cleanup.
 
 ### ✅ Tests
+
 - Added and reorganized tests, including expanded integration test assertions (e.g., more unit/quantity/price checks).
 
 ---
@@ -42,10 +69,14 @@ All notable changes to this project will be documented in this file.
 ## [0.2.4] – 2025-12-04
 
 ### ✨ Added
-- **Extended integration test coverage**: Added some comprehensive integration tests with special validation for deposit positions.
+
+- **Extended integration test coverage**: Added some comprehensive integration tests with special validation for deposit
+  positions.
 
 ### 🐛 Fixed
-- **Total identification**: Fixed a critical bug where totals were not correctly identified when total labels were present.
+
+- **Total identification**: Fixed a critical bug where totals were not correctly identified when total labels were
+  present.
 - **Unit parsing tolerance**: Adjusted vertical tolerance for better multi-line receipt handling.
 
 ---
@@ -53,33 +84,46 @@ All notable changes to this project will be documented in this file.
 ## [0.2.3] – 2025-12-03
 
 ### ✨ Added
-- **Extended integration tests**: Added comprehensive integration tests for multiple receipt types (EDEKA, LIDL, and ALDI) with validation of store names, totals, purchase dates, positions, and specific line items.
-- **Text processor testing support**: Added `debugRunSynchronouslyForTests` flag to `ReceiptTextProcessor` for synchronous parsing in test environments.
-- **Truncated frequency calculation**: New `calculateTruncatedFrequency` method that merges truncated leading-token alternatives into their longer counterparts before counting frequency.
+
+- **Extended integration tests**: Added comprehensive integration tests for multiple receipt types (EDEKA, LIDL, and
+  ALDI) with validation of store names, totals, purchase dates, positions, and specific line items.
+- **Text processor testing support**: Added `debugRunSynchronouslyForTests` flag to `ReceiptTextProcessor` for
+  synchronous parsing in test environments.
+- **Truncated frequency calculation**: New `calculateTruncatedFrequency` method that merges truncated leading-token
+  alternatives into their longer counterparts before counting frequency.
 
 ### 🛠️ Changed
-- **Unified unit parsing**: Merged `_tryParseUnitQuantity` and `_tryParseUnitPrice` into a single `_tryParseUnit` method for more efficient unit detection.
+
+- **Unified unit parsing**: Merged `_tryParseUnitQuantity` and `_tryParseUnitPrice` into a single `_tryParseUnit` method
+  for more efficient unit detection.
 - **Total label detection improvements**:
     - Now uses normalized keys for better matching accuracy
     - Added prefix matching for total labels (e.g., "SUMME EUR" will match "summe")
 - **Parser refinements**:
     - Fixed bug where `_findTotalLabel` was incorrectly called instead of `_findTotal` when searching for totals
     - Improved unit text extraction to avoid including numeric portions
-    - Enhanced unknown entity filtering to prevent lines with too many numeric characters from being classified as unknown
+    - Enhanced unknown entity filtering to prevent lines with too many numeric characters from being classified as
+      unknown
 - **Normalization improvements**:
     - Updated frequency calculation for alternative postfix texts to use truncated frequency method.
     - Moved truncated frequency calculator to the correct normalization method for alternative texts.
     - Refined alternative text frequency calculation in `RecognizedProduct`.
-- **Parser simplification**: Reduced complexity by removing overly complicated logic and making the codebase simpler and more maintainable.
+- **Parser simplification**: Reduced complexity by removing overly complicated logic and making the codebase simpler and
+  more maintainable.
 - **OCR autocorrection**: Reduced OCR autocorrection aggressiveness for better accuracy.
 - **Skew calculation**: Removed outliers from skew angle calculation for more stable alignment.
 - **Ignored keywords**: Added "Subtotal" to the list of keywords to ignore during product recognition.
 - **Timeout handling**: Improved timeout behavior for better responsiveness.
 
 ### 🐛 Fixed
-- **Entity type preservation**: Fixed issue where entities were being incorrectly cast, now properly creates new instances with correct types when filtering (e.g., `RecognizedTotal` → `RecognizedAmount`, `RecognizedTotalLabel` → `RecognizedUnknown`)
-- **Unit boundary detection**: Changed unit parsing to use `_rightL(line)` instead of `_leftL(line)` for proper right-bound checking
-- **Unit parsing**: Fixed a critical bug where unit prices with negative total prices were not correctly handled with proper sign adjustment.
+
+- **Entity type preservation**: Fixed issue where entities were being incorrectly cast, now properly creates new
+  instances with correct types when filtering (e.g., `RecognizedTotal` → `RecognizedAmount`, `RecognizedTotalLabel` →
+  `RecognizedUnknown`)
+- **Unit boundary detection**: Changed unit parsing to use `_rightL(line)` instead of `_leftL(line)` for proper
+  right-bound checking
+- **Unit parsing**: Fixed a critical bug where unit prices with negative total prices were not correctly handled with
+  proper sign adjustment.
 - **Unit validation**: Corrected unit price-quantity validation logic to properly check tolerance thresholds.
 - **Parsing stability**: Multiple fixes to improve parsing reliability and reduce edge-case errors.
 
@@ -88,14 +132,19 @@ All notable changes to this project will be documented in this file.
 ## [0.2.2] – 2025-11-19
 
 ### 🛠️ Changed
-- **Product recognition threshold**: Increased strictness for position confirmation – now requires **80% of positions** to pass validation (up from 75%) for more reliable receipt parsing.
-- **Product name handling**: Improved handling of leading digits – now allows product names with leading digits if they contain **6 or more letters total**, reducing false rejections.
+
+- **Product recognition threshold**: Increased strictness for position confirmation – now requires **80% of positions**
+  to pass validation (up from 75%) for more reliable receipt parsing.
+- **Product name handling**: Improved handling of leading digits – now allows product names with leading digits if they
+  contain **6 or more letters total**, reducing false rejections.
 
 ### 🐛 Fixed
+
 - **Normalization**: Removed verbose debug comments from OCR correction logic, improving code clarity.
 - **Integration tests**: Corrected asset path reference in integration tests.
 
 ### 🧹 Housekeeping
+
 - Removed `.metadata` tracking file from version control in example app.
 - Updated `.gitignore` to exclude metadata files going forward.
 
@@ -104,15 +153,18 @@ All notable changes to this project will be documented in this file.
 ## [0.2.1] – 2025-11-13
 
 ### ✨ Added
+
 - Added **Spar** to the default store list.
 
 ### 🛠️ Changed
+
 - Store and total-label detection is now **more tolerant** to OCR spacing glitches.
 - Store extraction now only considers candidates **above the first amount line**, reducing false positives.
 - Improved **skew angle estimation** for more stable item alignment.
 - Parser now performs a fallback pass to assign **unmatched amounts**, reducing missing line items.
 
 ### 🐛 Fixed
+
 - **Purchase date** handling no longer locks onto early, unstable detections; continuous scans refine it correctly.
 - Minor stability improvements in the optimizer and parser.
 
