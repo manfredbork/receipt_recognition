@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.8] – 2026-01-08
+
+### 🐛 Fixed
+
+- **Unit Parsing**: Improved logic for separating unit prices from product text, specifically handling cases where unit
+  information might appear as trailing text or between other tokens more reliably.
+
+---
+
 ## [0.2.7] – 2025-12-28
 
 ### 🛠️ Changed
