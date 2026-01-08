@@ -381,14 +381,19 @@ final class ReceiptParser {
                 )
                 .trim();
     final minLen = unitPrice.toString().length;
-    final isAmountBetween =
-        aMatch != null &&
-        text.substring(0, aMatch.start).trim().length >= minLen &&
-        text.substring(aMatch.end).trim().length >= minLen;
-
+    final hasMatch = aMatch != null;
+    final isTrailing =
+        hasMatch
+            ? text.substring(aMatch.end).trim().length == text.trim().length
+            : false;
+    final isBetween =
+        hasMatch
+            ? text.substring(0, aMatch.start).trim().length >= minLen &&
+                text.substring(aMatch.end).trim().length >= minLen
+            : false;
     final modified = ReceiptTextLine.fromLine(
       line,
-    ).copyWith(text: isAmountBetween ? text : leadingPart);
+    ).copyWith(text: isTrailing || isBetween ? text : leadingPart);
     _tryParseUnknown(modified, parsed, centerBound);
 
     return true;
