@@ -453,20 +453,18 @@ final class ReceiptParser {
   /// Converts a string to a double by normalizing minus signs,
   /// decimal separators, currencies, and comma-separated thousands.
   static double? _convertToDouble(String input) {
-    var s = ReceiptNormalizer.normalizeFullWidth(input);
-    s = s.replaceAll(RegExp(r'[-−–—]'), '-');
-    s = s.replaceAll(RegExp(r'[¥￥]'), '');
-    s = s.replaceAll('円', '');
+    final normalized = ReceiptNormalizer.normalizeFullWidth(input)
+        .replaceAll(RegExp(r'[-−–—]'), '-')
+        .replaceAll(RegExp(r'[¥￥]'), '')
+        .replaceAll('円', '');
     // Comma thousands separator: "1,280" (thousands) vs "1,28" (decimal)
-    final commaDigits = RegExp(r',(\d+)');
-    final commaMatch = commaDigits.firstMatch(s);
-    if (commaMatch != null && commaMatch.group(1)!.length == 3) {
-      s = s.replaceAll(',', '');
-    } else {
-      s = s.replaceAll(RegExp(r'[.,‚،٫·]'), '.');
-    }
-    s = s.replaceAll(RegExp(r'[^-0-9.]'), '');
-    return double.tryParse(s.trim());
+    final commaMatch = RegExp(r',(\d+)').firstMatch(normalized);
+    final decimalResolved =
+        (commaMatch != null && commaMatch.group(1)!.length == 3)
+            ? normalized.replaceAll(',', '')
+            : normalized.replaceAll(RegExp(r'[.,‚،٫·]'), '.');
+    final cleaned = decimalResolved.replaceAll(RegExp(r'[^-0-9.]'), '');
+    return double.tryParse(cleaned.trim());
   }
 
   /// Replaces elements in [list] that satisfy [test] by applying [replace] to them.

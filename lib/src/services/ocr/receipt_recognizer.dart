@@ -74,7 +74,7 @@ final class ReceiptRecognizer {
     Function(RecognizedReceipt)? onScanTimeout,
   }) : _textRecognizer = textRecognizer ?? TextRecognizer(script: script),
        _optimizer = optimizer ?? ReceiptOptimizer(),
-       _options = options ?? ReceiptOptions.defaults(),
+       _options = options ?? _defaultOptionsForScript(script),
        _singleScan = singleScan,
        _nearlyCompleteThreshold = nearlyCompleteThreshold,
        _scanInterval = scanInterval,
@@ -84,6 +84,15 @@ final class ReceiptRecognizer {
        _onScanComplete = onScanComplete,
        _onScanTimeout = onScanTimeout,
        _lastReceipt = RecognizedReceipt.empty();
+
+  /// Returns the default [ReceiptOptions] for the given [script].
+  static ReceiptOptions _defaultOptionsForScript(
+    TextRecognitionScript script,
+  ) =>
+      switch (script) {
+        TextRecognitionScript.japanese => ReceiptOptions.japanese(),
+        _ => ReceiptOptions.defaults(),
+      };
 
   /// Processes an image and returns a recognized receipt.
   Future<RecognizedReceipt> processImage(InputImage inputImage) async {
