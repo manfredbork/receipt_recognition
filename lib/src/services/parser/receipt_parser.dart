@@ -116,19 +116,19 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  /// 漢字日付: "2025年1月15日"
+  /// Kanji date: "2025年1月15日"
   static final RegExp _dateKanji = RegExp(
     r'(\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日)',
   );
 
-  /// 和暦日付: "令和7年1月15日"
+  /// Japanese era date: "令和7年1月15日"
   static final RegExp _dateJapaneseEra = RegExp(
     r'((令和|平成|昭和|大正|明治)\s*\d{1,2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日)',
   );
 
   /// Matches a monetary amount:
-  /// - 小数2桁パターン: "1,99", "-€4.00", "0,49 €"
-  /// - 日本語整数円パターン: "¥198", "￥1,280", "198円", "1,280"
+  /// - Two-decimal pattern: "1,99", "-€4.00", "0,49 €"
+  /// - Japanese integer yen pattern: "¥198", "￥1,280", "198円", "1,280"
   static final RegExp _amount = RegExp(
     r'(?:[-−–—]\s*)?(?:[$€£¥￥₽₹₩₺₫₪₴₦₱₲₵₡]\s*)?\d[\d,]*\s*[.,‚،٫·]\s*\d{2}(?!\d)\s*(?:[$€£¥￥₽₹₩₺₫₪₴₦₱₲₵₡])?'
     r'|'
@@ -457,7 +457,7 @@ final class ReceiptParser {
     s = s.replaceAll(RegExp(r'[-−–—]'), '-');
     s = s.replaceAll(RegExp(r'[¥￥]'), '');
     s = s.replaceAll('円', '');
-    // カンマ桁区切りの判定: "1,280" (桁区切り) vs "1,28" (小数)
+    // Comma thousands separator: "1,280" (thousands) vs "1,28" (decimal)
     final commaDigits = RegExp(r',(\d+)');
     final commaMatch = commaDigits.firstMatch(s);
     if (commaMatch != null && commaMatch.group(1)!.length == 3) {

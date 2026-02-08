@@ -52,7 +52,7 @@ final class ReceiptFormatter {
     'dezember': 12,
   };
 
-  /// 和暦の元号名→開始西暦年のマッピング
+  /// Japanese era name to base Gregorian year mapping.
   static const japaneseEraMap = {
     '令和': 2018,
     '平成': 1988,

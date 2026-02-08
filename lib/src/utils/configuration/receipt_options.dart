@@ -197,7 +197,7 @@ final class ReceiptOptions {
   static ReceiptOptions defaults() =>
       ReceiptOptions.fromJsonLike(kReceiptDefaultOptions);
 
-  /// 日本語レシート用のデフォルト設定を返す。
+  /// Returns default options for Japanese receipts.
   factory ReceiptOptions.japanese() =>
       ReceiptOptions.fromJsonLike(kReceiptDefaultOptionsJa);
 

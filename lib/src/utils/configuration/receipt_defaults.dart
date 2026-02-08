@@ -38,7 +38,7 @@ const Map<String, dynamic> kReceiptDefaultOptions = {
   },
 };
 
-/// 日本語レシート用のデフォルト設定
+/// Built-in default options for Japanese receipts.
 const Map<String, dynamic> kReceiptDefaultOptionsJa = {
   'storeNames': {
     'イオン': 'イオン',
