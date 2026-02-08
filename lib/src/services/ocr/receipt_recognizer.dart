@@ -88,11 +88,10 @@ final class ReceiptRecognizer {
   /// Returns the default [ReceiptOptions] for the given [script].
   static ReceiptOptions _defaultOptionsForScript(
     TextRecognitionScript script,
-  ) =>
-      switch (script) {
-        TextRecognitionScript.japanese => ReceiptOptions.japanese(),
-        _ => ReceiptOptions.defaults(),
-      };
+  ) => switch (script) {
+    TextRecognitionScript.japanese => ReceiptOptions.japanese(),
+    _ => ReceiptOptions.defaults(),
+  };
 
   /// Processes an image and returns a recognized receipt.
   Future<RecognizedReceipt> processImage(InputImage inputImage) async {

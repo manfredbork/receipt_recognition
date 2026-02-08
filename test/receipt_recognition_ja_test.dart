@@ -55,8 +55,7 @@ void main() {
         });
 
         test('スペースを含む和暦日付をパースする', () {
-          final dt =
-              ReceiptFormatter.parseJapaneseEraDate('令和 7 年 1 月 15 日');
+          final dt = ReceiptFormatter.parseJapaneseEraDate('令和 7 年 1 月 15 日');
           expect(dt, DateTime.utc(2025, 1, 15));
         });
 
@@ -74,17 +73,11 @@ void main() {
       });
 
       test('decimalDigits: 0 で整数フォーマット', () {
-        expect(
-          ReceiptFormatter.format(198, decimalDigits: 0),
-          '198',
-        );
+        expect(ReceiptFormatter.format(198, decimalDigits: 0), '198');
       });
 
       test('大きな数値を桁区切りでフォーマット', () {
-        expect(
-          ReceiptFormatter.format(1280, decimalDigits: 0),
-          '1,280',
-        );
+        expect(ReceiptFormatter.format(1280, decimalDigits: 0), '1,280');
       });
 
       test('decimalDigits: 2 で小数点以下2桁', () {
@@ -95,56 +88,32 @@ void main() {
 
     group('ReceiptNormalizer - 全角→半角変換', () {
       test('全角数字を半角に変換する', () {
-        expect(
-          ReceiptNormalizer.normalizeFullWidth('１２３'),
-          '123',
-        );
+        expect(ReceiptNormalizer.normalizeFullWidth('１２３'), '123');
       });
 
       test('全角英字を半角に変換する', () {
-        expect(
-          ReceiptNormalizer.normalizeFullWidth('ＡＢＣ'),
-          'ABC',
-        );
+        expect(ReceiptNormalizer.normalizeFullWidth('ＡＢＣ'), 'ABC');
       });
 
       test('全角記号を半角に変換する', () {
-        expect(
-          ReceiptNormalizer.normalizeFullWidth('￥'),
-          '¥',
-        );
+        expect(ReceiptNormalizer.normalizeFullWidth('￥'), '¥');
       });
 
       test('全角スペースを半角スペースに変換する', () {
-        expect(
-          ReceiptNormalizer.normalizeFullWidth('\u3000'),
-          ' ',
-        );
+        expect(ReceiptNormalizer.normalizeFullWidth('\u3000'), ' ');
       });
 
       test('混在した全角半角文字列を変換する', () {
-        expect(
-          ReceiptNormalizer.normalizeFullWidth('￥１，２８０'),
-          '¥1,280',
-        );
+        expect(ReceiptNormalizer.normalizeFullWidth('￥１，２８０'), '¥1,280');
       });
 
       test('半角文字はそのまま保持する', () {
-        expect(
-          ReceiptNormalizer.normalizeFullWidth('abc123'),
-          'abc123',
-        );
+        expect(ReceiptNormalizer.normalizeFullWidth('abc123'), 'abc123');
       });
 
       test('日本語文字（ひらがな・カタカナ・漢字）は変換しない', () {
-        expect(
-          ReceiptNormalizer.normalizeFullWidth('合計'),
-          '合計',
-        );
-        expect(
-          ReceiptNormalizer.normalizeFullWidth('イオン'),
-          'イオン',
-        );
+        expect(ReceiptNormalizer.normalizeFullWidth('合計'), '合計');
+        expect(ReceiptNormalizer.normalizeFullWidth('イオン'), 'イオン');
       });
 
       test('空文字列の場合は空文字列を返す', () {

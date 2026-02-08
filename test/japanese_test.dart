@@ -58,16 +58,12 @@ void main() {
       });
 
       test('スペースあり 令和 7 年 1 月 15 日', () {
-        final dt =
-            ReceiptFormatter.parseJapaneseEraDate('令和 7 年 1 月 15 日');
+        final dt = ReceiptFormatter.parseJapaneseEraDate('令和 7 年 1 月 15 日');
         expect(dt, DateTime.utc(2025, 1, 15));
       });
 
       test('無効な元号は null', () {
-        expect(
-          ReceiptFormatter.parseJapaneseEraDate('安政5年1月1日'),
-          isNull,
-        );
+        expect(ReceiptFormatter.parseJapaneseEraDate('安政5年1月1日'), isNull);
       });
 
       test('無効な入力は null', () {
@@ -120,10 +116,7 @@ void main() {
     });
 
     test('混合文字列', () {
-      expect(
-        ReceiptNormalizer.normalizeFullWidth('合計　￥１，２８０'),
-        '合計 ¥1,280',
-      );
+      expect(ReceiptNormalizer.normalizeFullWidth('合計　￥１，２８０'), '合計 ¥1,280');
     });
   });
 
@@ -209,12 +202,7 @@ void main() {
     RecognizedText buildRecognizedText(List<_LineSpec> specs) {
       final lines = <TextLine>[];
       for (final spec in specs) {
-        lines.add(
-          ReceiptTextLine(
-            text: spec.text,
-            boundingBox: spec.rect,
-          ),
-        );
+        lines.add(ReceiptTextLine(text: spec.text, boundingBox: spec.rect));
       }
       final block = _FakeTextBlock(lines);
       return _FakeRecognizedText([block]);
@@ -344,7 +332,8 @@ class _FakeRecognizedText implements RecognizedText {
   @override
   final List<TextBlock> blocks;
 
-  _FakeRecognizedText(this.blocks) : text = blocks.map((b) => b.text).join('\n');
+  _FakeRecognizedText(this.blocks)
+    : text = blocks.map((b) => b.text).join('\n');
 }
 
 /// テスト用の TextBlock 実装
@@ -365,12 +354,13 @@ class _FakeTextBlock implements TextBlock {
   final List<Point<int>> cornerPoints;
 
   _FakeTextBlock(this.lines)
-      : text = lines.map((l) => l.text).join('\n'),
-        boundingBox = lines.isEmpty
-            ? Rect.zero
-            : lines
-                .map((l) => l.boundingBox)
-                .reduce((a, b) => a.expandToInclude(b)),
-        recognizedLanguages = const [],
-        cornerPoints = const [];
+    : text = lines.map((l) => l.text).join('\n'),
+      boundingBox =
+          lines.isEmpty
+              ? Rect.zero
+              : lines
+                  .map((l) => l.boundingBox)
+                  .reduce((a, b) => a.expandToInclude(b)),
+      recognizedLanguages = const [],
+      cornerPoints = const [];
 }

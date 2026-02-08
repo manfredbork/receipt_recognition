@@ -539,10 +539,12 @@ final class ReceiptParser {
           DateTime? dt = switch (p) {
             _ when identical(p, _dateJapaneseEra) =>
               ReceiptFormatter.parseJapaneseEraDate(s),
-            _ when identical(p, _dateKanji) =>
-              ReceiptFormatter.parseKanjiDate(s),
-            _ when identical(p, _dateIsoYMD) ||
-                identical(p, _dateYearMonthDayNumeric) =>
+            _ when identical(p, _dateKanji) => ReceiptFormatter.parseKanjiDate(
+              s,
+            ),
+            _
+                when identical(p, _dateIsoYMD) ||
+                    identical(p, _dateYearMonthDayNumeric) =>
               ReceiptFormatter.parseNumericYMD(s),
             _ when identical(p, _dateDayMonthYearNumeric) =>
               ReceiptFormatter.parseNumericDMY(s),
