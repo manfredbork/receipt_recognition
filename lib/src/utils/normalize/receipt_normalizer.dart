@@ -209,20 +209,11 @@ final class ReceiptNormalizer {
   /// Fullwidth ASCII (U+FF01-U+FF5E) -> halfwidth (U+0021-U+007E)
   /// Fullwidth space (U+3000) -> ASCII space
   /// Fullwidth yen sign (U+FFE5) -> halfwidth yen sign (U+00A5)
-  static String normalizeFullWidth(String s) {
-    final buf = StringBuffer();
-    for (final code in s.runes) {
-      switch (code) {
-        case >= 0xFF01 && <= 0xFF5E:
-          buf.writeCharCode(code - 0xFEE0);
-        case 0x3000:
-          buf.write(' ');
-        case 0xFFE5:
-          buf.writeCharCode(0x00A5);
-        default:
-          buf.writeCharCode(code);
-      }
-    }
-    return buf.toString();
-  }
+  static String normalizeFullWidth(String s) =>
+      String.fromCharCodes(s.runes.map((code) => switch (code) {
+            >= 0xFF01 && <= 0xFF5E => code - 0xFEE0,
+            0x3000 => 0x20,
+            0xFFE5 => 0x00A5,
+            _ => code,
+          }));
 }
