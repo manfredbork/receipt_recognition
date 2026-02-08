@@ -204,4 +204,16 @@ final class ReceiptNormalizer {
   /// Remove all Unicode whitespace and lowercase for stable lookup keys.
   static String normalizeKey(String s) =>
       s.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+
+  /// Converts fullwidth characters to halfwidth equivalents.
+  /// Fullwidth ASCII (U+FF01-U+FF5E) -> halfwidth (U+0021-U+007E)
+  /// Fullwidth space (U+3000) -> ASCII space
+  /// Fullwidth yen sign (U+FFE5) -> halfwidth yen sign (U+00A5)
+  static String normalizeFullWidth(String s) =>
+      String.fromCharCodes(s.runes.map((code) => switch (code) {
+            >= 0xFF01 && <= 0xFF5E => code - 0xFEE0,
+            0x3000 => 0x20,
+            0xFFE5 => 0x00A5,
+            _ => code,
+          }));
 }

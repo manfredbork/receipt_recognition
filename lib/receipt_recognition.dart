@@ -52,7 +52,12 @@ export 'src/utils/configuration/index.dart'
         ReceiptTuning,
         MergePolicy,
         kReceiptDefaultOptions,
+        kReceiptDefaultOptionsJa,
         ReceiptRuntime;
+
+/// ── Normalizer (public utility) ──
+export 'src/utils/normalize/index.dart'
+    show ReceiptFormatter, ReceiptNormalizer;
 
 /// ── Logger + debug output ──
 export 'src/utils/logging/index.dart' show ReceiptLogger;

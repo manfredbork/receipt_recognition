@@ -197,6 +197,10 @@ final class ReceiptOptions {
   static ReceiptOptions defaults() =>
       ReceiptOptions.fromJsonLike(kReceiptDefaultOptions);
 
+  /// Returns default options for Japanese receipts.
+  factory ReceiptOptions.japanese() =>
+      ReceiptOptions.fromJsonLike(kReceiptDefaultOptionsJa);
+
   /// Merges default and user keyword sets according to [p].
   static KeywordSet _ksMerge(
     KeywordSet defaults,
