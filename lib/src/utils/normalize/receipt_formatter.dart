@@ -10,8 +10,8 @@ final class ReceiptFormatter {
     r'[-−–—]?\s*\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)',
   );
 
-  /// Cache of NumberFormat by locale for performance.
-  static final Map<String?, NumberFormat> _fmtCache = {};
+  /// Cache of NumberFormat by locale+digits key for performance.
+  static final Map<String, NumberFormat> _fmtCache = {};
 
   /// Maps English and German month names and abbreviations (with umlauts) to numeric month values.
   static const monthMap = {
@@ -52,16 +52,28 @@ final class ReceiptFormatter {
     'dezember': 12,
   };
 
-  /// Returns a cached `NumberFormat` for `Intl.defaultLocale` with two or three fraction digits.
-  static NumberFormat _formatter({int decimalDigits = 2}) =>
-      _fmtCache.putIfAbsent(Intl.defaultLocale, () {
-        return NumberFormat.decimalPatternDigits(
-          locale: Intl.defaultLocale,
-          decimalDigits: decimalDigits,
-        );
-      });
+  /// 和暦の元号名→開始西暦年のマッピング
+  static const japaneseEraMap = {
+    '令和': 2018,
+    '平成': 1988,
+    '昭和': 1925,
+    '大正': 1911,
+    '明治': 1867,
+  };
 
-  /// Formats [value] using the current locale with two or three decimal places (via `NumberFormat`).
+  /// Returns a cached `NumberFormat` for the given locale+digits key.
+  static NumberFormat _formatter({int decimalDigits = 2}) {
+    final key = '${Intl.defaultLocale}_$decimalDigits';
+    return _fmtCache.putIfAbsent(key, () {
+      return NumberFormat.decimalPatternDigits(
+        locale: Intl.defaultLocale,
+        decimalDigits: decimalDigits,
+      );
+    });
+  }
+
+  /// Formats [value] using the current locale.
+  /// [decimalDigits] defaults to 2 for most currencies, use 0 for JPY.
   static String format(num value, {int decimalDigits = 2}) =>
       _formatter(decimalDigits: decimalDigits).format(value);
 
@@ -149,6 +161,35 @@ final class ReceiptFormatter {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Parses `2025年1月15日` into `DateTime.utc`.
+  static DateTime? parseKanjiDate(String token) {
+    final re = RegExp(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日');
+    final m = re.firstMatch(token);
+    if (m == null) return null;
+    final y = int.tryParse(m.group(1)!);
+    final mon = int.tryParse(m.group(2)!);
+    final d = int.tryParse(m.group(3)!);
+    return _ymdUtc(y, mon, d);
+  }
+
+  /// Parses `令和7年1月15日` into `DateTime.utc` (和暦→西暦変換).
+  static DateTime? parseJapaneseEraDate(String token) {
+    final re = RegExp(
+      r'(令和|平成|昭和|大正|明治)\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日',
+    );
+    final m = re.firstMatch(token);
+    if (m == null) return null;
+    final era = m.group(1)!;
+    final eraYear = int.tryParse(m.group(2)!);
+    final mon = int.tryParse(m.group(3)!);
+    final d = int.tryParse(m.group(4)!);
+    if (eraYear == null) return null;
+    final baseYear = japaneseEraMap[era];
+    if (baseYear == null) return null;
+    final y = baseYear + eraYear;
+    return _ymdUtc(y, mon, d);
   }
 
   /// Converts EN/DE month names and abbreviations (with optional dot/umlauts) to a 1–12 month number.

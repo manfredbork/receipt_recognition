@@ -204,4 +204,24 @@ final class ReceiptNormalizer {
   /// Remove all Unicode whitespace and lowercase for stable lookup keys.
   static String normalizeKey(String s) =>
       s.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+
+  /// 全角文字を半角に変換する。
+  /// 全角ASCII (U+FF01-U+FF5E) → 半角 (U+0021-U+007E)
+  /// 全角スペース (U+3000) → 半角スペース
+  /// 全角円記号 (U+FFE5) → 半角円記号 (U+00A5)
+  static String normalizeFullWidth(String s) {
+    final buf = StringBuffer();
+    for (final code in s.runes) {
+      if (code >= 0xFF01 && code <= 0xFF5E) {
+        buf.writeCharCode(code - 0xFEE0);
+      } else if (code == 0x3000) {
+        buf.write(' ');
+      } else if (code == 0xFFE5) {
+        buf.writeCharCode(0x00A5); // ￥ → ¥
+      } else {
+        buf.writeCharCode(code);
+      }
+    }
+    return buf.toString();
+  }
 }

@@ -116,10 +116,25 @@ final class ReceiptParser {
     caseSensitive: false,
   );
 
-  /// Matches a monetary amount with two decimals (e.g. "1,99", "-€4.00", "0,49 €").
-  /// Supports optional sign, optional currency before or after the number.
+  /// 漢字日付: "2025年1月15日"
+  static final RegExp _dateKanji = RegExp(
+    r'(\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日)',
+  );
+
+  /// 和暦日付: "令和7年1月15日"
+  static final RegExp _dateJapaneseEra = RegExp(
+    r'((令和|平成|昭和|大正|明治)\s*\d{1,2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日)',
+  );
+
+  /// Matches a monetary amount:
+  /// - 小数2桁パターン: "1,99", "-€4.00", "0,49 €"
+  /// - 日本語整数円パターン: "¥198", "￥1,280", "198円", "1,280"
   static final RegExp _amount = RegExp(
-    r'(?:[-−–—]\s*)?(?:[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡]\s*)?\d+\s*[.,‚،٫·]\s*\d{2}(?!\d)\s*(?:[$€£¥₽₹₩₺₫₪₴₦₱₲₵₡])?',
+    r'(?:[-−–—]\s*)?(?:[$€£¥￥₽₹₩₺₫₪₴₦₱₲₵₡]\s*)?\d[\d,]*\s*[.,‚،٫·]\s*\d{2}(?!\d)\s*(?:[$€£¥￥₽₹₩₺₫₪₴₦₱₲₵₡])?'
+    r'|'
+    r'(?:[-−–—]\s*)?[¥￥]\s*\d[\d,]*(?:円)?'
+    r'|'
+    r'(?:[-−–—]\s*)?\d[\d,]*円',
   );
 
   /// Matches a quantity expression like "3 x 0,49 €" or "2kg × item".
@@ -325,7 +340,8 @@ final class ReceiptParser {
     double rightBound,
   ) {
     if (_rightL(line) <= rightBound) return false;
-    final amount = _amount.stringMatch(line.text);
+    final normalizedText = ReceiptNormalizer.normalizeFullWidth(line.text);
+    final amount = _amount.stringMatch(normalizedText);
     if (amount == null) return false;
     final value = _convertToDouble(amount);
     if (value == null || value == 0) return false;
@@ -341,7 +357,7 @@ final class ReceiptParser {
     double centerBound,
   ) {
     if (_rightL(line) > rightBound) return false;
-    final text = line.text;
+    final text = ReceiptNormalizer.normalizeFullWidth(line.text);
     final quantity = _quantity.stringMatch(text);
     final amount = _amount.stringMatch(text);
 
@@ -434,12 +450,23 @@ final class ReceiptParser {
     return m == null ? null : int.tryParse(m.group(0)!);
   }
 
-  /// Converts a string to a double by normalizing minus signs, decimal separators and currencies.
+  /// Converts a string to a double by normalizing minus signs,
+  /// decimal separators, currencies, and comma-separated thousands.
   static double? _convertToDouble(String input) {
-    final norm1 = input.replaceAll(RegExp(r'[-−–—]'), '-');
-    final norm2 = norm1.replaceAll(RegExp(r'[.,‚،٫·]'), '.');
-    final norm3 = norm2.replaceAll(RegExp(r'[^-0-9.]'), '');
-    return double.tryParse(norm3.trim());
+    var s = ReceiptNormalizer.normalizeFullWidth(input);
+    s = s.replaceAll(RegExp(r'[-−–—]'), '-');
+    s = s.replaceAll(RegExp(r'[¥￥]'), '');
+    s = s.replaceAll('円', '');
+    // カンマ桁区切りの判定: "1,280" (桁区切り) vs "1,28" (小数)
+    final commaDigits = RegExp(r',(\d+)');
+    final commaMatch = commaDigits.firstMatch(s);
+    if (commaMatch != null && commaMatch.group(1)!.length == 3) {
+      s = s.replaceAll(',', '');
+    } else {
+      s = s.replaceAll(RegExp(r'[.,‚،٫·]'), '.');
+    }
+    s = s.replaceAll(RegExp(r'[^-0-9.]'), '');
+    return double.tryParse(s.trim());
   }
 
   /// Replaces elements in [list] that satisfy [test] by applying [replace] to them.
@@ -492,9 +519,11 @@ final class ReceiptParser {
     return true;
   }
 
-  /// Finds the most prominent date: try ISO first, then YMD/DMY, then name-month; use all matches.
+  /// Finds the most prominent date: try Japanese era/kanji first, then ISO, YMD/DMY, name-month.
   static RecognizedPurchaseDate? _extractDateFromLines(List<TextLine> lines) {
     final patterns = [
+      _dateJapaneseEra,
+      _dateKanji,
       _dateIsoYMD,
       _dateYearMonthDayNumeric,
       _dateDayMonthYearNumeric,
@@ -504,20 +533,25 @@ final class ReceiptParser {
     ];
 
     for (final line in lines) {
-      final t = line.text;
+      final t = ReceiptNormalizer.normalizeFullWidth(line.text);
       for (final p in patterns) {
         for (final m in p.allMatches(t)) {
           if (m.groupCount < 1) continue;
           final s = m.group(1)!;
-          DateTime? dt =
-              identical(p, _dateIsoYMD) ||
-                      identical(p, _dateYearMonthDayNumeric)
-                  ? ReceiptFormatter.parseNumericYMD(s)
-                  : identical(p, _dateDayMonthYearNumeric)
-                  ? ReceiptFormatter.parseNumericDMY(s)
-                  : identical(p, _dateMonthDayYearEn)
-                  ? ReceiptFormatter.parseNameMDY(s)
-                  : ReceiptFormatter.parseNameDMY(s);
+          DateTime? dt = switch (p) {
+            _ when identical(p, _dateJapaneseEra) =>
+              ReceiptFormatter.parseJapaneseEraDate(s),
+            _ when identical(p, _dateKanji) =>
+              ReceiptFormatter.parseKanjiDate(s),
+            _ when identical(p, _dateIsoYMD) ||
+                identical(p, _dateYearMonthDayNumeric) =>
+              ReceiptFormatter.parseNumericYMD(s),
+            _ when identical(p, _dateDayMonthYearNumeric) =>
+              ReceiptFormatter.parseNumericDMY(s),
+            _ when identical(p, _dateMonthDayYearEn) =>
+              ReceiptFormatter.parseNameMDY(s),
+            _ => ReceiptFormatter.parseNameDMY(s),
+          };
           if (dt != null) {
             return RecognizedPurchaseDate(value: dt, line: line);
           }
