@@ -18,6 +18,4 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Pin GitHub Actions versions
-        uses: suzuki-shunsuke/pinact-action@43cd3c1019a721eba2b29e4c7b02cd300c0af505
-        with:
-          working_directory: .github/workflows
+        uses: suzuki-shunsuke/pinact-action@992d13034471d80a72b0bf2eb1031b17f5e22c25
