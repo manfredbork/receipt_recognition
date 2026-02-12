@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.3.0)"
+        required: true
+        type: string
+      generate_notes:
+        description: "Auto-generate release notes"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          if ! echo "${{ inputs.version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format. Use X.Y.Z (e.g. 0.3.0)"
+            exit 1
+          fi
+
+      - name: Check for duplicate tag
+        run: |
+          if git tag -l "v${{ inputs.version }}" | grep -q .; then
+            echo "::error::Tag v${{ inputs.version }} already exists."
+            exit 1
+          fi
+
+      - name: Update pubspec.yaml version
+        run: sed -i "s/^version: .*/version: ${{ inputs.version }}/" pubspec.yaml
+
+      - name: Extract release notes from CHANGELOG
+        id: changelog
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            body=$(awk '/^## \[?${{ inputs.version }}/{found=1; next} /^## /{if(found) exit} found{print}' CHANGELOG.md)
+            if [ -n "$body" ]; then
+              {
+                echo "body<<EOF"
+                echo "$body"
+                echo "EOF"
+              } >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Commit version bump and create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pubspec.yaml
+          git commit -m "release: v${{ inputs.version }}"
+          git tag "v${{ inputs.version }}"
+          git push origin HEAD "v${{ inputs.version }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@e798e6a1ede8d07b74ac4cdac6bdfa4cc1653907
+        with:
+          tag_name: "v${{ inputs.version }}"
+          name: "v${{ inputs.version }}"
+          body: ${{ steps.changelog.outputs.body }}
+          generate_release_notes: ${{ inputs.generate_notes }}
