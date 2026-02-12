@@ -39,7 +39,8 @@ jobs:
           fi
 
       - name: Update pubspec.yaml version
-        run: sed -i "s/^version: .*/version: ${{ inputs.version }}/" pubspec.yaml
+        run: |
+          sed -i "s/^version: .*/version: ${{ inputs.version }}/" pubspec.yaml
 
       - name: Extract release notes from CHANGELOG
         id: changelog
