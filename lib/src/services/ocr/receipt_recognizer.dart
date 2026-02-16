@@ -93,6 +93,10 @@ final class ReceiptRecognizer {
     _ => ReceiptOptions.defaults(),
   };
 
+  /// Processes a file at [path] and returns a recognized receipt.
+  Future<RecognizedReceipt> processFilePath(String path) =>
+      processImage(InputImage.fromFilePath(path));
+
   /// Processes an image and returns a recognized receipt.
   Future<RecognizedReceipt> processImage(InputImage inputImage) async {
     _initializeIfNeeded();
