@@ -23,8 +23,8 @@ void main() {
     ReceiptTextProcessor.debugRunSynchronouslyForTests = true;
   });
 
-  group('OCR fixture テスト', () {
-    test('gindaco_2026_02_08: 銀だこ酒場レシート', () async {
+  group('OCR fixture tests', () {
+    test('gindaco_2026_02_08: Gindaco Sakaba receipt', () async {
       final fixture = fixtures['gindaco_2026_02_08']
           as Map<String, dynamic>;
       final text = _buildRecognizedText(fixture);
@@ -33,13 +33,13 @@ void main() {
       final receipt =
           await ReceiptTextProcessor.processText(text, jaOptions);
 
-      // 店名
+      // Store name
       expect(receipt.store?.value, expected['store']);
 
-      // 合計
+      // Total
       expect(receipt.total?.value, expected['total']);
 
-      // 日付
+      // Date
       if (expected['date'] != null) {
         final parts = (expected['date'] as String).split('-');
         expect(
@@ -52,12 +52,12 @@ void main() {
         );
       }
 
-      // アイテム数
+      // Item count
       if (expected['itemCount'] != null) {
         expect(receipt.positions.length, expected['itemCount']);
       }
 
-      // 各アイテムの金額
+      // Each item's price
       final expectedItems = expected['items'] as List<dynamic>?;
       if (expectedItems != null) {
         for (var i = 0; i < expectedItems.length; i++) {
@@ -70,7 +70,7 @@ void main() {
         }
       }
 
-      // デバッグ出力
+      // Debug output
       _printResult(receipt);
     });
   });
