@@ -6,6 +6,7 @@ import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/models/index.dart';
 import 'package:receipt_recognition/src/services/ocr/index.dart';
+import 'package:receipt_recognition/src/services/parser/receipt_parser_ja.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
@@ -148,10 +149,18 @@ final class ReceiptParser {
 
   /// Parses [text] with [options] and returns a structured [RecognizedReceipt].
   /// Performs line ordering, entity extraction, geometric filtering, and building.
+  ///
+  /// When [ReceiptOptions.script] is [TextRecognitionScript.japanese],
+  /// delegates to [ReceiptParserJa] which uses a row-grouping strategy
+  /// optimized for Japanese receipt layouts.
   static RecognizedReceipt processText(
     RecognizedText text,
     ReceiptOptions options,
   ) {
+    if (options.script == TextRecognitionScript.japanese) {
+      return ReceiptParserJa.processText(text, options);
+    }
+
     return ReceiptRuntime.runWithOptions(options, () {
       if (text.blocks.isEmpty) return RecognizedReceipt.empty();
 
