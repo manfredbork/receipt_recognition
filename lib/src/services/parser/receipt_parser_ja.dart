@@ -17,19 +17,13 @@ import 'package:receipt_recognition/src/utils/normalize/index.dart';
 final class ReceiptParserJa {
   /// Matches Japanese yen amounts: ¥198, ￥1,280, ¥702※, etc.
   /// Captures the numeric portion (digits, commas, spaces).
-  static final RegExp _yenPrefix = RegExp(
-    r'[¥￥]\s*([\d,\s]+)',
-  );
+  static final RegExp _yenPrefix = RegExp(r'[¥￥]\s*([\d,\s]+)');
 
   /// Matches amounts with trailing 円: 198円, 1,280円
-  static final RegExp _yenSuffix = RegExp(
-    r'(\d[\d,]*)\s*円',
-  );
+  static final RegExp _yenSuffix = RegExp(r'(\d[\d,]*)\s*円');
 
   /// Matches standalone discount lines: -100, −200, –300
-  static final RegExp _discount = RegExp(
-    r'^[-−–—]\s*([\d,]+)$',
-  );
+  static final RegExp _discount = RegExp(r'^[-−–—]\s*([\d,]+)$');
 
   /// Fallback: standalone price-like numbers without ¥/円.
   /// Handles OCR artifacts: leading *, +; trailing >, %, ), X, *.
@@ -41,16 +35,12 @@ final class ReceiptParserJa {
   /// Garbled ¥ prefix: OCR commonly reads ¥ as digit 4.
   /// "4702%" → ¥702※ (price = 702).
   /// Requires trailing artifacts to distinguish from legitimate prices.
-  static final RegExp _yenGarbled = RegExp(
-    r'^4(\d[\d,]{0,5})[%\)>※＞\*X]+$',
-  );
+  static final RegExp _yenGarbled = RegExp(r'^4(\d[\d,]{0,5})[%\)>※＞\*X]+$');
 
   /// Matches tax rate indicator lines common on Japanese receipts:
   /// "(8% 軽)", "(10% 標)", "(8% 内税額)", etc.
   /// OCR often garbles these to "(8% REAR", "(8% BRI", "(10% ..." etc.
-  static final RegExp _taxRate = RegExp(
-    r'^\(?\d{1,2}%',
-  );
+  static final RegExp _taxRate = RegExp(r'^\(?\d{1,2}%');
 
   /// Active options from [ReceiptRuntime].
   static ReceiptOptions get _options => ReceiptRuntime.options;
@@ -63,9 +53,7 @@ final class ReceiptParserJa {
     return ReceiptRuntime.runWithOptions(options, () {
       if (text.blocks.isEmpty) return RecognizedReceipt.empty();
 
-      final allLines = text.blocks
-          .expand((b) => b.lines)
-          .toList();
+      final allLines = text.blocks.expand((b) => b.lines).toList();
 
       if (allLines.isEmpty) return RecognizedReceipt.empty();
 
@@ -76,9 +64,10 @@ final class ReceiptParserJa {
       allLines.sort((a, b) {
         final ab = a.boundingBox;
         final bb = b.boundingBox;
-        final (p1, s1, p2, s2) = rotated
-            ? (ab.left, ab.top, bb.left, bb.top)
-            : (ab.top, ab.left, bb.top, bb.left);
+        final (p1, s1, p2, s2) =
+            rotated
+                ? (ab.left, ab.top, bb.left, bb.top)
+                : (ab.top, ab.left, bb.top, bb.left);
         return switch (p1.compareTo(p2)) {
           0 => s1.compareTo(s2),
           final c => c,
@@ -111,16 +100,16 @@ final class ReceiptParserJa {
 
       for (final row in rows) {
         final rowText = row.map((l) => l.text).join(' ');
-        final normalizedRowText =
-            ReceiptNormalizer.normalizeFullWidth(rowText);
+        final normalizedRowText = ReceiptNormalizer.normalizeFullWidth(rowText);
 
         // Strip markers (※ etc.) before keyword checks, since these
         // appear as trailing markers on product lines but are also
         // registered as ignore keywords for standalone annotation lines.
-        final cleanedRowText = normalizedRowText
-            .replaceAll('※', '')
-            .replaceAll(RegExp(r'\s+'), ' ')
-            .trim();
+        final cleanedRowText =
+            normalizedRowText
+                .replaceAll('※', '')
+                .replaceAll(RegExp(r'\s+'), ' ')
+                .trim();
 
         // Stop keywords → stop processing.
         if (_options.stopKeywords.hasMatch(cleanedRowText)) break;
@@ -211,13 +200,14 @@ final class ReceiptParserJa {
       }
 
       // Build the receipt.
-      final receipt = RecognizedReceipt.empty()
-        ..store = store
-        ..totalLabel = totalLabel
-        ..total = total
-        ..purchaseDate = purchaseDate
-        ..bounds = bounds
-        ..positions.addAll(positions);
+      final receipt =
+          RecognizedReceipt.empty()
+            ..store = store
+            ..totalLabel = totalLabel
+            ..total = total
+            ..purchaseDate = purchaseDate
+            ..bounds = bounds
+            ..positions.addAll(positions);
 
       return receipt.copyWith(entities: entities);
     });
@@ -255,14 +245,12 @@ final class ReceiptParserJa {
 
     final rows = <List<TextLine>>[];
     var currentRow = <TextLine>[lines.first];
-    var currentPos = rotated
-        ? lines.first.boundingBox.left
-        : lines.first.boundingBox.top;
+    var currentPos =
+        rotated ? lines.first.boundingBox.left : lines.first.boundingBox.top;
 
     for (var i = 1; i < lines.length; i++) {
       final line = lines[i];
-      final pos =
-          rotated ? line.boundingBox.left : line.boundingBox.top;
+      final pos = rotated ? line.boundingBox.left : line.boundingBox.top;
 
       // Adaptive tolerance: use the larger of the current row's first
       // line height and the candidate line's height. This prevents
@@ -287,10 +275,12 @@ final class ReceiptParserJa {
 
     // Sort within each row along the reading axis.
     for (final row in rows) {
-      row.sort((a, b) => switch (rotated) {
-        true => a.boundingBox.top.compareTo(b.boundingBox.top),
-        false => a.boundingBox.left.compareTo(b.boundingBox.left),
-      });
+      row.sort(
+        (a, b) => switch (rotated) {
+          true => a.boundingBox.top.compareTo(b.boundingBox.top),
+          false => a.boundingBox.left.compareTo(b.boundingBox.left),
+        },
+      );
     }
 
     return rows;
@@ -306,16 +296,15 @@ final class ReceiptParserJa {
   static double? _extractPrice(List<TextLine> row) {
     // First pass: look for explicit ¥/円 patterns.
     for (final line in row) {
-      final normalized = ReceiptNormalizer.normalizeFullWidth(line.text)
-          .replaceAll('※', '')
-          .replaceAll(RegExp(r'[＞>X]'), '')
-          .trim();
+      final normalized =
+          ReceiptNormalizer.normalizeFullWidth(
+            line.text,
+          ).replaceAll('※', '').replaceAll(RegExp(r'[＞>X]'), '').trim();
 
       // ¥ prefix pattern.
       final prefixMatch = _yenPrefix.firstMatch(normalized);
       if (prefixMatch != null) {
-        final priceStr =
-            prefixMatch.group(1)!.replaceAll(RegExp(r'[\s,]'), '');
+        final priceStr = prefixMatch.group(1)!.replaceAll(RegExp(r'[\s,]'), '');
         final price = double.tryParse(priceStr);
         if (price != null && price > 0) return price;
       }
@@ -333,8 +322,7 @@ final class ReceiptParserJa {
     // Uses original text (fullwidth-normalized only) to preserve trailing
     // artifacts like % and ) that distinguish garbled ¥ from real prices.
     for (final line in row) {
-      final normalized =
-          ReceiptNormalizer.normalizeFullWidth(line.text).trim();
+      final normalized = ReceiptNormalizer.normalizeFullWidth(line.text).trim();
       final garbMatch = _yenGarbled.firstMatch(normalized);
       if (garbMatch != null) {
         final priceStr = garbMatch.group(1)!.replaceAll(',', '');
@@ -399,10 +387,8 @@ final class ReceiptParserJa {
 
   /// Returns true if the entire [text] is a price pattern.
   static bool _isPriceLine(String text) {
-    final stripped = text
-        .replaceAll('※', '')
-        .replaceAll(RegExp(r'[＞>X]'), '')
-        .trim();
+    final stripped =
+        text.replaceAll('※', '').replaceAll(RegExp(r'[＞>X]'), '').trim();
 
     final prefixMatch = _yenPrefix.firstMatch(stripped);
     if (prefixMatch != null) {
@@ -432,11 +418,12 @@ final class ReceiptParserJa {
     // Remove standalone price patterns.
     result = result.replaceAll(_standalonePrice, '');
     // Clean up price-adjacent artifacts and extra whitespace.
-    result = result
-        .replaceAll('※', '')
-        .replaceAll(RegExp(r'[＞>%\)\*X]'), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    result =
+        result
+            .replaceAll('※', '')
+            .replaceAll(RegExp(r'[＞>%\)\*X]'), '')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
     return result;
   }
 
@@ -478,8 +465,7 @@ final class ReceiptParserJa {
       RegExp('[\\d\\s()|.,*`°#@\\-\'"\\\\]'),
       '',
     );
-    final hasCjk = RegExp('[\u3000-\u9fff\uf900-\ufaff]')
-        .hasMatch(meaningful);
+    final hasCjk = RegExp('[\u3000-\u9fff\uf900-\ufaff]').hasMatch(meaningful);
     return hasCjk || meaningful.length >= 3;
   }
 
@@ -492,10 +478,7 @@ final class ReceiptParserJa {
     List<RecognizedPosition> positions,
     List<TextLine> allLines,
   ) {
-    final expected = positions.fold<double>(
-      0,
-      (sum, p) => sum + p.price.value,
-    );
+    final expected = positions.fold<double>(0, (sum, p) => sum + p.price.value);
     if (expected <= 0) return null;
 
     final totalLine = _findLineByAmount(allLines, expected);
@@ -507,24 +490,17 @@ final class ReceiptParserJa {
 
   /// Finds a [TextLine] whose parsed amount equals [amount].
   /// Checks ¥-prefix first, then standalone price pattern.
-  static TextLine? _findLineByAmount(
-    List<TextLine> lines,
-    double amount,
-  ) {
+  static TextLine? _findLineByAmount(List<TextLine> lines, double amount) {
     for (final line in lines) {
-      final text =
-          ReceiptNormalizer.normalizeFullWidth(line.text).trim();
+      final text = ReceiptNormalizer.normalizeFullWidth(line.text).trim();
       final m = _yenPrefix.firstMatch(text);
       if (m != null) {
-        final v = double.tryParse(
-          m.group(1)!.replaceAll(RegExp(r'[\s,]'), ''),
-        );
+        final v = double.tryParse(m.group(1)!.replaceAll(RegExp(r'[\s,]'), ''));
         if (v == amount) return line;
       }
     }
     for (final line in lines) {
-      final text =
-          ReceiptNormalizer.normalizeFullWidth(line.text).trim();
+      final text = ReceiptNormalizer.normalizeFullWidth(line.text).trim();
       final m = _standalonePrice.firstMatch(text);
       if (m != null) {
         final v = double.tryParse(m.group(1)!.replaceAll(',', ''));
@@ -559,9 +535,7 @@ final class ReceiptParserJa {
   // ─── Store Detection ──────────────────────────────────────────
 
   /// Matches phone number patterns common in receipt headers.
-  static final RegExp _phoneNumber = RegExp(
-    r'\d{2,4}-\d{3,4}-\d{3,4}',
-  );
+  static final RegExp _phoneNumber = RegExp(r'\d{2,4}-\d{3,4}-\d{3,4}');
 
   /// Attempts to detect a store name from the first few rows.
   /// Only checks rows before any price-containing row.
@@ -584,8 +558,7 @@ final class ReceiptParserJa {
     // Fallback: first qualifying text row before any price row.
     for (final row in rows) {
       final rowText = row.map((l) => l.text).join(' ');
-      final normalized =
-          ReceiptNormalizer.normalizeFullWidth(rowText).trim();
+      final normalized = ReceiptNormalizer.normalizeFullWidth(rowText).trim();
       if (_extractPrice(row) != null) break;
       if (normalized.length < 3) continue;
       if (_phoneNumber.hasMatch(normalized)) continue;

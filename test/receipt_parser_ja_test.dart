@@ -48,8 +48,7 @@ void main() {
           _LineSpec('お預かり', Rect.fromLTWH(50, 170, 100, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.store?.value, 'イオン');
         expect(receipt.positions, hasLength(2));
         expect(receipt.total?.value, 348.0);
@@ -64,8 +63,7 @@ void main() {
           _LineSpec('130円', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.store?.value, 'セブンイレブン');
         expect(receipt.positions, hasLength(1));
         expect(receipt.positions.first.price.value, 130.0);
@@ -80,8 +78,7 @@ void main() {
           _LineSpec('¥1,280', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.store?.value, 'ライフ');
         expect(receipt.positions, hasLength(1));
         expect(receipt.positions.first.price.value, 1280.0);
@@ -96,29 +93,21 @@ void main() {
           _LineSpec('¥702', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, hasLength(1));
         expect(receipt.positions.first.price.value, 702.0);
-        expect(
-          receipt.positions.first.product.text,
-          contains('TTOもちチーズ'),
-        );
+        expect(receipt.positions.first.product.text, contains('TTOもちチーズ'));
         expect(receipt.total?.value, 702.0);
       });
 
       test('handles prices with marker suffix', () async {
         final text = buildRecognizedText([
-          _LineSpec(
-            'TTOもちチーズ 明6個 ¥702※',
-            Rect.fromLTWH(50, 50, 350, 30),
-          ),
+          _LineSpec('TTOもちチーズ 明6個 ¥702※', Rect.fromLTWH(50, 50, 350, 30)),
           _LineSpec('合計', Rect.fromLTWH(50, 130, 100, 30)),
           _LineSpec('¥702', Rect.fromLTWH(250, 130, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, hasLength(1));
         expect(receipt.positions.first.price.value, 702.0);
         expect(receipt.total?.value, 702.0);
@@ -136,8 +125,7 @@ void main() {
           _LineSpec('¥602', Rect.fromLTWH(250, 130, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, hasLength(2));
 
         final item = receipt.positions.first;
@@ -163,8 +151,7 @@ void main() {
           _LineSpec('¥550', Rect.fromLTWH(250, 170, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, hasLength(2));
         // The last total label's amount is used
         expect(receipt.total?.value, 550.0);
@@ -182,8 +169,7 @@ void main() {
           _LineSpec('¥150', Rect.fromLTWH(250, 130, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.purchaseDate?.value, DateTime.utc(2025, 1, 15));
       });
 
@@ -197,8 +183,7 @@ void main() {
           _LineSpec('¥150', Rect.fromLTWH(250, 130, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.purchaseDate?.value, DateTime.utc(2025, 1, 15));
       });
 
@@ -211,8 +196,7 @@ void main() {
           _LineSpec('¥150', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.purchaseDate?.value, DateTime.utc(2025, 2, 8));
       });
     });
@@ -227,8 +211,7 @@ void main() {
           _LineSpec('￥１９８', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, hasLength(1));
         expect(receipt.positions.first.price.value, 198.0);
       });
@@ -245,8 +228,7 @@ void main() {
           _LineSpec('¥500', Rect.fromLTWH(250, 130, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, hasLength(1));
       });
 
@@ -260,8 +242,7 @@ void main() {
           _LineSpec('¥198', Rect.fromLTWH(250, 130, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, hasLength(1));
         expect(receipt.total?.value, 198.0);
       });
@@ -270,8 +251,7 @@ void main() {
     group('Empty and edge cases', () {
       test('returns empty receipt for empty text', () async {
         final text = _FakeRecognizedText([]);
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, isEmpty);
         expect(receipt.total, isNull);
       });
@@ -282,8 +262,7 @@ void main() {
           _LineSpec('いらっしゃいませ', Rect.fromLTWH(50, 50, 200, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions, isEmpty);
       });
     });
@@ -302,8 +281,7 @@ void main() {
           _LineSpec('Bar', Rect.fromLTWH(50, 130, 100, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, deOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, deOptions);
         expect(receipt.store?.value, 'Aldi');
         expect(receipt.positions, hasLength(1));
         expect(receipt.positions.first.price.value, 1.99);
@@ -315,10 +293,7 @@ void main() {
         final text = buildRecognizedText([
           _LineSpec('銀だこ酒場', Rect.fromLTWH(50, 10, 200, 30)),
           _LineSpec('2026年2月8日', Rect.fromLTWH(50, 50, 200, 30)),
-          _LineSpec(
-            'TTOもちチーズ 明6個 ¥702※',
-            Rect.fromLTWH(50, 90, 350, 30),
-          ),
+          _LineSpec('TTOもちチーズ 明6個 ¥702※', Rect.fromLTWH(50, 90, 350, 30)),
           _LineSpec('@100x 1', Rect.fromLTWH(50, 130, 100, 30)),
           _LineSpec('-100', Rect.fromLTWH(250, 130, 80, 30)),
           _LineSpec('合計', Rect.fromLTWH(50, 170, 100, 30)),
@@ -327,8 +302,7 @@ void main() {
           _LineSpec('¥602', Rect.fromLTWH(250, 210, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
 
         // Date is recognized
         expect(receipt.purchaseDate?.value, DateTime.utc(2026, 2, 8));
@@ -345,67 +319,78 @@ void main() {
       });
     });
 
-    group('Store name fallback — structural detection of unregistered names', () {
-      test('detects unregistered English store name from first line', () async {
-        final text = buildRecognizedText([
-          _LineSpec('TSUKIJI', Rect.fromLTWH(50, 10, 200, 30)),
-          _LineSpec('GINDACOSAKABA', Rect.fromLTWH(50, 50, 200, 30)),
-          _LineSpec(
-            'TTOもちチーズ ¥702',
-            Rect.fromLTWH(50, 90, 350, 30),
-          ),
-          _LineSpec('合計', Rect.fromLTWH(50, 130, 100, 30)),
-          _LineSpec('¥702', Rect.fromLTWH(250, 130, 80, 30)),
-        ]);
+    group(
+      'Store name fallback — structural detection of unregistered names',
+      () {
+        test(
+          'detects unregistered English store name from first line',
+          () async {
+            final text = buildRecognizedText([
+              _LineSpec('TSUKIJI', Rect.fromLTWH(50, 10, 200, 30)),
+              _LineSpec('GINDACOSAKABA', Rect.fromLTWH(50, 50, 200, 30)),
+              _LineSpec('TTOもちチーズ ¥702', Rect.fromLTWH(50, 90, 350, 30)),
+              _LineSpec('合計', Rect.fromLTWH(50, 130, 100, 30)),
+              _LineSpec('¥702', Rect.fromLTWH(250, 130, 80, 30)),
+            ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
-        expect(receipt.store?.value, 'TSUKIJI');
-      });
+            final receipt = await ReceiptTextProcessor.processText(
+              text,
+              jaOptions,
+            );
+            expect(receipt.store?.value, 'TSUKIJI');
+          },
+        );
 
-      test('skips phone number line and uses next line as store', () async {
-        final text = buildRecognizedText([
-          _LineSpec('03-1234-5678', Rect.fromLTWH(50, 10, 200, 30)),
-          _LineSpec('GINDACO SAKABA', Rect.fromLTWH(50, 50, 200, 30)),
-          _LineSpec('牛乳', Rect.fromLTWH(50, 90, 100, 30)),
-          _LineSpec('¥198', Rect.fromLTWH(250, 90, 80, 30)),
-          _LineSpec('合計', Rect.fromLTWH(50, 130, 100, 30)),
-          _LineSpec('¥198', Rect.fromLTWH(250, 130, 80, 30)),
-        ]);
+        test('skips phone number line and uses next line as store', () async {
+          final text = buildRecognizedText([
+            _LineSpec('03-1234-5678', Rect.fromLTWH(50, 10, 200, 30)),
+            _LineSpec('GINDACO SAKABA', Rect.fromLTWH(50, 50, 200, 30)),
+            _LineSpec('牛乳', Rect.fromLTWH(50, 90, 100, 30)),
+            _LineSpec('¥198', Rect.fromLTWH(250, 90, 80, 30)),
+            _LineSpec('合計', Rect.fromLTWH(50, 130, 100, 30)),
+            _LineSpec('¥198', Rect.fromLTWH(250, 130, 80, 30)),
+          ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
-        expect(receipt.store?.value, 'GINDACO SAKABA');
-      });
+          final receipt = await ReceiptTextProcessor.processText(
+            text,
+            jaOptions,
+          );
+          expect(receipt.store?.value, 'GINDACO SAKABA');
+        });
 
-      test('skips pure digit strings', () async {
-        // 0001 → standalonePrice returns null due to >= 10 threshold,
-        // so it's not a price line, but skipped by pure-digit check.
-        final text = buildRecognizedText([
-          _LineSpec('0001', Rect.fromLTWH(50, 10, 200, 30)),
-          _LineSpec('SHOP NAME', Rect.fromLTWH(50, 50, 200, 30)),
-          _LineSpec('牛乳', Rect.fromLTWH(50, 90, 100, 30)),
-          _LineSpec('¥198', Rect.fromLTWH(250, 90, 80, 30)),
-        ]);
+        test('skips pure digit strings', () async {
+          // 0001 → standalonePrice returns null due to >= 10 threshold,
+          // so it's not a price line, but skipped by pure-digit check.
+          final text = buildRecognizedText([
+            _LineSpec('0001', Rect.fromLTWH(50, 10, 200, 30)),
+            _LineSpec('SHOP NAME', Rect.fromLTWH(50, 50, 200, 30)),
+            _LineSpec('牛乳', Rect.fromLTWH(50, 90, 100, 30)),
+            _LineSpec('¥198', Rect.fromLTWH(250, 90, 80, 30)),
+          ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
-        expect(receipt.store?.value, 'SHOP NAME');
-      });
+          final receipt = await ReceiptTextProcessor.processText(
+            text,
+            jaOptions,
+          );
+          expect(receipt.store?.value, 'SHOP NAME');
+        });
 
-      test('skips lines with 2 or fewer characters', () async {
-        final text = buildRecognizedText([
-          _LineSpec('AB', Rect.fromLTWH(50, 10, 200, 30)),
-          _LineSpec('MY STORE', Rect.fromLTWH(50, 50, 200, 30)),
-          _LineSpec('牛乳', Rect.fromLTWH(50, 90, 100, 30)),
-          _LineSpec('¥198', Rect.fromLTWH(250, 90, 80, 30)),
-        ]);
+        test('skips lines with 2 or fewer characters', () async {
+          final text = buildRecognizedText([
+            _LineSpec('AB', Rect.fromLTWH(50, 10, 200, 30)),
+            _LineSpec('MY STORE', Rect.fromLTWH(50, 50, 200, 30)),
+            _LineSpec('牛乳', Rect.fromLTWH(50, 90, 100, 30)),
+            _LineSpec('¥198', Rect.fromLTWH(250, 90, 80, 30)),
+          ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
-        expect(receipt.store?.value, 'MY STORE');
-      });
-    });
+          final receipt = await ReceiptTextProcessor.processText(
+            text,
+            jaOptions,
+          );
+          expect(receipt.store?.value, 'MY STORE');
+        });
+      },
+    );
 
     group('Total estimation — infer total from item sum without label', () {
       test('estimates total from position sum when label is missing', () async {
@@ -419,8 +404,7 @@ void main() {
           _LineSpec('PayPay', Rect.fromLTWH(50, 170, 100, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.total?.value, 602.0);
       });
 
@@ -433,8 +417,7 @@ void main() {
           _LineSpec('お預かり', Rect.fromLTWH(50, 130, 100, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         // 200 + 150 = 350
         expect(receipt.total?.value, 350.0);
       });
@@ -450,13 +433,11 @@ void main() {
           _LineSpec('¥702', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions.first.price.value, 702.0);
       });
 
-      test('treats 4702 without trailing artifact as normal price',
-          () async {
+      test('treats 4702 without trailing artifact as normal price', () async {
         // Without trailing artifact, not treated as garbled
         final text = buildRecognizedText([
           _LineSpec('TTOもちチーズ', Rect.fromLTWH(50, 50, 200, 30)),
@@ -465,33 +446,36 @@ void main() {
           _LineSpec('¥4702', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.positions.first.price.value, 4702.0);
       });
 
-      test('real device OCR pattern: 4702% + -100 estimates total 602',
-          () async {
-        // Reproduce real OCR output
-        final text = buildRecognizedText([
-          _LineSpec('TSUKIJI', Rect.fromLTWH(50, 10, 200, 30)),
-          _LineSpec('GINDACOSAKABA', Rect.fromLTWH(50, 50, 200, 30)),
-          _LineSpec('TTO5-`BA6', Rect.fromLTWH(50, 90, 200, 30)),
-          _LineSpec('4702%', Rect.fromLTWH(250, 90, 80, 30)),
-          _LineSpec('e100x', Rect.fromLTWH(50, 130, 100, 30)),
-          _LineSpec('-100', Rect.fromLTWH(250, 130, 80, 30)),
-          _LineSpec('602)', Rect.fromLTWH(250, 170, 80, 30)),
-          _LineSpec('PayPay', Rect.fromLTWH(50, 210, 100, 30)),
-        ]);
+      test(
+        'real device OCR pattern: 4702% + -100 estimates total 602',
+        () async {
+          // Reproduce real OCR output
+          final text = buildRecognizedText([
+            _LineSpec('TSUKIJI', Rect.fromLTWH(50, 10, 200, 30)),
+            _LineSpec('GINDACOSAKABA', Rect.fromLTWH(50, 50, 200, 30)),
+            _LineSpec('TTO5-`BA6', Rect.fromLTWH(50, 90, 200, 30)),
+            _LineSpec('4702%', Rect.fromLTWH(250, 90, 80, 30)),
+            _LineSpec('e100x', Rect.fromLTWH(50, 130, 100, 30)),
+            _LineSpec('-100', Rect.fromLTWH(250, 130, 80, 30)),
+            _LineSpec('602)', Rect.fromLTWH(250, 170, 80, 30)),
+            _LineSpec('PayPay', Rect.fromLTWH(50, 210, 100, 30)),
+          ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
-        expect(receipt.store?.value, 'TSUKIJI');
-        expect(receipt.positions.first.price.value, 702.0);
-        expect(receipt.positions[1].price.value, -100.0);
-        // 702 + (-100) = 602
-        expect(receipt.total?.value, 602.0);
-      });
+          final receipt = await ReceiptTextProcessor.processText(
+            text,
+            jaOptions,
+          );
+          expect(receipt.store?.value, 'TSUKIJI');
+          expect(receipt.positions.first.price.value, 702.0);
+          expect(receipt.positions[1].price.value, -100.0);
+          // 702 + (-100) = 602
+          expect(receipt.total?.value, 602.0);
+        },
+      );
     });
 
     group('Date garbled fallback — recognizing garbled dates in OCR', () {
@@ -508,8 +492,7 @@ void main() {
           _LineSpec('¥198', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.purchaseDate?.value, DateTime.utc(2026, 2, 8));
       });
 
@@ -522,24 +505,19 @@ void main() {
           _LineSpec('¥198', Rect.fromLTWH(250, 90, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.purchaseDate?.value, DateTime.utc(2025, 3, 15));
       });
 
       test('rejects out-of-range month/day in garbled fallback', () async {
         final text = buildRecognizedText([
           // month=13 is out of range
-          _LineSpec(
-            '20264# 13A 8A(A)17H34A',
-            Rect.fromLTWH(50, 10, 400, 30),
-          ),
+          _LineSpec('20264# 13A 8A(A)17H34A', Rect.fromLTWH(50, 10, 400, 30)),
           _LineSpec('牛乳', Rect.fromLTWH(50, 50, 100, 30)),
           _LineSpec('¥198', Rect.fromLTWH(250, 50, 80, 30)),
         ]);
 
-        final receipt =
-            await ReceiptTextProcessor.processText(text, jaOptions);
+        final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
         expect(receipt.purchaseDate, isNull);
       });
     });

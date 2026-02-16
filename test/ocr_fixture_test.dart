@@ -14,8 +14,7 @@ void main() {
 
   setUpAll(() async {
     final file = File('test/assets/ocr_fixtures.json');
-    fixtures = jsonDecode(await file.readAsString())
-        as Map<String, dynamic>;
+    fixtures = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
   });
 
   setUp(() {
@@ -25,13 +24,11 @@ void main() {
 
   group('OCR fixture tests', () {
     test('gindaco_2026_02_08: Gindaco Sakaba receipt', () async {
-      final fixture = fixtures['gindaco_2026_02_08']
-          as Map<String, dynamic>;
+      final fixture = fixtures['gindaco_2026_02_08'] as Map<String, dynamic>;
       final text = _buildRecognizedText(fixture);
       final expected = fixture['expected'] as Map<String, dynamic>;
 
-      final receipt =
-          await ReceiptTextProcessor.processText(text, jaOptions);
+      final receipt = await ReceiptTextProcessor.processText(text, jaOptions);
 
       // Store name
       expect(receipt.store?.value, expected['store']);
