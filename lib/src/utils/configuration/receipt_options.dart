@@ -1,3 +1,4 @@
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:receipt_recognition/src/utils/configuration/index.dart';
 import 'package:receipt_recognition/src/utils/normalize/index.dart';
 
@@ -18,7 +19,7 @@ final class ReceiptOptions {
   /// Map of store aliases to canonical names.
   final DetectionMap storeNames;
 
-  /// Map of total labels (e.g., “Total”, “Summe”) to canonical label.
+  /// Map of total labels (e.g., "Total", "Summe") to canonical label.
   final DetectionMap totalLabels;
 
   /// Keywords that should be ignored during parsing.
@@ -33,6 +34,17 @@ final class ReceiptOptions {
   /// Numeric/string tuning applied across the parser/optimizer.
   final ReceiptTuning tuning;
 
+  /// The text recognition script used for OCR, which also determines
+  /// which parsing algorithm is used to extract receipt entities.
+  ///
+  /// When set to [TextRecognitionScript.japanese], the row-grouping parser
+  /// is used, which handles Japanese receipt layouts where product names
+  /// and prices may appear on the same [TextLine].
+  ///
+  /// When `null` (default), the geometric parser is used for European-style
+  /// receipts.
+  final TextRecognitionScript? script;
+
   /// Private constructor for raw typed parts.
   ReceiptOptions._internal({
     required this.storeNames,
@@ -41,6 +53,7 @@ final class ReceiptOptions {
     required this.stopKeywords,
     required this.allowedProductGroups,
     required this.tuning,
+    this.script,
   });
 
   /// Public constructor that mirrors the layered user config structure.
@@ -198,8 +211,21 @@ final class ReceiptOptions {
       ReceiptOptions.fromJsonLike(kReceiptDefaultOptions);
 
   /// Returns default options for Japanese receipts.
-  factory ReceiptOptions.japanese() =>
-      ReceiptOptions.fromJsonLike(kReceiptDefaultOptionsJa);
+  ///
+  /// Uses the row-grouping parser which handles Japanese receipt layouts
+  /// where product names and prices may appear on the same line.
+  factory ReceiptOptions.japanese() {
+    final base = ReceiptOptions.fromJsonLike(kReceiptDefaultOptionsJa);
+    return ReceiptOptions._internal(
+      storeNames: base.storeNames,
+      totalLabels: base.totalLabels,
+      ignoreKeywords: base.ignoreKeywords,
+      stopKeywords: base.stopKeywords,
+      allowedProductGroups: base.allowedProductGroups,
+      tuning: base.tuning,
+      script: TextRecognitionScript.japanese,
+    );
+  }
 
   /// Merges default and user keyword sets according to [p].
   static KeywordSet _ksMerge(
