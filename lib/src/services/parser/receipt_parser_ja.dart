@@ -74,16 +74,15 @@ final class ReceiptParserJa {
 
       // Sort: primary axis = receipt top→bottom, secondary = within-line.
       allLines.sort((a, b) {
-        if (rotated) {
-          final c = a.boundingBox.left.compareTo(b.boundingBox.left);
-          return c != 0
-              ? c
-              : a.boundingBox.top.compareTo(b.boundingBox.top);
-        }
-        final c = a.boundingBox.top.compareTo(b.boundingBox.top);
-        return c != 0
-            ? c
-            : a.boundingBox.left.compareTo(b.boundingBox.left);
+        final ab = a.boundingBox;
+        final bb = b.boundingBox;
+        final (p1, s1, p2, s2) = rotated
+            ? (ab.left, ab.top, bb.left, bb.top)
+            : (ab.top, ab.left, bb.top, bb.left);
+        return switch (p1.compareTo(p2)) {
+          0 => s1.compareTo(s2),
+          final c => c,
+        };
       });
 
       final entities = <RecognizedEntity>[];
@@ -171,31 +170,17 @@ final class ReceiptParserJa {
         // Check for discount line first (standalone negative like -100).
         final discountVal = _extractDiscount(row);
         if (discountVal != null) {
-          final productName = _extractProductName(row);
-          final productLine = _productLine(row);
-          final priceLine = _priceLine(row);
-
-          final product = RecognizedProduct(
-            value: productName,
-            line: productLine,
-            options: _options,
-          );
-          final recognizedPrice = RecognizedPrice(
-            line: priceLine,
-            value: -discountVal,
-          );
-          final position = RecognizedPosition(
-            product: product,
-            price: recognizedPrice,
+          final name = _extractProductName(row);
+          final pos = _createPosition(
+            name: name,
+            row: row,
+            price: -discountVal,
             timestamp: timestamp,
-            operation: Operation.none,
           );
-          product.position = position;
-          recognizedPrice.position = position;
-          positions.add(position);
+          positions.add(pos);
           entities
-            ..add(RecognizedAmount(value: -discountVal, line: priceLine))
-            ..add(RecognizedUnknown(value: productName, line: productLine));
+            ..add(RecognizedAmount(value: -discountVal, line: pos.price.line))
+            ..add(RecognizedUnknown(value: name, line: pos.product.line));
           continue;
         }
 
@@ -205,89 +190,24 @@ final class ReceiptParserJa {
 
         // Normal item line.
         final productName = _extractProductName(row);
-        if (productName.isEmpty) continue;
+        if (productName.isEmpty || !_isMeaningfulName(productName)) continue;
 
-        // Skip garbled labels with too few meaningful characters.
-        // CJK products ("牛乳", "パン") are always accepted.
-        // ASCII-only names need 3+ meaningful chars to avoid
-        // garbled labels like "f3I(" (meaningful "fI" = 2 → skip).
-        final meaningful = productName.replaceAll(
-          RegExp('[\\d\\s()|.,*`°#@\\-\'"\\\\]'),
-          '',
-        );
-        final hasCjk = RegExp('[\u3000-\u9fff\uf900-\ufaff]')
-            .hasMatch(meaningful);
-        if (!hasCjk && meaningful.length < 3) continue;
-
-        final productLine = _productLine(row);
-        final priceLine = _priceLine(row);
-
-        final product = RecognizedProduct(
-          value: productName,
-          line: productLine,
-          options: _options,
-        );
-        final recognizedPrice = RecognizedPrice(
-          line: priceLine,
-          value: price,
-        );
-        final position = RecognizedPosition(
-          product: product,
-          price: recognizedPrice,
+        final pos = _createPosition(
+          name: productName,
+          row: row,
+          price: price,
           timestamp: timestamp,
-          operation: Operation.none,
         );
-        product.position = position;
-        recognizedPrice.position = position;
-        positions.add(position);
+        positions.add(pos);
         entities
-          ..add(RecognizedAmount(value: price, line: priceLine))
-          ..add(RecognizedUnknown(value: productName, line: productLine));
+          ..add(RecognizedAmount(value: price, line: pos.price.line))
+          ..add(RecognizedUnknown(value: productName, line: pos.product.line));
       }
 
       // Estimate total from item sum when label-based detection failed.
       if (total == null && positions.isNotEmpty) {
-        final expectedTotal = positions.fold<double>(
-          0,
-          (sum, p) => sum + p.price.value,
-        );
-        if (expectedTotal > 0) {
-          TextLine? totalLine;
-          // Try ¥-prefixed match first.
-          for (final line in allLines) {
-            final text =
-                ReceiptNormalizer.normalizeFullWidth(line.text).trim();
-            final m = _yenPrefix.firstMatch(text);
-            if (m != null) {
-              final v = double.tryParse(
-                m.group(1)!.replaceAll(RegExp(r'[\s,]'), ''),
-              );
-              if (v == expectedTotal) {
-                totalLine = line;
-                break;
-              }
-            }
-          }
-          // Fallback: standalone price matching the expected total.
-          if (totalLine == null) {
-            for (final line in allLines) {
-              final text =
-                  ReceiptNormalizer.normalizeFullWidth(line.text).trim();
-              final m = _standalonePrice.firstMatch(text);
-              if (m != null) {
-                final v =
-                    double.tryParse(m.group(1)!.replaceAll(',', ''));
-                if (v == expectedTotal) {
-                  totalLine = line;
-                  break;
-                }
-              }
-            }
-          }
-          totalLine ??= positions.last.price.line;
-          total = RecognizedTotal(value: expectedTotal, line: totalLine);
-          entities.add(total);
-        }
+        total = _estimateTotal(positions, allLines);
+        if (total != null) entities.add(total);
       }
 
       // Build the receipt.
@@ -367,15 +287,10 @@ final class ReceiptParserJa {
 
     // Sort within each row along the reading axis.
     for (final row in rows) {
-      if (rotated) {
-        row.sort(
-          (a, b) => a.boundingBox.top.compareTo(b.boundingBox.top),
-        );
-      } else {
-        row.sort(
-          (a, b) => a.boundingBox.left.compareTo(b.boundingBox.left),
-        );
-      }
+      row.sort((a, b) => switch (rotated) {
+        true => a.boundingBox.top.compareTo(b.boundingBox.top),
+        false => a.boundingBox.left.compareTo(b.boundingBox.left),
+      });
     }
 
     return rows;
@@ -523,6 +438,100 @@ final class ReceiptParserJa {
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     return result;
+  }
+
+  // ─── Position Factory ─────────────────────────────────────────
+
+  /// Creates a [RecognizedPosition] from [row] with mutually linked
+  /// product/price entities.
+  static RecognizedPosition _createPosition({
+    required String name,
+    required List<TextLine> row,
+    required double price,
+    required DateTime timestamp,
+  }) {
+    final product = RecognizedProduct(
+      value: name,
+      line: _productLine(row),
+      options: _options,
+    );
+    final recognizedPrice = RecognizedPrice(
+      line: _priceLine(row),
+      value: price,
+    );
+    final position = RecognizedPosition(
+      product: product,
+      price: recognizedPrice,
+      timestamp: timestamp,
+      operation: Operation.none,
+    );
+    product.position = position;
+    recognizedPrice.position = position;
+    return position;
+  }
+
+  /// Returns true if [name] has enough meaningful characters to be a
+  /// product name. CJK names are always accepted; ASCII-only names
+  /// need 3+ non-punctuation chars to filter garbled OCR labels.
+  static bool _isMeaningfulName(String name) {
+    final meaningful = name.replaceAll(
+      RegExp('[\\d\\s()|.,*`°#@\\-\'"\\\\]'),
+      '',
+    );
+    final hasCjk = RegExp('[\u3000-\u9fff\uf900-\ufaff]')
+        .hasMatch(meaningful);
+    return hasCjk || meaningful.length >= 3;
+  }
+
+  // ─── Total Estimation ───────────────────────────────────────────
+
+  /// Estimates total from item sum when label-based detection failed.
+  /// Searches [allLines] for a ¥-prefixed or standalone price matching
+  /// the sum of [positions], falls back to the last position's price line.
+  static RecognizedTotal? _estimateTotal(
+    List<RecognizedPosition> positions,
+    List<TextLine> allLines,
+  ) {
+    final expected = positions.fold<double>(
+      0,
+      (sum, p) => sum + p.price.value,
+    );
+    if (expected <= 0) return null;
+
+    final totalLine = _findLineByAmount(allLines, expected);
+    return RecognizedTotal(
+      value: expected,
+      line: totalLine ?? positions.last.price.line,
+    );
+  }
+
+  /// Finds a [TextLine] whose parsed amount equals [amount].
+  /// Checks ¥-prefix first, then standalone price pattern.
+  static TextLine? _findLineByAmount(
+    List<TextLine> lines,
+    double amount,
+  ) {
+    for (final line in lines) {
+      final text =
+          ReceiptNormalizer.normalizeFullWidth(line.text).trim();
+      final m = _yenPrefix.firstMatch(text);
+      if (m != null) {
+        final v = double.tryParse(
+          m.group(1)!.replaceAll(RegExp(r'[\s,]'), ''),
+        );
+        if (v == amount) return line;
+      }
+    }
+    for (final line in lines) {
+      final text =
+          ReceiptNormalizer.normalizeFullWidth(line.text).trim();
+      final m = _standalonePrice.firstMatch(text);
+      if (m != null) {
+        final v = double.tryParse(m.group(1)!.replaceAll(',', ''));
+        if (v == amount) return line;
+      }
+    }
+    return null;
   }
 
   // ─── Line Helpers ─────────────────────────────────────────────
