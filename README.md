@@ -73,62 +73,74 @@ Update `Info.plist`:
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:receipt_recognition/receipt_recognition.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:receipt_recognition/receipt_recognition.dart';
 
-// Prefer layered options:
-// - extend: merge with defaults (user wins on duplicates)
-// - override: replace specific sections entirely
-// - tuning: override-only thresholds/knobs
-final options = ReceiptOptions.fromLayeredJson({
-  "extend": {
-    "storeNames": {
-      "REWE CITY": "Rewe"
-    }
-  },
-  "override": {
-    "stopKeywords": ["Rückgeld", "Change"]
-  },
-  "tuning": {
-    "optimizerConfidenceThreshold": 88,
-    "optimizerStabilityThreshold": 45
+/// Demo class showing receipt recognition API usage patterns.
+///
+/// This is a reference implementation for:
+/// - Configuring receipt options with layered JSON
+/// - Creating and using a receipt recognizer
+/// - Processing images and handling scan callbacks
+/// - Proper resource cleanup
+class ReceiptApiDemo {
+  /// Demonstrates receipt options configuration with layered approach.
+  static final ReceiptOptions demoOptions = ReceiptOptions.fromLayeredJson({
+    "extend": {
+      "storeNames": {"REWE CITY": "Rewe"},
+    },
+    "override": {
+      "stopKeywords": ["Rückgeld", "Change"],
+    },
+    "tuning": {
+      "optimizerConfidenceThreshold": 88,
+      "optimizerStabilityThreshold": 45,
+    },
+  });
+
+  /// Creates a receipt recognizer with demo callbacks.
+  static ReceiptRecognizer createDemoRecognizer() {
+    return ReceiptRecognizer(
+      options: demoOptions,
+      onScanComplete: (receipt) {
+        // Handle the recognized receipt
+        debugPrint('Store: ${receipt.store?.value}');
+        debugPrint('Total: ${receipt.total?.formattedValue}');
+        for (final position in receipt.positions) {
+          debugPrint(
+            '${position.product.formattedValue}: ${position.price.formattedValue}',
+          );
+        }
+      },
+      onScanUpdate: (progress) {
+        // Track scanning progress
+        debugPrint(
+          'Scan progress: ${progress.validationResult.matchPercentage}%',
+        );
+        debugPrint('Added positions: ${progress.addedPositions.length}');
+      },
+    );
   }
-});
 
-// Create a receipt recognizer
-final receiptRecognizer = ReceiptRecognizer(
-  options: options,
-  onScanComplete: (receipt) {
-    // Handle the recognized receipt
-    print('Store: ${receipt.store?.value}');
-    print('Total: ${receipt.total?.formattedValue}');
-    for (final position in receipt.positions) {
-      print('${position.product.formattedValue}: ${position.price.formattedValue}');
+  /// Demonstrates image processing with a receipt recognizer.
+  ///
+  /// Receives ongoing snapshots from [processImage].
+  /// A snapshot becomes final when [isValid] && [isConfirmed].
+  /// [onScanComplete] fires at that point.
+  static Future<void> demonstrateImageProcessing(
+    ReceiptRecognizer recognizer,
+    InputImage inputImage,
+  ) async {
+    final snapshot = await recognizer.processImage(inputImage);
+    if (snapshot.isValid && snapshot.isConfirmed) {
+      ReceiptLogger.logReceipt(snapshot);
     }
-  },
-  onScanUpdate: (progress) {
-    // Track scanning progress
-    print('Scan progress: ${progress.validationResult.matchPercentage}%');
-    print('Added positions: ${progress.addedPositions.length}');
-  },
-);
-
-// Process an image Future
-processReceiptImage(InputImage inputImage) async {
-  // You receive ongoing snapshots from processImage.
-  // A snapshot is final when isValid && isConfirmed;
-  // onScanComplete will fire at that point.
-  final snapshot = await receiptRecognizer.processImage(inputImage);
-  if (snapshot.isValid && snapshot.isConfirmed) {
-    ReceiptLogger.logReceipt(snapshot);
   }
-}
 
-// Dispose
-@override
-void dispose() {
-  receiptRecognizer.close();
-  super.dispose();
+  /// Demonstrates proper cleanup of recognizer resources.
+  static void demonstrateCleanup(ReceiptRecognizer recognizer) {
+    recognizer.close();
+  }
 }
 ```
 
