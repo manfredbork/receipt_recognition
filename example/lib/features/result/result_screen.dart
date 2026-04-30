@@ -48,33 +48,72 @@ class ResultScreen extends StatelessWidget {
                       ),
                       const Divider(),
                       ...receipt.positions.map((position) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
+                        final hasMultipleUnits =
+                            position.product.unit.quantity.value > 1;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      position.product.normalizedText,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        position.price.formattedValue,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                      if (position
+                                          .product
+                                          .productGroup
+                                          .isNotEmpty)
+                                        Text(
+                                          ' ${position.product.productGroup}',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (hasMultipleUnits)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 16,
+                                  top: 2,
+                                  bottom: 4,
+                                ),
                                 child: Text(
-                                  position.product.normalizedText,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  softWrap: false,
+                                  '${position.product.unit.quantity.value.toInt()} × ${position.product.unit.price.formattedValue}',
                                   style: const TextStyle(
                                     fontSize: 16,
                                     color: Colors.black,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                position.price.formattedValue,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ],
-                          ),
+                          ],
                         );
                       }),
                       const Divider(),
