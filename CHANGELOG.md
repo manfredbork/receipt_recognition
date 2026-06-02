@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.9] – 2026-06-02
+
+### ✨ Added
+
+- **File path processing**: Added `processFilePath(String)` method to `ReceiptRecognizer` for direct file path processing without requiring direct `google_mlkit_text_recognition` dependency.
+- **TextRecognitionScript re-export**: Re-exported `TextRecognitionScript` from the barrel file to allow consumers to configure OCR script without a direct mlkit dependency.
+- **Japanese receipt parser** ([@anies1212](https://github.com/anies1212)): Dedicated parser for Japanese receipts with improved handling of thermal paper OCR garbling and row-based grouping strategy.
+
+### 🛠️ Changed
+
+- **Example app**: Updated result screen to display unit quantity, unit price, and product group for line items.
+- **Example app**: Updated screenshots to reflect new unit and product group information.
+- **Test documentation**: Unified test comments and documentation to English for better maintainability.
+- **Refactoring**: Improved Japanese parser with switch-based sorting, consolidated position creation logic, and dedicated total estimation helpers.
+- **Export structure**: Added `ReceiptParserJa` to parser module exports.
+
+### 🔧 CI/CD ([@anies1212](https://github.com/anies1212))
+
+- **Release workflow**: Added automated release workflow with `workflow_dispatch` for streamlined pub.dev publishing.
+- **Workflow automation**: Added auto-assign-author and pinact workflows for improved CI/CD pipeline.
+- **Workflow validation**: Fixed YAML syntax errors and added actionlint validation.
+
+---
+
 ## [0.2.8] – 2026-01-08
 
 ### 🐛 Fixed
